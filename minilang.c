@@ -441,9 +441,15 @@ ml_type_t MLReference[1] = {{
 }};
 
 ml_value_t *ml_reference(ml_value_t **Address) {
-	ml_reference_t *Reference = new(ml_reference_t);
+	ml_reference_t *Reference;
+	if (Address == 0) {
+		Reference = xnew(ml_reference_t, 1, ml_value_t *);
+		Reference->Address = Reference->Value;
+	} else {
+		Reference = new(ml_reference_t);
+		Reference->Address = Address;
+	}
 	Reference->Type = MLReference;
-	Reference->Address = Address;
 	return (ml_value_t *)Reference;
 }
 
@@ -682,6 +688,13 @@ static ml_value_t *ml_tree_index(ml_t *ML, ml_value_t *Value, int Count, ml_valu
 	if (Count < 1) return Nil;
 	ml_value_t *Key = Args[0];
 	return ml_property(Tree, (const char *)Key, ml_tree_index_get, ml_tree_index_set, 0);
+}
+
+static ml_value_t *ml_tree_delete(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	if (Count < 2) return Nil;
+	ml_tree_t *Tree = (ml_tree_t *)Args[0];
+	ml_value_t *Key = Args[1];
+	return ml_tree_remove(ML, Tree, Key);
 }
 
 ml_type_t MLTree[1] = {{
@@ -1224,6 +1237,7 @@ static void ml_init() {
 	ml_add_method("put", 0, ml_list_put, 1, MLList);
 	ml_add_method("pop", 0, ml_list_pop, 1, MLList);
 	ml_add_method("pull", 0, ml_list_pull, 1, MLList);
+	ml_add_method("delete", 0, ml_tree_delete, 1, MLTree);
 	// TODO: Implement other methods
 }
 
