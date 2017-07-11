@@ -1,6 +1,6 @@
 .PHONY: clean all
 
-all: ../../bin/rabs ml
+all: rabs ml
 
 sources = \
 	cache.c \
@@ -17,11 +17,11 @@ sources = \
 CFLAGS += -I. -g
 LDFLAGS += -llua -lm -lgc -lsqlite3 -lHX -g
 
-../../bin/rabs: $(sources) *.h builtins.lua
+rabs: $(sources) *.h builtins.lua
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
 
-ml: minilang.* ml.* map.*
-	gcc -g minilang.c ml.c map.c -lgc -oml
+ml: minilang.* ml.* map.* sha256.*
+	gcc -g minilang.c ml.c map.c sha256.c -lgc -oml
 
 clean:
 	rm ../../bin/rabs
