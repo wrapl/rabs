@@ -1,77 +1,112 @@
-/** 
- * Copyright (c) 2014 rxi
- *
- * This library is free software; you can redistribute it and/or modify it
- * under the terms of the MIT license. See LICENSE for details.
- */
+//
+// map.h
+//
+// Copyright (c) 2014 Joao Cordeiro
+// MIT licensed
 
-#ifndef MAP_H
-#define MAP_H
+#ifndef __MAP_H__
+#define __MAP_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <string.h>
 
-#define MAP_VERSION "0.1.0"
+//
 
-struct map_node_t;
-typedef struct map_node_t map_node_t;
+/**
+ * \brief Node structure.
+ */
+struct map_node_t {
+    char* key;
+    void* value;
 
-typedef struct {
-	map_node_t **buckets;
-	unsigned nbuckets, nnodes;
-} map_base_t;
+    struct map_node_t* next;
+};
 
-typedef struct {
-	unsigned bucketidx;
-	map_node_t *node;
-} map_iter_t;
+/**
+ * \brief Map structure.
+ */
+struct map_t {
+    /** Head node */
+    struct map_node_t* head;
 
+    /** Number of elements in the map. */
+    size_t size;
 
-#define map_t(T)\
-	struct { map_base_t base; T *ref; T tmp; }
+    /** Function to use when comparing map keys. */
+    int (*cmp_func)(const char*, const char*);
 
-
-#define map_init(m)\
-	memset(m, 0, sizeof(*(m)))
-
-
-#define map_deinit(m)\
-	map_deinit_(&(m)->base)
-
-
-#define map_get(m, key)\
-	( (m)->ref = map_get_(&(m)->base, key) )
+    /** Function to use when deleting map values. */
+    void (*free_func)(void*);
+};
 
 
-#define map_set(m, key, value)\
-	( (m)->tmp = (value),\
-		map_set_(&(m)->base, key, &(m)->tmp, sizeof((m)->tmp)) )
+// Create and delete map functions
+
+/**
+ * \brief Create a new map.
+ * Until something else is specifically set, this map will
+ * not do anything on entry deletion and will use strcmp to
+ * compare values.
+ * \param cs Case sensitivity to use in key comparison.
+ * \return New map or NULL on failure.
+ */
+struct map_t* new_map();
+
+/**
+ * \brief Save the pointer to the function to use to free map values.
+ * \param f Pointer to the function that is to be called on value deletion.
+ */
+void map_set_free_func(struct map_t* map, void (*f)(void*));
+
+/**
+ * \brief Save the pointer to the function to use compare map keys.
+ * \param f Pointer to the function that is to be called on key comparison.
+ */
+void map_set_cmp_func(struct map_t* map, int (*f)(const char*, const char*));
+
+/**
+ * \brief Destroy map. Free all memory.
+ */
+void destroy_map(struct map_t** map);
 
 
-#define map_remove(m, key)\
-	map_remove_(&(m)->base, key)
+// Map access functions.
+
+/**
+ * \brief Get the value that corresponds to a key.
+ * \return Value associated with the key. NULL if not found.
+ */
+void* map_get(struct map_t* map, const char* key);
+
+/**
+ * \brief Set a value in a map.
+ * Adds a new entry if the key does not exist,
+ * or replaces the value if it exists.
+ * \return 0 if successful. -1 if it fails.
+ */
+int map_set(struct map_t* map, const char* key, void* value);
+
+/**
+ * \brief Remove an entry from the map.
+ */
+void map_del(struct map_t* map, const char* key);
 
 
-#define map_iter(m)\
-	map_iter_()
+// Utility functions
 
+/**
+ * \brief Get number of elements in a map.
+ * \param map Map to be analysed.
+ * \return Number of elements in a map.
+ */
+size_t map_size(const struct map_t* map);
 
-#define map_next(m, iter)\
-	map_next_(&(m)->base, iter)
-
-
-void map_deinit_(map_base_t *m);
-void *map_get_(map_base_t *m, const char *key);
-int map_set_(map_base_t *m, const char *key, void *value, int vsize);
-void map_remove_(map_base_t *m, const char *key);
-map_iter_t map_iter_(void);
-const char *map_next_(map_base_t *m, map_iter_t *iter);
-
-
-typedef map_t(void*) map_void_t;
-typedef map_t(char*) map_str_t;
-typedef map_t(int) map_int_t;
-typedef map_t(char) map_char_t;
-typedef map_t(float) map_float_t;
-typedef map_t(double) map_double_t;
+#ifdef __cplusplus
+}
+#endif
 
 #endif
+

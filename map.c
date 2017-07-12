@@ -1,194 +1,218 @@
-/** 
- * Copyright (c) 2014 rxi
- *
- * This library is GC_free software; you can redistribute it and/or modify it
- * under the terms of the MIT license. See LICENSE for details.
- */
+//
+// map.c
+//
+// Copyright (c) 2014 Joao Cordeiro
+// MIT licensed
 
+#ifdef __APPLE__
 #include <stdlib.h>
-#include <string.h>
-#include <gc.h>
+#include <strings.h>
+#else
+#include <malloc.h>
+#endif
+#include <stdio.h>
 #include "map.h"
 
-struct map_node_t {
-	unsigned hash;
-	void *value;
-	map_node_t *next;
-	/* char key[]; */
-	/* char value[]; */
+// Utility functions
+
+/**
+ * \brief Create a node.
+ * \param key Entry key.
+ * \param value Entry value.
+ * \return A new node object. In case of error, returns NULL.
+ */
+static struct map_node_t* new_map_node(const char* key, void* value)
+{
+    struct map_node_t* new_node = NULL;
+
+    new_node = (struct map_node_t*)malloc(sizeof(struct map_node_t));
+
+    if (new_node) {
+        new_node->next = NULL;
+        new_node->value = value;
+
+        new_node->key = (char*)malloc(strlen(key) + 1);
+        if (!new_node->key) {
+            free(new_node);
+            return NULL;
+        }
+
+        strcpy(new_node->key, key);
+    }
+
+    return new_node;
+}
+
+struct map_find_results_t {
+    struct map_node_t* prev_node;
+    struct map_node_t* node;
+    unsigned short exact_match;
 };
 
+/**
+ * \brief Find a node with a given key.
+ * \param map Map to search for the key in.
+ * \param key Key to search for.
+ * \return Pointer to node if found. NULL otherwise.
+ */
+static struct map_find_results_t map_find(struct map_t* map, const char* key)
+{
+    struct map_find_results_t results;
 
-static unsigned map_hash(const char *str) {
-	unsigned hash = 5381;
-	while (*str) {
-		hash = ((hash << 5) + hash) ^ *str++;
-	}
-	return hash;
+    results.prev_node = NULL;
+    results.node = NULL;
+    results.exact_match = 0;
+
+    struct map_node_t* node;
+    for (node = map->head; node != NULL; node = node->next) {
+        int cmp = (*map->cmp_func)(key, node->key);
+
+        if (cmp <= 0) {
+            results.node = node;
+            results.exact_match = (cmp == 0);
+            return results;
+        }
+
+        results.prev_node = node;
+    }
+
+    return results;
 }
 
 
-static map_node_t *map_newnode(const char *key, void *value, int vsize) {
-	map_node_t *node;
-	int ksize = strlen(key) + 1;
-	int voffset = ksize + ((sizeof(void*) - ksize) % sizeof(void*));
-	node = GC_malloc(sizeof(*node) + voffset + vsize);
-	if (!node) return NULL;
-	memcpy(node + 1, key, ksize);
-	node->hash = map_hash(key);
-	node->value = ((char*) (node + 1)) + voffset;
-	memcpy(node->value, value, vsize);
-	return node;
+// Lib functions
+
+struct map_t* new_map()
+{
+    struct map_t* map = NULL;
+
+    map = (struct map_t*)malloc(sizeof(struct map_t));
+
+    if (map) {
+        map->head = NULL;
+        map->size = 0;
+        map->cmp_func = strcmp;
+        map->free_func = NULL;
+    }
+
+    return map;
+}
+
+void map_set_free_func(struct map_t* map, void (*f)(void*))
+{
+    map->free_func = f;
+}
+
+void map_set_cmp_func(struct map_t* map, int (*f)(const char*, const char*))
+{
+    map->cmp_func = f;
+}
+
+void destroy_map(struct map_t** map)
+{
+    struct map_node_t* node;
+    struct map_node_t* next_node;
+
+    for (node = (*map)->head; node != NULL; node = next_node) {
+        free(node->key);
+
+        if ((*map)->free_func && node->value) {
+            (*(*map)->free_func)(node->value);
+        }
+
+        next_node = node->next;
+        free(node);
+        node = NULL;
+    }
+
+    free(*map);
+    *map = NULL;
 }
 
 
-static int map_bucketidx(map_base_t *m, unsigned hash) {
-	/* If the implementation is changed to allow a non-power-of-2 bucket count,
-	 * the line below should be changed to use mod instead of AND */
-	return hash & (m->nbuckets - 1);
+void* map_get(struct map_t* map, const char* key)
+{
+    const struct map_find_results_t find_result = map_find(map, key);
+
+    if (find_result.exact_match) {
+        return find_result.node->value;
+    }
+
+    return NULL;
+}
+
+int map_set(struct map_t* map, const char* key, void* value)
+{
+    const struct map_find_results_t find_result = map_find(map, key);
+
+    // found node with same key
+    if (find_result.exact_match) {
+        if (map->free_func && find_result.node->value) {
+            (*map->free_func)(find_result.node->value);
+        }
+
+        find_result.node->value = value;
+        return 0;
+    }
+
+    // create the new node.
+    struct map_node_t* new_node = new_map_node(key, value);
+
+    if (!new_node) {
+        return -1;
+    }
+
+    // empty list
+    if (map->head == NULL) {
+        map->head = new_node;
+        map->size = 1;
+        return 0;
+    }
+
+    // put the new node in the proper place
+    struct map_node_t* node = find_result.node;
+    struct map_node_t* prev_node = find_result.prev_node;
+
+    new_node->next = node;
+
+    if (prev_node) {
+        prev_node->next = new_node;
+    } else {
+        map->head = new_node;
+    }
+
+    map->size++;
+    return 0;
+}
+
+void map_del(struct map_t* map, const char* key)
+{
+    struct map_find_results_t find_results = map_find(map, key);
+
+    if (!find_results.exact_match) {
+        return;
+    }
+
+    struct map_node_t* node = find_results.node;
+
+    if (map->free_func && node->value) {
+        (*map->free_func)(node->value);
+    }
+
+    if (node == map->head) {
+        map->head = map->head->next;
+    } else {
+        find_results.prev_node->next = node->next;
+    }
+
+    free(node->key);
+    free(node);
+
+    map->size--;
 }
 
 
-static void map_addnode(map_base_t *m, map_node_t *node) {
-	int n = map_bucketidx(m, node->hash);
-	node->next = m->buckets[n];
-	m->buckets[n] = node;
-}
-
-
-static int map_resize(map_base_t *m, int nbuckets) {
-	map_node_t *nodes, *node, *next;
-	map_node_t **buckets;
-	int i; 
-	/* Chain all nodes together */
-	nodes = NULL;
-	i = m->nbuckets;
-	while (i--) {
-		node = (m->buckets)[i];
-		while (node) {
-			next = node->next;
-			node->next = nodes;
-			nodes = node;
-			node = next;
-		}
-	}
-	/* Reset buckets */
-	buckets = GC_realloc(m->buckets, sizeof(*m->buckets) * nbuckets);
-	if (buckets != NULL) {
-		m->buckets = buckets;
-		m->nbuckets = nbuckets;
-	}
-	if (m->buckets) {
-		memset(m->buckets, 0, sizeof(*m->buckets) * m->nbuckets);
-		/* Re-add nodes to buckets */
-		node = nodes;
-		while (node) {
-			next = node->next;
-			map_addnode(m, node);
-			node = next;
-		}
-	}
-	/* Return error code if GC_realloc() failed */
-	return (buckets == NULL) ? -1 : 0;
-}
-
-
-static map_node_t **map_getref(map_base_t *m, const char *key) {
-	unsigned hash = map_hash(key);
-	map_node_t **next;
-	if (m->nbuckets > 0) {
-		next = &m->buckets[map_bucketidx(m, hash)];
-		while (*next) {
-			if ((*next)->hash == hash && !strcmp((char*) (*next + 1), key)) {
-				return next;
-			}
-			next = &(*next)->next;
-		}
-	}
-	return NULL;
-}
-
-
-void map_deinit_(map_base_t *m) {
-	map_node_t *next, *node;
-	int i;
-	i = m->nbuckets;
-	while (i--) {
-		node = m->buckets[i];
-		while (node) {
-			next = node->next;
-			GC_free(node);
-			node = next;
-		}
-	}
-	GC_free(m->buckets);
-}
-
-
-void *map_get_(map_base_t *m, const char *key) {
-	map_node_t **next = map_getref(m, key);
-	return next ? (*next)->value : NULL;
-}
-
-
-int map_set_(map_base_t *m, const char *key, void *value, int vsize) {
-	int n, err;
-	map_node_t **next, *node;
-	/* Find & replace existing node */
-	next = map_getref(m, key);
-	if (next) {
-		memcpy((*next)->value, value, vsize);
-		return 0;
-	}
-	/* Add new node */
-	node = map_newnode(key, value, vsize);
-	if (node == NULL) goto fail;
-	if (m->nnodes >= m->nbuckets) {
-		n = (m->nbuckets > 0) ? (m->nbuckets << 1) : 1;
-		err = map_resize(m, n);
-		if (err) goto fail;
-	}
-	map_addnode(m, node);
-	m->nnodes++;
-	return 0;
-	fail:
-	if (node) GC_free(node);
-	return -1;
-}
-
-
-void map_remove_(map_base_t *m, const char *key) {
-	map_node_t *node;
-	map_node_t **next = map_getref(m, key);
-	if (next) {
-		node = *next;
-		*next = (*next)->next;
-		GC_free(node);
-		m->nnodes--;
-	}
-}
-
-
-map_iter_t map_iter_(void) {
-	map_iter_t iter;
-	iter.bucketidx = -1;
-	iter.node = NULL;
-	return iter;
-}
-
-
-const char *map_next_(map_base_t *m, map_iter_t *iter) {
-	if (iter->node) {
-		iter->node = iter->node->next;
-		if (iter->node == NULL) goto nextBucket;
-	} else {
-		nextBucket:
-		do {
-			if (++iter->bucketidx >= m->nbuckets) {
-				return NULL;
-			}
-			iter->node = m->buckets[iter->bucketidx];
-		} while (iter->node == NULL);
-	}
-	return (char*) (iter->node + 1);
+size_t map_size(const struct map_t* map)
+{
+    return map->size;
 }

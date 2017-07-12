@@ -29,8 +29,6 @@ typedef struct ml_function_t ml_function_t;
 typedef struct ml_method_t ml_method_t;
 typedef struct ml_error_t ml_error_t;
 
-typedef struct ml_method_t ml_method_t;
-
 typedef struct ml_frame_t ml_frame_t;
 typedef struct ml_inst_t ml_inst_t;
 
@@ -52,9 +50,6 @@ struct ml_type_t {
 	ml_value_t *(*deref)(ml_t *ML, ml_value_t *);
 	ml_value_t *(*assign)(ml_t *ML, ml_value_t *, ml_value_t *);
 	ml_value_t *(*next)(ml_t *ML, ml_value_t *);
-	long (*to_long)(ml_t *ML, ml_value_t *);
-	double (*to_double)(ml_t *ML, ml_value_t *);
-	const char *(*to_string)(ml_t *ML, ml_value_t *);
 };
 
 static long ml_default_hash(ml_t *ML, ml_value_t *Value) {
@@ -81,14 +76,6 @@ static ml_value_t *ml_default_next(ml_t *ML, ml_value_t *Iter) {
 	return ml_error("TypeError", "value is not iterable");
 }
 
-static long ml_default_to_long(ml_t *ML, ml_value_t *Value) {
-	return 0;
-}
-
-static double ml_default_to_double(ml_t *ML, ml_value_t *Value) {
-	return 0.0;
-}
-
 ml_value_t *CompareMethod;
 
 ml_type_t MLAny[1] = {{0,}};
@@ -104,10 +91,7 @@ ml_type_t MLNil[1] = {{
 	ml_default_index,
 	ml_default_deref,
 	ml_default_assign,
-	ml_default_next,
-	ml_default_to_long,
-	ml_default_to_double,
-	ml_nil_to_string
+	ml_default_next
 }};
 
 ml_value_t Nil[1] = {{MLNil}};
@@ -115,18 +99,6 @@ ml_value_t Nil[1] = {{MLNil}};
 long ml_hash(ml_t *ML, ml_value_t *Value) {
 	Value = Value->Type->deref(ML, Value);
 	return Value->Type->hash(ML, Value);
-}
-
-long ml_to_long(ml_t *ML, ml_value_t *Value) {
-	return Value->Type->to_long(ML, Value);
-}
-
-double ml_to_double(ml_t *ML, ml_value_t *Value) {
-	return Value->Type->to_double(ML, Value);
-}
-
-const char *ml_to_string(ml_t *ML, ml_value_t *Value) {
-	return Value->Type->to_string(ML, Value);
 }
 
 ml_value_t *ml_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
@@ -187,25 +159,12 @@ struct ml_real_t {
 struct ml_string_t {
 	const ml_type_t *Type;
 	const char *Value;
+	int Length;
 };
 
 static long ml_integer_hash(ml_t *ML, ml_value_t *Value) {
 	ml_integer_t *Integer = (ml_integer_t *)Value;
 	return Integer->Value;
-}
-
-static long ml_integer_to_long(ml_t *ML, ml_value_t *Value) {
-	return ((ml_integer_t *)Value)->Value;
-}
-
-static double ml_integer_to_double(ml_t *ML, ml_value_t *Value) {
-	return ((ml_integer_t *)Value)->Value;
-}
-
-static const char *ml_integer_to_string(ml_t *ML, ml_value_t *Value) {
-	char *String = snew(20);
-	sprintf(String, "%d", ((ml_integer_t *)Value)->Value);
-	return String;
 }
 
 ml_type_t MLInteger[1] = {{
@@ -215,10 +174,7 @@ ml_type_t MLInteger[1] = {{
 	ml_default_index,
 	ml_default_deref,
 	ml_default_assign,
-	ml_default_next,
-	ml_integer_to_long,
-	ml_integer_to_double,
-	ml_integer_to_string
+	ml_default_next
 }};
 
 ml_value_t *ml_integer(long Value) {
@@ -232,23 +188,13 @@ int ml_is_integer(ml_value_t *Value) {
 	return Value->Type == MLInteger;
 }
 
+long ml_integer_value(ml_value_t *Value) {
+	return ((ml_integer_t *)Value)->Value;
+}
+
 static long ml_real_hash(ml_t *ML, ml_value_t *Value) {
 	ml_real_t *Real = (ml_real_t *)Value;
 	return (long)Real->Value;
-}
-
-static long ml_real_to_long(ml_t *ML, ml_value_t *Value) {
-	return ((ml_real_t *)Value)->Value;
-}
-
-static double ml_real_to_double(ml_t *ML, ml_value_t *Value) {
-	return ((ml_real_t *)Value)->Value;
-}
-
-static const char *ml_real_to_string(ml_t *ML, ml_value_t *Value) {
-	char *String = snew(20);
-	sprintf(String, "%f", ((ml_real_t *)Value)->Value);
-	return String;
 }
 
 ml_type_t MLReal[1] = {{
@@ -258,10 +204,7 @@ ml_type_t MLReal[1] = {{
 	ml_default_index,
 	ml_default_deref,
 	ml_default_assign,
-	ml_default_next,
-	ml_real_to_long,
-	ml_real_to_double,
-	ml_real_to_string
+	ml_default_next
 }};
 
 ml_value_t *ml_real(double Value) {
@@ -275,15 +218,23 @@ int ml_is_real(ml_value_t *Value) {
 	return Value->Type == MLReal;
 }
 
+double ml_real_value(ml_value_t *Value) {
+	return ((ml_real_t *)Value)->Value;
+}
+
 static long ml_string_hash(ml_t *ML, ml_value_t *Value) {
 	ml_string_t *String = (ml_string_t *)Value;
 	long Hash = 5381;
-	for (const char *P = String->Value; *P; ++P) Hash = ((Hash << 5) + Hash) + *P;
+	for (int I = 0; I < String->Length; ++I) Hash = ((Hash << 5) + Hash) + String->Value[I];
 	return Hash;
 }
 
-static const char *ml_string_to_string(ml_t *ML, ml_value_t *Value) {
+const char *ml_string_value(ml_value_t *Value) {
 	return ((ml_string_t *)Value)->Value;
+}
+
+int ml_string_length(ml_value_t *Value) {
+	return ((ml_string_t *)Value)->Length;
 }
 
 ml_type_t MLString[1] = {{
@@ -293,16 +244,14 @@ ml_type_t MLString[1] = {{
 	ml_default_index,
 	ml_default_deref,
 	ml_default_assign,
-	ml_default_next,
-	ml_default_to_long,
-	ml_default_to_double,
-	ml_string_to_string
+	ml_default_next
 }};
 
-ml_value_t *ml_string(const char *Value) {
+ml_value_t *ml_string(const char *Value, int Length) {
 	ml_string_t *String = new(ml_string_t);
 	String->Type = MLString;
 	String->Value = Value;
+	String->Length = Length >= 0 ? Length : strlen(Value);
 	return (ml_value_t *)String;
 }
 
@@ -339,7 +288,7 @@ static ml_method_node_t *ml_method_find(ml_method_node_t *Node, int Count, ml_va
 	return Node;
 }
 
-static ml_value_t *ml_method_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
+ml_value_t *ml_method_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
 	ml_method_t *Method = (ml_method_t *)Value;
 	ml_method_node_t *Node = ml_method_find(Method->Root, Count, Args);
 	if (Node->Callback) {
@@ -391,26 +340,24 @@ ml_value_t *ml_method(const char *Name) {
 	return (ml_value_t *)Method;
 }
 
-void ml_add_method(const char *Name, void *Data, ml_callback_t Callback, int Count, ...) {
+void ml_method_add(const char *Name, void *Data, ml_callback_t Callback, ...) {
 	ml_method_t *Method = (ml_method_t *)ml_method(Name);
 	ml_method_node_t *Node = Method->Root;
-	if (Count > 0) {
-		ml_method_node_t *Next;
-		va_list Args;
-		va_start(Args, Count);
-		while (--Count >= 0) {
-			ml_type_t *Type = va_arg(Args, ml_type_t *);
-			ml_method_node_t **Slot = &Node->Child;
-			while (Slot[0] && Slot[0]->Type != Type) Slot = &Slot[0]->Next;
-			if (Slot[0]) {
-				Node = Slot[0];
-			} else {
-				Node = Slot[0] = new(ml_method_node_t);
-				Node->Type = Type;
-			}
+	va_list Args;
+	va_start(Args, Callback);
+	ml_type_t *Type;
+	while ((Type = va_arg(Args, ml_type_t *))) {
+		ml_method_node_t **Slot = &Node->Child;
+		while (Slot[0] && Slot[0]->Type != Type) Slot = &Slot[0]->Next;
+		if (Slot[0]) {
+			Node = Slot[0];
+		} else {
+			Node = Slot[0] = new(ml_method_node_t);
+			Node->Type = Type;
 		}
-		va_end(Args);
+
 	}
+	va_end(Args);
 	Node->Data = Data;
 	Node->Callback = Callback;
 }
@@ -467,7 +414,8 @@ struct ml_list_node_t {
 
 static ml_value_t *ml_list_index(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
 	ml_list_t *List = (ml_list_t *)Value;
-	long Index = Args[0]->Type->to_long(ML, Args[0]);
+	if (Args[0]->Type != MLInteger) return ml_error("ParamError", "indices to lists must be integer");
+	long Index = ((ml_integer_t *)Args[0])->Value;
 	if (Index > 0) {
 		for (ml_list_node_t *Node = List->Head; Node; Node = Node->Next) {
 			if (--Index == 0) return ml_reference(&Node->Value);
@@ -496,6 +444,18 @@ ml_value_t *ml_list() {
 	ml_list_t *List = new(ml_list_t);
 	List->Type = MLList;
 	return (ml_value_t *)List;
+}
+
+int ml_is_list(ml_value_t *Value) {
+	return Value->Type == MLList;
+}
+
+int ml_list_foreach(ml_value_t *Value, void *Data, int (*callback)(ml_value_t *, void *)) {
+	ml_list_t *List = (ml_list_t *)Value;
+	for (ml_list_node_t *Node = List->Head; Node; Node = Node->Next) {
+		if (callback(Node->Value, Data)) return 1;
+	}
+	return 0;
 }
 
 static ml_value_t *ml_list_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
@@ -539,7 +499,13 @@ ml_value_t *ml_tree_search(ml_t *ML, ml_tree_t *Tree, ml_value_t *Key) {
 		if (!Compare) {
 			ml_value_t *Args[2] = {Key, Node->Key};
 			ml_value_t *Result = ml_method_call(ML, CompareMethod, 2, Args);
-			Compare = Result->Type->to_long(ML, Result);
+			if (Result->Type == MLInteger) {
+				Compare = ((ml_integer_t *)Result)->Value;
+			} else if (Result->Type == MLReal) {
+				Compare = ((ml_real_t *)Result)->Value;
+			} else {
+				return ml_error("CompareError", "comparison must return number");
+			}
 		}
 		if (!Compare) {
 			return Node->Value;
@@ -606,7 +572,13 @@ static ml_value_t *ml_tree_insert_internal(ml_t *ML, ml_tree_t *Tree, ml_tree_no
 	if (!Compare) {
 		ml_value_t *Args[2] = {Key, Slot[0]->Key};
 		ml_value_t *Result = ml_method_call(ML, CompareMethod, 2, Args);
-		Compare = Result->Type->to_long(ML, Result);
+		if (Result->Type == MLInteger) {
+			Compare = ((ml_integer_t *)Result)->Value;
+		} else if (Result->Type == MLReal) {
+			Compare = ((ml_real_t *)Result)->Value;
+		} else {
+			return ml_error("CompareError", "comparison must return number");
+		}
 	}
 	if (!Compare) {
 		ml_value_t *Old = Slot[0]->Value;
@@ -637,7 +609,13 @@ ml_value_t *ml_tree_remove_internal(ml_t *ML, ml_tree_t *Tree, ml_tree_node_t **
 	if (!Compare) {
 		ml_value_t *Args[2] = {Key, Slot[0]->Key};
 		ml_value_t *Result = ml_method_call(ML, CompareMethod, 2, Args);
-		Compare = Result->Type->to_long(ML, Result);
+		if (Result->Type == MLInteger) {
+			Compare = ((ml_integer_t *)Result)->Value;
+		} else if (Result->Type == MLReal) {
+			Compare = ((ml_real_t *)Result)->Value;
+		} else {
+			return ml_error("CompareError", "comparison must return number");
+		}
 	}
 	ml_value_t *Removed = Nil;
 	if (!Compare) {
@@ -712,6 +690,22 @@ ml_value_t *ml_tree() {
 	ml_tree_t *Tree = new(ml_tree_t);
 	Tree->Type = MLTree;
 	return (ml_value_t *)Tree;
+}
+
+int ml_is_tree(ml_value_t *Value) {
+	return Value->Type == MLTree;
+}
+
+static int ml_tree_node_foreach(ml_tree_node_t *Node, void *Data, int (*callback)(ml_value_t *, ml_value_t *, void *)) {
+	if (callback(Node->Key, Node->Value, Data)) return 1;
+	if (Node->Left && ml_tree_node_foreach(Node->Left, Data, callback)) return 1;
+	if (Node->Right && ml_tree_node_foreach(Node->Right, Data, callback)) return 1;
+	return 0;
+}
+
+int ml_tree_foreach(ml_value_t *Value, void *Data, int (*callback)(ml_value_t *, ml_value_t *, void *)) {
+	ml_tree_t *Tree = (ml_tree_t *)Value;
+	return Tree->Root ? ml_tree_node_foreach(Tree->Root, callback, Data) : 0;
 }
 
 static ml_value_t *ml_tree_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
@@ -900,9 +894,7 @@ ml_type_t MLClosure[1] = {{
 	ml_default_index,
 	ml_default_deref,
 	ml_default_assign,
-	ml_default_next,
-	ml_default_to_long,
-	ml_default_to_double
+	ml_default_next
 }};
 
 struct ml_error_t {
@@ -927,10 +919,7 @@ ml_type_t MLError[1] = {{
 	ml_default_index,
 	ml_default_deref,
 	ml_default_assign,
-	ml_default_next,
-	ml_default_to_long,
-	ml_default_to_double,
-	ml_error_to_string
+	ml_default_next
 }};
 
 ml_value_t *ml_error(const char *Error, const char *Format, ...) {
@@ -949,6 +938,14 @@ ml_value_t *ml_error(const char *Error, const char *Format, ...) {
 
 int ml_is_error(ml_value_t *Value) {
 	return Value->Type == MLError;
+}
+
+const char *ml_error_type(ml_value_t *Value) {
+	return ((ml_error_t *)Value)->Error;
+}
+
+const char *ml_error_message(ml_value_t *Value) {
+	return ((ml_error_t *)Value)->Message;
 }
 
 #define ml_arith_method_integer(NAME, SYMBOL) \
@@ -1082,10 +1079,10 @@ static ml_value_t *ml_range_integer_integer(ml_t *ML, void *Data, int Count, ml_
 }
 
 #define ml_add_methods_number_number(NAME, SYMBOL) \
-	ml_add_method(#SYMBOL, 0, ml_ ## NAME ## _integer_integer, 2, MLInteger, MLInteger); \
-	ml_add_method(#SYMBOL, 0, ml_ ## NAME ## _real_real, 2, MLReal, MLReal); \
-	ml_add_method(#SYMBOL, 0, ml_ ## NAME ## _real_integer, 2, MLReal, MLInteger); \
-	ml_add_method(#SYMBOL, 0, ml_ ## NAME ## _integer_real, 2, MLInteger, MLReal)
+	ml_add_method(#SYMBOL, 0, ml_ ## NAME ## _integer_integer, MLInteger, MLInteger, 0); \
+	ml_add_method(#SYMBOL, 0, ml_ ## NAME ## _real_real, MLReal, MLReal, 0); \
+	ml_add_method(#SYMBOL, 0, ml_ ## NAME ## _real_integer, MLReal, MLInteger, 0); \
+	ml_add_method(#SYMBOL, 0, ml_ ## NAME ## _integer_real, MLInteger, MLReal, 0)
 
 static ml_value_t *ml_add_string_string(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	ml_string_t *StringA = (ml_string_t *)Args[0];
@@ -1096,7 +1093,7 @@ static ml_value_t *ml_add_string_string(ml_t *ML, void *Data, int Count, ml_valu
 	memcpy(Buffer, StringA->Value, LengthA);
 	memcpy(Buffer + LengthA, StringB->Value, LengthB);
 	Buffer[LengthA + LengthB] = 0;
-	return ml_string(Buffer);
+	return ml_string(Buffer, LengthA + LengthB);
 }
 
 static ml_value_t *ml_compare_string_string(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
@@ -1216,8 +1213,8 @@ static ml_value_t *ml_list_pull(ml_t *ML, void *Data, int Count, ml_value_t **Ar
 static void ml_init() {
 	Methods = anew(ml_method_t *, MaxMethods);
 	CompareMethod = ml_method("?");
-	ml_add_method("-", 0, ml_neg_integer, 1, MLInteger);
-	ml_add_method("-", 0, ml_neg_real, 1, MLReal);
+	ml_method_add("-", 0, ml_neg_integer, MLInteger, 0);
+	ml_method_add("-", 0, ml_neg_real, MLReal, 0);
 	ml_add_methods_number_number(sub, ?);
 	ml_add_methods_number_number(add, +);
 	ml_add_methods_number_number(sub, -);
@@ -1229,23 +1226,23 @@ static void ml_init() {
 	ml_add_methods_number_number(gre, >);
 	ml_add_methods_number_number(leq, <=);
 	ml_add_methods_number_number(geq, >=);
-	ml_add_method("%", 0, ml_mod_integer_integer, 2, MLInteger, MLInteger);
-	ml_add_method("->", 0, ml_range_integer_integer, 2, MLInteger, MLInteger);
-	ml_add_method("?", 0, ml_compare_string_string, 2, MLString, MLString);
-	ml_add_method("=", 0, ml_eq_string_string, 2, MLString, MLString);
-	ml_add_method("!=", 0, ml_neq_string_string, 2, MLString, MLString);
-	ml_add_method("<", 0, ml_les_string_string, 2, MLString, MLString);
-	ml_add_method(">", 0, ml_gre_string_string, 2, MLString, MLString);
-	ml_add_method("<=", 0, ml_leq_string_string, 2, MLString, MLString);
-	ml_add_method(">=", 0, ml_geq_string_string, 2, MLString, MLString);
-	ml_add_method("?", 0, ml_compare_any_any, 2, MLAny, MLAny);
-	ml_add_method("+", 0, ml_add_string_string, 2, MLString, MLString);
-	ml_add_method("values", 0, ml_list_values, 1, MLList);
-	ml_add_method("push", 0, ml_list_push, 1, MLList);
-	ml_add_method("put", 0, ml_list_put, 1, MLList);
-	ml_add_method("pop", 0, ml_list_pop, 1, MLList);
-	ml_add_method("pull", 0, ml_list_pull, 1, MLList);
-	ml_add_method("delete", 0, ml_tree_delete, 1, MLTree);
+	ml_method_add("%", 0, ml_mod_integer_integer, MLInteger, MLInteger, 0);
+	ml_method_add("->", 0, ml_range_integer_integer, MLInteger, MLInteger, 0);
+	ml_method_add("?", 0, ml_compare_string_string, MLString, MLString, 0);
+	ml_method_add("=", 0, ml_eq_string_string, MLString, MLString, 0);
+	ml_method_add("!=", 0, ml_neq_string_string, MLString, MLString, 0);
+	ml_method_add("<", 0, ml_les_string_string, MLString, MLString, 0);
+	ml_method_add(">", 0, ml_gre_string_string, MLString, MLString, 0);
+	ml_method_add("<=", 0, ml_leq_string_string, MLString, MLString, 0);
+	ml_method_add(">=", 0, ml_geq_string_string, MLString, MLString, 0);
+	ml_method_add("?", 0, ml_compare_any_any, MLAny, MLAny, 0);
+	ml_method_add("+", 0, ml_add_string_string, MLString, MLString, 0);
+	ml_method_add("values", 0, ml_list_values, MLList, 0);
+	ml_method_add("push", 0, ml_list_push, MLList, 0);
+	ml_method_add("put", 0, ml_list_put, MLList, 0);
+	ml_method_add("pop", 0, ml_list_pop, MLList, 0);
+	ml_method_add("pull", 0, ml_list_pull, MLList, 0);
+	ml_method_add("delete", 0, ml_tree_delete, MLTree, 0);
 	// TODO: Implement other methods
 }
 
@@ -2114,7 +2111,7 @@ static int ml_parse(mlc_scanner_t *Scanner, ml_token_t Token) {
 				}
 			}
 			*D = 0;
-			Scanner->Value = ml_string(String);
+			Scanner->Value = ml_string(String, Length);
 			Scanner->Token = MLT_VALUE;
 			Scanner->Next = End + 1;
 			goto done;

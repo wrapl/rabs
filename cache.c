@@ -171,7 +171,7 @@ struct HXmap *cache_depends_get(const char *Id) {
 	while (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
 		if (Depends == 0) Depends = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
 		const char *DependId = sqlite3_column_text(DependsGetStatement, 0);
-		HXmap_add(Depends, target_find(DependId), 0);
+		map_set(Depends, target_find(DependId), 0);
 	}
 	sqlite3_reset(DependsGetStatement);
 	return Depends;
@@ -201,7 +201,7 @@ struct HXmap *cache_scan_get(const char *Id) {
 	while (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
 		if (Scans == 0) Scans = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
 		const char *ScanId = sqlite3_column_text(ScanGetStatement, 0);
-		HXmap_add(Scans, target_find(ScanId), 0);
+		map_set(Scans, target_find(ScanId), 0);
 	}
 	sqlite3_reset(ScanGetStatement);
 	return Scans;

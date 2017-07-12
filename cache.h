@@ -1,9 +1,9 @@
 #ifndef CACHE_H
 #define CACHE_H
 
-#include <libHX/map.h>
 #include <time.h>
 #include "sha256.h"
+#include "map.h"
 
 void cache_open(const char *RootPath);
 void cache_close();

@@ -2,7 +2,7 @@
 #define CONTEXT_H
 
 #include "vfs.h"
-#include <lua.h>
+#include "map.h"
 
 typedef struct context_t context_t;
 
@@ -10,8 +10,8 @@ struct context_t {
 	context_t *Parent;
 	const char *Path, *Name;
 	const vmount_t *Mounts;
-	int Ref, Locals;
 	struct target_t *Default;
+	map_str_t Locals[1];
 };
 
 void context_init();

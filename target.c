@@ -3,9 +3,6 @@
 #include "util.h"
 #include "context.h"
 #include "cache.h"
-#include <lauxlib.h>
-#include <libHX/map.h>
-#include <libHX/io.h>
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -14,6 +11,11 @@
 #include <unistd.h>
 #include <gc.h>
 #include <errno.h>
+
+#define new(T) ((T *)GC_MALLOC(sizeof(T)))
+#define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
+#define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
+#define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
 
 typedef struct target_update_t target_update_t;
 typedef struct target_pair_t target_pair_t;
@@ -25,15 +27,13 @@ typedef struct target_symb_t target_symb_t;
 extern const char *RootPath;
 static int TargetMetatable;
 static int BuildScanTarget;
-static struct HXmap *TargetCache;
+static struct map_t *TargetCache;
 struct target_t *CurrentTarget = 0;
-static struct HXmap *DetectedDepends = 0;
+static struct map_t *DetectedDepends = 0;
 static int BuiltTargets = 0;
 
 void target_depends_add(target_t *Target, target_t *Depend) {
-	if (Target != Depend) {
-		HXmap_add(Target->Depends, Depend, 0);
-	}
+	if (Target != Depend) map_set(Target->Depends, Depend, 0);
 }
 
 static int target_function_hash(lua_State *L, const void *P, size_t Size, SHA256_CTX *Ctx) {
@@ -41,72 +41,69 @@ static int target_function_hash(lua_State *L, const void *P, size_t Size, SHA256
 	return 0;
 }
 
-static void target_value_hash(int8_t Hash[SHA256_BLOCK_SIZE]) {
-	switch (lua_type(L, -1)) {
-	case LUA_TNIL: {
+static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
+	int8_t ChildHash[SHA256_BLOCK_SIZE];
+	target_value_hash(Value, ChildHash);
+	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+}
+
+static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
+	int8_t ChildHash[SHA256_BLOCK_SIZE];
+	target_value_hash(Key, ChildHash);
+	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+	target_value_hash(Value, ChildHash);
+	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+}
+
+static void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
+	if (Value == Nil) {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
-		return;
-	}
-	case LUA_TNUMBER: {
+	} else if (ml_is_integer(Value)) {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
-		*(lua_Number *)Hash = lua_tonumber(L, -1);
-		Hash[SHA256_BLOCK_SIZE - 1] = LUA_TNUMBER;
-		return;
-	}
-	case LUA_TBOOLEAN: {
-		*(int *)Hash = lua_toboolean(L, -1);
+		*(long *)Hash = ml_to_long(Value);
+		Hash[SHA256_BLOCK_SIZE - 1] = 1;
+	} else if (ml_is_real(Value)) {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
-		Hash[SHA256_BLOCK_SIZE - 1] = LUA_TBOOLEAN;
-		return;
-	}
-	case LUA_TSTRING: {
-		size_t Len;
+		*(double *)Hash = ml_to_double(Value);
+		Hash[SHA256_BLOCK_SIZE - 1] = 1;
+	} else if (ml_is_string(Value)) {
+		const char *String = ml_to_string(Value);
+		size_t Len = strlen(String);
 		const char *String = lua_tolstring(L, -1, &Len);
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
 		sha256_update(Ctx, String, Len);
 		sha256_final(Ctx, Hash);
-		return;
-	}
-	case LUA_TTABLE: {
+	} else if (ml_is_list(Value)) {
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		lua_pushnil(L);
-		while (lua_next(L, -2)) {
-			int8_t ChildHash[SHA256_BLOCK_SIZE];
-			target_value_hash(ChildHash);
-			sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-			lua_pop(L, 1);
-			target_value_hash(ChildHash);
-			sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-		}
+		ml_list_foreach(Value, Ctx, list_update_hash);
+		sha256_final(Ctx, Hash);
+	} else if (ml_is_tree(Value)) {
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		ml_tree_foreach(Value, Ctx, tree_update_hash);
+		sha256_final(Ctx, Hash);
+	} else if (ml_is_closure(Value)) {
+		ml_closure_hash(Value, Hash);
+	} else {
+		target_t *Target = luaL_checkudata(L, -1, "target");
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		sha256_update(Ctx, Target->Id, strlen(Target->Id));
 		sha256_final(Ctx, Hash);
 		return;
 	}
-	case LUA_TFUNCTION: {
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		lua_dump(L, (void *)target_function_hash, Ctx, 1);
-		sha256_final(Ctx, Hash);
-		return;
-	}
-	}
-	target_t *Target = luaL_checkudata(L, -1, "target");
-	SHA256_CTX Ctx[1];
-	sha256_init(Ctx);
-	sha256_update(Ctx, Target->Id, strlen(Target->Id));
-	sha256_final(Ctx, Hash);
-	return;
 }
 
-bool depends_update_fn(const struct HXmap_node *Node, int *DependsLastUpdated) {
+bool depends_update_fn(const struct map_t_node *Node, int *DependsLastUpdated) {
 	target_t *Depends = (target_t *)Node->key;
 	target_update(Depends);
 	if (Depends->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depends->LastUpdated;
 	return true;
 }
 
-bool depends_print_fn(const struct HXmap_node *Node, int *DependsLastUpdated) {
+bool depends_print_fn(const struct map_t_node *Node, int *DependsLastUpdated) {
 	target_t *Depends = (target_t *)Node->key;
 	if (Depends->LastUpdated == *DependsLastUpdated) printf("\t\e[35m%s[%d]\e[0m\n", Depends->Id, Depends->LastUpdated);
 	return true;
@@ -132,7 +129,7 @@ void target_update(target_t *Target) {
 			lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Build);
 			target_value_hash(BuildHash);
 			lua_pop(L, 1);
-			struct HXmap *PreviousDetectedDepends = cache_depends_get(Target->Id);
+			struct map_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
 			const char *BuildId = concat(Target->Id, "::build", 0);
 			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
@@ -150,7 +147,7 @@ void target_update(target_t *Target) {
 					HXmap_qfe(PreviousDetectedDepends, (void *)depends_print_fn, &DependsLastUpdated);
 				}
 				target_t *PreviousTarget = CurrentTarget;
-				struct HXmap *PreviousDepends = DetectedDepends;
+				struct map_t *PreviousDepends = DetectedDepends;
 				context_t *PreviousContext = CurrentContext;
 				CurrentTarget = Target;
 				DetectedDepends = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
@@ -187,7 +184,7 @@ void target_update(target_t *Target) {
 	}
 }
 
-bool depends_query_fn(const struct HXmap_node *Node, int *DependsLastUpdated) {
+bool depends_query_fn(const struct map_t_node *Node, int *DependsLastUpdated) {
 	target_t *Depends = (target_t *)Node->key;
 	target_query(Depends);
 	if (Depends->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depends->LastUpdated;
@@ -206,10 +203,8 @@ void target_query(target_t *Target) {
 		time_t FileTime;
 		if (Target->Build) {	
 			int8_t BuildHash[SHA256_BLOCK_SIZE];
-			lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Build);
-			target_value_hash(BuildHash);
-			lua_pop(L, 1);
-			struct HXmap *PreviousDetectedDepends = cache_depends_get(Target->Id);
+			ml_closure_hash(Target->Build, BuildHash);
+			struct map_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
 			const char *BuildId = concat(Target->Id, "::build", 0);
 			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
@@ -233,26 +228,20 @@ void target_query(target_t *Target) {
 }
 
 void target_depends_auto(target_t *Depend) {
-	if (CurrentTarget && CurrentTarget != Depend && !HXmap_get(CurrentTarget->Depends, Depend)) {
-		HXmap_add(DetectedDepends, Depend, 0);
+	if (CurrentTarget && CurrentTarget != Depend && !map_get(CurrentTarget->Depends, Depend)) {
+		map_set(DetectedDepends, Depend, 0);
 	}
 }
 
-void target_push(target_t *Target) {
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Ref);
-}
-
 static target_t *target_new(target_class_t *Class, const char *Id) {
-	target_t *Target = (target_t *)lua_newuserdata(L, Class->Size);
-	lua_rawgeti(L, LUA_REGISTRYINDEX, TargetMetatable);
-	lua_setmetatable(L, -2);
+	target_t *Target = new(target_t);
+	Target->ML = ml_object(Target, Class->Type);
 	Target->Class = Class;
 	Target->Id = Id;
 	Target->Build = 0;
 	Target->LastUpdated = 0;
-	Target->Depends = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
-	Target->Ref = luaL_ref(L, LUA_REGISTRYINDEX);
-	HXmap_add(TargetCache, Id, Target);
+	Target->Depends = new_map();
+	map_set(TargetCache, Id, Target);
 	return Target;
 }
 
@@ -360,7 +349,7 @@ target_class_t FileClass[] = {{
 static target_t *target_file_check(const char *Path, int Absolute) {
 	Path = concat(Path, 0);
 	const char *Id = concat("file:", Path, 0);
-	target_file_t *Target = (target_file_t *)HXmap_get(TargetCache, Id);
+	target_file_t *Target = (target_file_t *)map_get(TargetCache, Id);
 	if (!Target) {
 		Target = (target_file_t *)target_new(FileClass, Id);
 		Target->Absolute = Absolute;
@@ -508,15 +497,16 @@ static target_class_t MetaClass[] = {{
 	target_default_missing
 }};
 
-int target_meta_new(lua_State *L) {
-	const char *Name = luaL_checkstring(L, 1);
+ml_value_t *target_meta_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	if (Count < 0) return ml_error("ParamError", "missing parameter <name>");
+	const char *Name = ml_to_string(Args[0]);
 	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, 0);
-	target_meta_t *Target = (target_meta_t *)HXmap_get(TargetCache, Id);
+	target_meta_t *Target = (target_meta_t *)map_get(TargetCache, Id);
 	if (!Target) {
 		Target = (target_meta_t *)target_new(MetaClass, Id);
 		Target->Name = Name;
 	}
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Ref);
+	return Target->ML;
 	return 1;
 }
 
@@ -535,7 +525,7 @@ int target_depends(lua_State *L) {
 			}
 		} else {
 			target_t *Depend = luaL_checkudata(L, I, "target");
-			HXmap_add(Target->Depends, Depend, 0);
+			map_set(Target->Depends, Depend, 0);
 		}
 	}
 	lua_pushvalue(L, 1);
@@ -565,7 +555,7 @@ struct target_scan_t {
 static void target_scan_tostring(target_scan_t *Target, luaL_Buffer *Buffer) {
 }
 
-bool scan_depends_hash(const struct HXmap_node *Node, int8_t Hash[SHA256_BLOCK_SIZE]) {
+bool scan_depends_hash(const struct map_t_node *Node, int8_t Hash[SHA256_BLOCK_SIZE]) {
 	target_t *Depends = (target_t *)Node->key;
 	target_update(Depends);
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depends->Hash[I];
@@ -573,7 +563,7 @@ bool scan_depends_hash(const struct HXmap_node *Node, int8_t Hash[SHA256_BLOCK_S
 }
 
 static time_t target_scan_hash(target_scan_t *Target, time_t *PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
-	struct HXmap *Scans = cache_scan_get(Target->Id);
+	struct map_t *Scans = cache_scan_get(Target->Id);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	if (Scans) HXmap_qfe(Scans, (void *)scan_depends_hash, Target->Hash);
 	return 0;
@@ -596,11 +586,11 @@ static int build_scan_target(lua_State *L) {
 		exit(1);
 	}
 	luaL_checktype(L, -1, LUA_TTABLE);
-	struct HXmap *Scans = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
+	struct map_t *Scans = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
 	lua_pushnil(L);
 	while (lua_next(L, -2)) {
 		target_t *ScanTarget = (target_t *)luaL_checkudata(L, -1, "target");
-		HXmap_add(Scans, ScanTarget, 0);
+		map_set(Scans, ScanTarget, 0);
 		lua_pop(L, 1);
 	}
 	lua_pop(L, 2);
@@ -612,10 +602,10 @@ int target_scan_new(lua_State *L) {
 	target_t *ParentTarget = (target_t *)luaL_checkudata(L, 1, "target");
 	const char *Name = luaL_checkstring(L, 2);
 	const char *Id = concat("scan:", ParentTarget->Id, "::", Name, 0);
-	target_scan_t *Target = (target_scan_t *)HXmap_get(TargetCache, Id);
+	target_scan_t *Target = (target_scan_t *)map_get(TargetCache, Id);
 	if (!Target) {
 		Target = (target_scan_t *)target_new(ScanClass, Id);
-		HXmap_add(Target->Depends, ParentTarget, 0);
+		map_set(Target->Depends, ParentTarget, 0);
 		Target->Name = Name;
 		Target->Source = ParentTarget;
 		Target->Build = BuildScanTarget;
@@ -653,7 +643,7 @@ static target_class_t SymbClass[] = {{
 
 target_t *target_symb_new(const char *Name) {
 	const char *Id = concat("symb:", CurrentContext->Path, CurrentContext->Name, "/", Name, 0);
-	target_symb_t *Target = (target_symb_t *)HXmap_get(TargetCache, Id);
+	target_symb_t *Target = (target_symb_t *)map_get(TargetCache, Id);
 	if (!Target) {
 		Target = (target_symb_t *)target_new(SymbClass, Id);
 		Target->Path = CurrentContext->Path;
@@ -699,7 +689,7 @@ static int target_index(lua_State *L) {
 }
 
 target_t *target_find(const char *Id) {
-	target_t *Target = (target_t *)HXmap_get(TargetCache, Id);
+	target_t *Target = (target_t *)map_get(TargetCache, Id);
 	if (Target) return Target;
 	if (!memcmp(Id, "file", 4)) return target_file_check(Id + 5, Id[5] == '/');
 	if (!memcmp(Id, "symb", 4)) {
@@ -721,10 +711,10 @@ target_t *target_find(const char *Id) {
 }
 
 target_t *target_get(const char *Id) {
-	return (target_t *)HXmap_get(TargetCache, Id);
+	return (target_t *)map_get(TargetCache, Id);
 }
 
-bool target_print_fn(const struct HXmap_node *Node, void *Data) {
+bool target_print_fn(const struct map_t_node *Node, void *Data) {
 	target_t *Target = (target_t *)Node->data;
 	printf("%s\n", Target->Id);
 	return true;

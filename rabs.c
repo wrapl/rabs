@@ -1,8 +1,4 @@
 #define _GNU_SOURCE
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
-#include <lfs.h>
 #include <gc/gc.h>
 #include <string.h>
 #include <unistd.h>
@@ -15,11 +11,11 @@
 #include "context.h"
 #include "util.h"
 #include "cache.h"
-#include <libHX/io.h>
+#include "minilang.h"
 
 const char *RootPath = 0;
 static int RabsEnv;
-lua_State *L;
+ml_t *ML;
 
 static void load_file(lua_State *L, const char *FileName) {
 	//printf("\n\nLoad: %s\n", Path);
