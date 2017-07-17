@@ -3,6 +3,7 @@
 #include "util.h"
 #include "context.h"
 #include "cache.h"
+#include "stringbuffer.h"
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
@@ -11,125 +12,78 @@
 #include <unistd.h>
 #include <gc.h>
 #include <errno.h>
+#include <stdint.h>
+#include <stdio.h>
+
+#include <libHX/io.h>
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 #define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
 #define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
 #define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
 
-typedef struct target_update_t target_update_t;
-typedef struct target_pair_t target_pair_t;
 typedef struct target_file_t target_file_t;
 typedef struct target_meta_t target_meta_t;
 typedef struct target_scan_t target_scan_t;
 typedef struct target_symb_t target_symb_t;
 
 extern const char *RootPath;
-static int TargetMetatable;
-static int BuildScanTarget;
-static struct map_t *TargetCache;
+static stringmap_t TargetCache[1] = {STRINGMAP_INIT};
 struct target_t *CurrentTarget = 0;
-static struct map_t *DetectedDepends = 0;
+static stringmap_t *DetectedDepends = 0;
 static int BuiltTargets = 0;
 
+static ml_value_t *SHA256Method;
+static ml_value_t *MissingMethod;
+
+static ml_type_t *TargetT;
+
+static ml_value_t *build_scan_target(ml_t *ML, void *Data, int Count, ml_value_t **Args);
+
+void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]);
+
+static ml_function_t BuildScanTarget[1] = {{FunctionT, build_scan_target, 0}};
+
 void target_depends_add(target_t *Target, target_t *Depend) {
-	if (Target != Depend) map_set(Target->Depends, Depend, 0);
+	if (Target != Depend) stringmap_insert(Target->Depends, Depend->Id, Depend);
 }
 
-static int target_function_hash(lua_State *L, const void *P, size_t Size, SHA256_CTX *Ctx) {
-	sha256_update(Ctx, P, Size);
+int depends_update_fn(const char *Key, target_t *Depend, int *DependsLastUpdated) {
+	target_update(Depend);
+	if (Depend->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depend->LastUpdated;
 	return 0;
 }
 
-static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
-	int8_t ChildHash[SHA256_BLOCK_SIZE];
-	target_value_hash(Value, ChildHash);
-	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+int depends_print_fn(const char *Key, target_t *Depend, int *DependsLastUpdated) {
+	if (Depend->LastUpdated == *DependsLastUpdated) printf("\t\e[35m%s[%d]\e[0m\n", Depend->Id, Depend->LastUpdated);
+	return 0;
 }
 
-static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
-	int8_t ChildHash[SHA256_BLOCK_SIZE];
-	target_value_hash(Key, ChildHash);
-	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-	target_value_hash(Value, ChildHash);
-	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-}
-
-static void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
-	if (Value == Nil) {
-		memset(Hash, 0, SHA256_BLOCK_SIZE);
-	} else if (ml_is_integer(Value)) {
-		memset(Hash, 0, SHA256_BLOCK_SIZE);
-		*(long *)Hash = ml_to_long(Value);
-		Hash[SHA256_BLOCK_SIZE - 1] = 1;
-	} else if (ml_is_real(Value)) {
-		memset(Hash, 0, SHA256_BLOCK_SIZE);
-		*(double *)Hash = ml_to_double(Value);
-		Hash[SHA256_BLOCK_SIZE - 1] = 1;
-	} else if (ml_is_string(Value)) {
-		const char *String = ml_to_string(Value);
-		size_t Len = strlen(String);
-		const char *String = lua_tolstring(L, -1, &Len);
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		sha256_update(Ctx, String, Len);
-		sha256_final(Ctx, Hash);
-	} else if (ml_is_list(Value)) {
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		ml_list_foreach(Value, Ctx, list_update_hash);
-		sha256_final(Ctx, Hash);
-	} else if (ml_is_tree(Value)) {
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		ml_tree_foreach(Value, Ctx, tree_update_hash);
-		sha256_final(Ctx, Hash);
-	} else if (ml_is_closure(Value)) {
-		ml_closure_hash(Value, Hash);
-	} else {
-		target_t *Target = luaL_checkudata(L, -1, "target");
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		sha256_update(Ctx, Target->Id, strlen(Target->Id));
-		sha256_final(Ctx, Hash);
-		return;
-	}
-}
-
-bool depends_update_fn(const struct map_t_node *Node, int *DependsLastUpdated) {
-	target_t *Depends = (target_t *)Node->key;
-	target_update(Depends);
-	if (Depends->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depends->LastUpdated;
-	return true;
-}
-
-bool depends_print_fn(const struct map_t_node *Node, int *DependsLastUpdated) {
-	target_t *Depends = (target_t *)Node->key;
-	if (Depends->LastUpdated == *DependsLastUpdated) printf("\t\e[35m%s[%d]\e[0m\n", Depends->Id, Depends->LastUpdated);
-	return true;
-}
+static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]);
+static int target_missing(target_t *Target);
 
 void target_update(target_t *Target) {
 	if (Target->LastUpdated == -1) {
 		printf("\e[31mError: build cycle with %s\e[0m\n", Target->Id);
 		exit(1);
 	}
-	int Top = lua_gettop(L);
 	if (Target->LastUpdated == 0) {
 		Target->LastUpdated = -1;
 		++BuiltTargets;
 		//printf("\e[32m[%d/%d] \e[33mtarget_update(%s)\e[0m\n", BuiltTargets, TargetCache->items, Target->Id);
 		int DependsLastUpdated = 0;
-		HXmap_qfe(Target->Depends, (void *)depends_update_fn, &DependsLastUpdated);
+		stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_update_fn);
 		int8_t Previous[SHA256_BLOCK_SIZE];
 		int LastUpdated, LastChecked;
 		time_t FileTime;
 		if (Target->Build) {	
 			int8_t BuildHash[SHA256_BLOCK_SIZE];
-			lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Build);
-			target_value_hash(BuildHash);
-			lua_pop(L, 1);
-			struct map_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
+			if (Target->Build->Type == ClosureT) {
+				ml_closure_hash(Target->Build, BuildHash);
+			} else {
+				memset(BuildHash, 0, SHA256_BLOCK_SIZE);
+			}
+			stringmap_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
 			const char *BuildId = concat(Target->Id, "::build", 0);
 			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
@@ -137,30 +91,27 @@ void target_update(target_t *Target) {
 				DependsLastUpdated = CurrentVersion;
 				printf("\t\e[35m<build function updated>\e[0m\n");
 			} else if (PreviousDetectedDepends) {
-				HXmap_qfe(PreviousDetectedDepends, (void *)depends_update_fn, &DependsLastUpdated);
+				stringmap_foreach(PreviousDetectedDepends, &DependsLastUpdated, (void *)depends_update_fn);
 			}
 			cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);
-			if ((DependsLastUpdated > LastChecked) || Target->Class->missing(Target)) {
+			if ((DependsLastUpdated > LastChecked) || target_missing(Target)) {
 				printf("\e[33mtarget_build(%s) Depends = %d, Last Updated = %d\e[0m\n", Target->Id, DependsLastUpdated, LastChecked);
-				HXmap_qfe(Target->Depends, (void *)depends_print_fn, &DependsLastUpdated);
+				stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_print_fn);
 				if (PreviousDetectedDepends) {
-					HXmap_qfe(PreviousDetectedDepends, (void *)depends_print_fn, &DependsLastUpdated);
+					stringmap_foreach(PreviousDetectedDepends, &DependsLastUpdated, (void *)depends_print_fn);
 				}
 				target_t *PreviousTarget = CurrentTarget;
-				struct map_t *PreviousDepends = DetectedDepends;
+				stringmap_t *PreviousDepends = DetectedDepends;
 				context_t *PreviousContext = CurrentContext;
 				CurrentTarget = Target;
-				DetectedDepends = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
+				DetectedDepends = new(stringmap_t);
 				CurrentContext = Target->BuildContext;
 				chdir(concat(RootPath, CurrentContext->Path, 0));
-				lua_pushcfunction(L, msghandler);
-				lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Build);
-				lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Ref);
-				if (lua_pcall(L, 1, 0, -3) != LUA_OK) {
-					fprintf(stderr, "\e[31mError: %s: %s\e[0m", Target->Id, lua_tostring(L, -1));
+				ml_value_t *Result = ml_inline(ML, Target->Build, 1, Target);
+				if (Result->Type == ErrorT) {
+					fprintf(stderr, "\e[31mError: %s: %s\e[0m", Target->Id, ml_error_message(Result));
 					exit(1);
 				}
-				lua_pop(L, 1);
 				cache_depends_set(Target->Id, DetectedDepends);
 				CurrentTarget = PreviousTarget;
 				DetectedDepends = PreviousDepends;
@@ -170,7 +121,7 @@ void target_update(target_t *Target) {
 		} else {
 			cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);	
 		}
-		FileTime = Target->Class->hash(Target, FileTime, Previous);
+		FileTime = target_hash(Target, FileTime, Previous);
 		if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 			Target->LastUpdated = CurrentVersion;
 			cache_hash_set(Target->Id, FileTime, Target->Hash);
@@ -179,16 +130,12 @@ void target_update(target_t *Target) {
 			cache_last_check_set(Target->Id);
 		}
 	}
-	if (Top != lua_gettop(L)) {
-		printf("Warning: building %s changed the lua stack from %d to %d\n", Target->Id, Top, lua_gettop(L));
-	}
 }
 
-bool depends_query_fn(const struct map_t_node *Node, int *DependsLastUpdated) {
-	target_t *Depends = (target_t *)Node->key;
+int depends_query_fn(const char *Id, target_t *Depends, int *DependsLastUpdated) {
 	target_query(Depends);
 	if (Depends->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depends->LastUpdated;
-	return true;
+	return 0;
 }
 
 void target_query(target_t *Target) {
@@ -197,28 +144,28 @@ void target_query(target_t *Target) {
 		Target->LastUpdated = -1;
 		printf("Target: %s\n", Target->Id);
 		int DependsLastUpdated = 0;
-		HXmap_qfe(Target->Depends, (void *)depends_query_fn, &DependsLastUpdated);
+		stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_query_fn);
 		int8_t Previous[SHA256_BLOCK_SIZE];
 		int LastUpdated, LastChecked;
 		time_t FileTime;
 		if (Target->Build) {	
 			int8_t BuildHash[SHA256_BLOCK_SIZE];
 			ml_closure_hash(Target->Build, BuildHash);
-			struct map_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
+			stringmap_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
 			const char *BuildId = concat(Target->Id, "::build", 0);
 			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
 				DependsLastUpdated = CurrentVersion;
 				printf("\t\e[35m<build function updated>\e[0m\n");
 			} else if (PreviousDetectedDepends) {
-				HXmap_qfe(PreviousDetectedDepends, (void *)depends_query_fn, &DependsLastUpdated);
+				stringmap_foreach(PreviousDetectedDepends, &DependsLastUpdated, (void *)depends_query_fn);
 			}
 			cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);
-			if ((DependsLastUpdated > LastChecked) || Target->Class->missing(Target)) {
+			if ((DependsLastUpdated > LastChecked) || target_missing(Target)) {
 				printf("\e[33mtarget_build(%s) Depends = %d, Last Updated = %d\e[0m\n", Target->Id, DependsLastUpdated, LastChecked);
-				HXmap_qfe(Target->Depends, (void *)depends_print_fn, &DependsLastUpdated);
+				stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_print_fn);
 				if (PreviousDetectedDepends) {
-					HXmap_qfe(PreviousDetectedDepends, (void *)depends_print_fn, &DependsLastUpdated);
+					stringmap_foreach(PreviousDetectedDepends, &DependsLastUpdated, (void *)depends_print_fn);
 				}
 			}
 		} else {
@@ -228,53 +175,22 @@ void target_query(target_t *Target) {
 }
 
 void target_depends_auto(target_t *Depend) {
-	if (CurrentTarget && CurrentTarget != Depend && !map_get(CurrentTarget->Depends, Depend)) {
-		map_set(DetectedDepends, Depend, 0);
+	if (CurrentTarget && CurrentTarget != Depend && !stringmap_search(CurrentTarget->Depends, Depend->Id)) {
+		stringmap_insert(DetectedDepends, Depend->Id, Depend);
 	}
 }
 
-static target_t *target_new(target_class_t *Class, const char *Id) {
-	target_t *Target = new(target_t);
-	Target->ML = ml_object(Target, Class->Type);
-	Target->Class = Class;
+static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id) {
+	target_t *Target = (target_t *)GC_malloc(Size);
+	Target->Type = Type;
 	Target->Id = Id;
 	Target->Build = 0;
 	Target->LastUpdated = 0;
-	Target->Depends = new_map();
-	map_set(TargetCache, Id, Target);
+	stringmap_insert(TargetCache, Id, Target);
 	return Target;
 }
 
-static int target_default_missing(target_t *Target) {
-	return 0;
-}
-
-int target_tostring(lua_State *L) {
-	target_t *Target = luaL_checkudata(L, 1, "target");
-	luaL_Buffer Buffer[1];
-	luaL_buffinit(L, Buffer);
-	Target->Class->tostring(Target, Buffer);
-	luaL_pushresult(Buffer);
-	return 1;
-}
-
-static int target_concat(lua_State *L) {
-	const char *String;
-	if ((String = lua_tostring(L, 1))) {
-		lua_pushstring(L, String);
-	} else if (luaL_callmeta(L, 1, "__tostring") && lua_type(L, -1) == LUA_TSTRING) {
-	} else {
-		return luaL_error(L, "Cannot convert arg 1 to string");
-	}
-	if ((String = lua_tostring(L, 2))) {
-		lua_pushstring(L, String);
-	} else if (luaL_callmeta(L, 2, "__tostring") && lua_type(L, -1) == LUA_TSTRING) {
-	} else {
-		return luaL_error(L, "Cannot convert arg 2 to string");
-	}
-	lua_concat(L, 2);
-	return 1;
-}
+#define target_new(type, Type, Id) ((type *)target_alloc(sizeof(type), Type, Id))
 
 struct target_file_t {
 	TARGET_FIELDS
@@ -282,13 +198,29 @@ struct target_file_t {
 	const char *Path;
 };
 
-static void target_file_tostring(target_file_t *Target, luaL_Buffer *Buffer) {
+static ml_type_t *FileTargetT;
+
+static ml_value_t *target_file_stringify(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
+	target_file_t *Target = (target_file_t *)Args[1];
 	//target_depends_auto((target_t *)Target);
 	if (Target->Absolute) {
-		luaL_addstring(Buffer, Target->Path);
+		stringbuffer_add(Buffer, Target->Path, strlen(Target->Path));
 	} else {
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
-		luaL_addstring(Buffer, Path);
+		stringbuffer_add(Buffer, Path, strlen(Path));
+	}
+	return Nil;
+}
+
+static ml_value_t *target_file_to_string(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[1];
+	//target_depends_auto((target_t *)Target);
+	if (Target->Absolute) {
+		return ml_string(Target->Path, -1);
+	} else {
+		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+		return ml_string(Path, -1);
 	}
 }
 
@@ -339,29 +271,21 @@ static int target_file_missing(target_file_t *Target) {
 	return !!stat(FileName, Stat);
 }
 
-target_class_t FileClass[] = {{
-	sizeof(target_file_t),
-	(void *)target_file_tostring,
-	(void *)target_file_hash,
-	(void *)target_file_missing
-}};
-
 static target_t *target_file_check(const char *Path, int Absolute) {
 	Path = concat(Path, 0);
 	const char *Id = concat("file:", Path, 0);
-	target_file_t *Target = (target_file_t *)map_get(TargetCache, Id);
+	target_file_t *Target = (target_file_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
-		Target = (target_file_t *)target_new(FileClass, Id);
+		Target = (target_file_t *)target_new(target_file_t, FileTargetT, Id);
 		Target->Absolute = Absolute;
 		Target->Path = Path;
-		Target->Depends = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
 		Target->BuildContext = CurrentContext;
 	}
 	return (target_t *)Target;
 }
 
-int target_file_new(lua_State *L) {
-	const char *Path = luaL_checkstring(L, 1);
+ml_value_t *target_file_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	const char *Path = ml_string_value(Args[0]);
 	target_t *Target;
 	if (Path[0] != '/') {
 		Path = concat(CurrentContext->Path, "/", Path, 0) + 1;
@@ -374,15 +298,14 @@ int target_file_new(lua_State *L) {
 			Target = target_file_check(Path, 1);
 		}
 	}
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Ref);
-	return 1;
+	return (ml_value_t *)Target;
 }
 
-int target_file_dir(lua_State *L) {
-	target_file_t *FileTarget = (target_file_t *)luaL_checkudata(L, 1, "target");
+ml_value_t *target_file_dir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_file_t *FileTarget = (target_file_t *)Args[0];
 	char *Path;
 	int Absolute;
-	if ((lua_gettop(L) == 2) && lua_toboolean(L, 2)) {
+	if (Count > 1 && Args[1] != Nil) {
 		Path = vfs_resolve(FileTarget->BuildContext->Mounts, concat(RootPath, "/", FileTarget->Path, 0));
 		Absolute = 1;
 	} else {
@@ -393,21 +316,19 @@ int target_file_dir(lua_State *L) {
 	for (char *P = Path; *P; ++P) if (*P == '/') Last = P;
 	*Last = 0;
 	target_t *Target = target_file_check(Path, Absolute);
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Ref);
-	return 1;
+	return (ml_value_t *)Target;
 }
 
-int target_file_basename(lua_State *L) {
-	target_file_t *FileTarget = (target_file_t *)luaL_checkudata(L, 1, "target");
+ml_value_t *target_file_basename(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Path = FileTarget->Path;
 	const char *Last = Path;
 	for (const char *P = Path; *P; ++P) if (*P == '/') Last = P;
-	lua_pushstring(L, concat(Last + 1, 0));
-	return 1;
+	return ml_string(concat(Last + 1, 0), -1);
 }
 
-int target_file_exists(lua_State *L) {
-	target_file_t *Target = (target_file_t *)luaL_checkudata(L, 1, "target");
+ml_value_t *target_file_exists(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -416,17 +337,15 @@ int target_file_exists(lua_State *L) {
 	}
 	struct stat Stat[1];
 	if (!stat(FileName, Stat)) {
-		lua_pushboolean(L, 1);
+		return (ml_value_t *)Target;
 	} else {
-		lua_pushboolean(L, 0);
+		return Nil;
 	}
-	return 1;
 }
 
-int target_file_copy(lua_State *L) {
-	target_file_t *Source = (target_file_t *)luaL_checkudata(L, 1, "target");
-	target_file_t *Dest = (target_file_t *)luaL_checkudata(L, 1, "target");
-	if (Dest->Class != FileClass) return luaL_error(L, "Error: target is not a file");
+ml_value_t *target_file_copy(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Source = (target_file_t *)Args[0];
+	target_file_t *Dest = (target_file_t *)Args[1];
 	const char *SourcePath, *DestPath;
 	if (Source->Absolute) {
 		SourcePath = Source->Path;
@@ -439,23 +358,20 @@ int target_file_copy(lua_State *L) {
 		DestPath = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Dest->Path, 0));
 	}
 	int Error = HX_copy_file(SourcePath, DestPath, 0);
-	if (Error < 0) return luaL_error(L, strerror(-Error));
-	return 0;
+	if (Error < 0) return ml_error("FileError", "file copy failed");
+	return Nil;
 }
 
-int target_div(lua_State *L) {
-	target_file_t *FileTarget = (target_file_t *)luaL_checkudata(L, 1, "target");
-	if (FileTarget->Class != FileClass) return luaL_error(L, "Error: target is not a file");
-	const char *Path = concat(FileTarget->Path, "/", luaL_checkstring(L, 2), 0);
+ml_value_t *target_div(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_file_t *FileTarget = (target_file_t *)Args[0];
+	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), 0);
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Ref);
-	return 1;
+	return (ml_value_t *)Target;
 }
 
-int target_mod(lua_State *L) {
-	target_file_t *FileTarget = (target_file_t *)luaL_checkudata(L, 1, "target");
-	if (FileTarget->Class != FileClass) return luaL_error(L, "Error: target is not a file");
-	const char *Replacement = luaL_checkstring(L, 2);
+ml_value_t *target_mod(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_file_t *FileTarget = (target_file_t *)Args[0];
+	const char *Replacement = ml_string_value(Args[1]);
 	char *Path = concat(FileTarget->Path, ".", Replacement, 0);
 	for (char *End = Path + strlen(FileTarget->Path); --End >= Path;) {
 		if (*End == '.') {
@@ -466,8 +382,7 @@ int target_mod(lua_State *L) {
 		}
 	}
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Ref);
-	return 1;
+	return (ml_value_t *)Target;
 }
 
 struct target_meta_t {
@@ -475,13 +390,9 @@ struct target_meta_t {
 	const char *Name;
 };
 
-static void target_meta_tostring(target_meta_t *Target, luaL_Buffer *Buffer) {
-	luaL_addstring(Buffer, CurrentContext->Path);
-	luaL_addstring(Buffer, "::");
-	luaL_addstring(Buffer, Target->Name);
-}
+static ml_type_t *MetaTargetT;
 
-static time_t target_meta_hash(target_meta_t *Target, time_t *PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
 	memset(Target->Hash, -1, SHA256_BLOCK_SIZE);
 	return 0;
 }
@@ -490,131 +401,97 @@ static time_t target_meta_hash(target_meta_t *Target, time_t *PreviousTime, int8
 	return Updated ? STATUS_UPDATED : STATUS_UNCHANGED;
 }*/
 
-static target_class_t MetaClass[] = {{
-	sizeof(target_meta_t),
-	(void *)target_meta_tostring,
-	(void *)target_meta_hash,
-	target_default_missing
-}};
-
 ml_value_t *target_meta_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	if (Count < 0) return ml_error("ParamError", "missing parameter <name>");
-	const char *Name = ml_to_string(Args[0]);
+	const char *Name = ml_string_value(Args[0]);
 	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, 0);
-	target_meta_t *Target = (target_meta_t *)map_get(TargetCache, Id);
+	target_meta_t *Target = (target_meta_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
-		Target = (target_meta_t *)target_new(MetaClass, Id);
+		Target = (target_meta_t *)target_new(target_meta_t, MetaTargetT, Id);
 		Target->Name = Name;
 	}
-	return Target->ML;
-	return 1;
+	return (ml_value_t *)Target;
 }
 
-int target_depends(lua_State *L) {
-	target_t *Target = luaL_checkudata(L, 1, "target");
-	int N = lua_gettop(L);
-	for (int I = 2; I <= N; ++I) {
-		if (lua_type(L, I) == LUA_TTABLE) {
-			lua_pushnil(L);
-			while (lua_next(L, I)) {
-				lua_pushcfunction(L, target_depends);
-				lua_pushvalue(L, 1);
-				lua_pushvalue(L, -3);
-				lua_call(L, 2, 0);
-				lua_pop(L, 1);
-			}
+ml_value_t *target_depends_list(target_t *Depend, target_t *Target) {
+	stringmap_insert(Target->Depends, Depend->Id, Depend);
+	return 0;
+}
+
+ml_value_t *target_depend(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Value;
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Arg = Args[I];
+		if (Arg->Type == ListT) {
+			ml_list_foreach(Arg, Target, (void *)target_depends_list);
 		} else {
-			target_t *Depend = luaL_checkudata(L, I, "target");
-			map_set(Target->Depends, Depend, 0);
+			target_t *Depend = (target_t *)Arg;
+			stringmap_insert(Target->Depends, Depend->Id, Depend);
 		}
 	}
-	lua_pushvalue(L, 1);
-	return 1;
+	return Value;
 }
 
-static int target_build(lua_State *L) {
-	target_t *Target = luaL_checkudata(L, 1, "target");
-	if (Target->Build) {
-		//return luaL_error(L, "Error: multiple build rules defined for target %s", Target->Id);
-	}
-	lua_pushvalue(L, 2);
-	Target->Build = luaL_ref(L, LUA_REGISTRYINDEX);
+ml_value_t *target_build(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Args[0];
+	if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
+	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
 	Target->LastUpdated = 0;
-	lua_pushvalue(L, 1);
-	return 1;
+	return Args[0];
 }
 
 struct target_scan_t {
 	TARGET_FIELDS
 	const char *Name;
 	target_t *Source;
-	int Scan;
+	ml_value_t *Scan;
 };
 
-static void target_scan_tostring(target_scan_t *Target, luaL_Buffer *Buffer) {
-}
+static ml_type_t *ScanTargetT;
 
-bool scan_depends_hash(const struct map_t_node *Node, int8_t Hash[SHA256_BLOCK_SIZE]) {
-	target_t *Depends = (target_t *)Node->key;
-	target_update(Depends);
-	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depends->Hash[I];
-	return true;
-}
-
-static time_t target_scan_hash(target_scan_t *Target, time_t *PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
-	struct map_t *Scans = cache_scan_get(Target->Id);
-	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
-	if (Scans) HXmap_qfe(Scans, (void *)scan_depends_hash, Target->Hash);
+int scan_depends_hash(const char *Id, target_t *Depend, int8_t Hash[SHA256_BLOCK_SIZE]) {
+	target_update(Depend);
+	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
 	return 0;
 }
 
-static target_class_t ScanClass[] = {{
-	sizeof(target_scan_t),
-	(void *)target_scan_tostring,
-	(void *)target_scan_hash,
-	target_default_missing
-}};
+static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+	stringmap_t *Scans = cache_scan_get(Target->Id);
+	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
+	if (Scans) stringmap_foreach(Scans, Target->Hash, (void *)scan_depends_hash);
+	return 0;
+}
 
-static int build_scan_target(lua_State *L) {
-	target_scan_t *Target = (target_scan_t *)luaL_checkudata(L, 1, "target");
-	lua_pushcfunction(L, msghandler);
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Scan);
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Source->Ref);
-	if (lua_pcall(L, 1, 1, -3) != LUA_OK) {
-		fprintf(stderr, "Error: %s: %s", Target->Id, lua_tostring(L, -1));
-		exit(1);
-	}
-	luaL_checktype(L, -1, LUA_TTABLE);
-	struct map_t *Scans = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
-	lua_pushnil(L);
-	while (lua_next(L, -2)) {
-		target_t *ScanTarget = (target_t *)luaL_checkudata(L, -1, "target");
-		map_set(Scans, ScanTarget, 0);
-		lua_pop(L, 1);
-	}
-	lua_pop(L, 2);
+static int build_scan_target_list(target_t *Depend, stringmap_t *Scans) {
+	stringmap_insert(Scans, Depend->Id, Depend);
+	return 0;
+}
+
+static ml_value_t *build_scan_target(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_scan_t *Target = (target_scan_t *)Args[0];
+	ml_value_t *Result = ml_inline(ML, Target->Scan, 1, Target);
+	stringmap_t Scans[1] = {STRINGMAP_INIT};
+	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 	cache_scan_set(Target->Id, Scans);
 	return 0;
 }
 
-int target_scan_new(lua_State *L) {
-	target_t *ParentTarget = (target_t *)luaL_checkudata(L, 1, "target");
-	const char *Name = luaL_checkstring(L, 2);
+ml_value_t *target_scan_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_t *ParentTarget = (target_t *)Args[0];
+	const char *Name = ml_string_value(Args[1]);
 	const char *Id = concat("scan:", ParentTarget->Id, "::", Name, 0);
-	target_scan_t *Target = (target_scan_t *)map_get(TargetCache, Id);
+	target_scan_t *Target = (target_scan_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
-		Target = (target_scan_t *)target_new(ScanClass, Id);
-		map_set(Target->Depends, ParentTarget, 0);
+		Target = target_new(target_scan_t, ScanTargetT, Id);
+		stringmap_insert(Target->Depends, ParentTarget->Id, ParentTarget);
 		Target->Name = Name;
 		Target->Source = ParentTarget;
-		Target->Build = BuildScanTarget;
+		Target->Build = (ml_value_t *)BuildScanTarget;
 		Target->BuildContext = CurrentContext;
-		lua_pushvalue(L, 3);
-		Target->Scan = luaL_ref(L, LUA_REGISTRYINDEX);
+		Target->Scan = Args[2];
 	}
-	lua_rawgeti(L, LUA_REGISTRYINDEX, Target->Ref);
-	return 1;
+	return (ml_value_t *)Target;
 }
 
 struct target_symb_t {
@@ -623,78 +500,132 @@ struct target_symb_t {
 	const char *Path;
 };
 
-static void target_symb_tostring(target_symb_t *Target, luaL_Buffer *Buffer) {
+static ml_type_t *SymbTargetT;
+
+static ml_value_t *symb_target_deref(ml_t *ML, ml_value_t *Ref) {
+	target_symb_t *Target = (target_symb_t *)Ref;
+	context_t *Context = context_find(Target->Path);
+	return context_symb_get(Context, Target->Name);
 }
 
-static time_t target_symb_hash(target_symb_t *Target, time_t *PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static ml_value_t *symb_target_assign(ml_t *ML, ml_value_t *Ref, ml_value_t *Value) {
+	target_symb_t *Target = (target_symb_t *)Ref;
 	context_t *Context = context_find(Target->Path);
-	context_symb_get(Context, Target->Name);
-	target_value_hash(Target->Hash);
-	lua_pop(L, 1);
+	context_symb_set(Context, Target->Name, Value);
+	return Value;
+}
+
+static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+	context_t *Context = context_find(Target->Path);
+	ml_value_t *Value = context_symb_get(Context, Target->Name);
+	target_value_hash(Value, Target->Hash);
 	return 0;
 }
 
-static target_class_t SymbClass[] = {{
-	sizeof(target_symb_t),
-	(void *)target_symb_tostring,
-	(void *)target_symb_hash,
-	target_default_missing
-}};
-
 target_t *target_symb_new(const char *Name) {
 	const char *Id = concat("symb:", CurrentContext->Path, CurrentContext->Name, "/", Name, 0);
-	target_symb_t *Target = (target_symb_t *)map_get(TargetCache, Id);
+	target_symb_t *Target = (target_symb_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
-		Target = (target_symb_t *)target_new(SymbClass, Id);
+		Target = target_new(target_symb_t, SymbTargetT, Id);
 		Target->Path = CurrentContext->Path;
 		Target->Name = Name;
 	}
 	return (target_t *)Target;
 }
 
-static int target_index(lua_State *L) {
-	target_t *Target = luaL_checkudata(L, 1, "target");
-	const char *Method = luaL_checkstring(L, 2);
-	if (!strcmp(Method, "depends")) {
-		lua_pushcfunction(L, target_depends);
-		return 1;
+static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
+	int8_t ChildHash[SHA256_BLOCK_SIZE];
+	target_value_hash(Value, ChildHash);
+	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+	return 0;
+}
+
+static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
+	int8_t ChildHash[SHA256_BLOCK_SIZE];
+	target_value_hash(Key, ChildHash);
+	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+	target_value_hash(Value, ChildHash);
+	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+	return 0;
+}
+
+void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
+	if (Value->Type == NilT) {
+		memset(Hash, 0, SHA256_BLOCK_SIZE);
+	} else if (Value->Type == IntegerT) {
+		memset(Hash, 0, SHA256_BLOCK_SIZE);
+		*(long *)Hash = ml_integer_value(Value);
+		Hash[SHA256_BLOCK_SIZE - 1] = 1;
+	} else if (Value->Type == RealT) {
+		memset(Hash, 0, SHA256_BLOCK_SIZE);
+		*(double *)Hash = ml_real_value(Value);
+		Hash[SHA256_BLOCK_SIZE - 1] = 1;
+	} else if (Value->Type == StringT) {
+		const char *String = ml_string_value(Value);
+		size_t Len = strlen(String);
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		sha256_update(Ctx, String, Len);
+		sha256_final(Ctx, Hash);
+	} else if (Value->Type == ListT) {
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		ml_list_foreach(Value, Ctx, (void *)list_update_hash);
+		sha256_final(Ctx, Hash);
+	} else if (Value->Type == TreeT) {
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		ml_tree_foreach(Value, Ctx, (void *)tree_update_hash);
+		sha256_final(Ctx, Hash);
+	} else if (Value->Type == ClosureT) {
+		ml_closure_hash(Value, Hash);
+	} else if (Value->Type == FileTargetT) {
+		target_t *Target = (target_t *)Value;
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_final(Ctx, Hash);
+	} else if (Value->Type == MetaTargetT) {
+		target_t *Target = (target_t *)Value;
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_final(Ctx, Hash);
+	} else if (Value->Type == ScanTargetT) {
+		target_t *Target = (target_t *)Value;
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_final(Ctx, Hash);
+	} else if (Value->Type == SymbTargetT) {
+		target_t *Target = (target_t *)Value;
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_final(Ctx, Hash);
 	}
-	if (!strcmp(Method, "build")) {
-		lua_pushcfunction(L, target_build);
-		return 1;
-	}
-	if (!strcmp(Method, "scan")) {
-		lua_pushcfunction(L, target_scan_new);
-		return 1;
-	}
-	if (Target->Class == FileClass) {
-		if (!strcmp(Method, "dir")) {
-			lua_pushcfunction(L, target_file_dir);
-			return 1;
-		}
-		if (!strcmp(Method, "basename")) {
-			lua_pushcfunction(L, target_file_basename);
-			return 1;
-		}
-		if (!strcmp(Method, "exists")) {
-			lua_pushcfunction(L, target_file_exists);
-			return 1;
-		}
-		if (!strcmp(Method, "copy")) {
-			lua_pushcfunction(L, target_file_copy);
-			return 1;
-		}
-	}
+}
+
+static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+	if (Target->Type == FileTargetT) return target_file_hash((target_file_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == MetaTargetT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == SymbTargetT) return target_symb_hash((target_symb_t *)Target, PreviousTime, PreviousHash);
+	return 0;
+}
+
+static int target_missing(target_t *Target) {
+	if (Target->Type == FileTargetT) return target_file_missing((target_file_t *)Target);
 	return 0;
 }
 
 target_t *target_find(const char *Id) {
-	target_t *Target = (target_t *)map_get(TargetCache, Id);
+	target_t *Target = (target_t *)stringmap_search(TargetCache, Id);
 	if (Target) return Target;
 	if (!memcmp(Id, "file", 4)) return target_file_check(Id + 5, Id[5] == '/');
 	if (!memcmp(Id, "symb", 4)) {
 		Id = concat(Id, 0);
-		target_symb_t *Target = (target_symb_t *)target_new(SymbClass, Id);
+		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id);
 		const char *Name;
 		for (Name = Id + strlen(Id); --Name > Id + 5;) {
 			if (*Name == '/') break;
@@ -711,34 +642,30 @@ target_t *target_find(const char *Id) {
 }
 
 target_t *target_get(const char *Id) {
-	return (target_t *)map_get(TargetCache, Id);
+	return (target_t *)stringmap_search(TargetCache, Id);
 }
 
-bool target_print_fn(const struct map_t_node *Node, void *Data) {
-	target_t *Target = (target_t *)Node->data;
+int target_print_fn(const char *Key, target_t *Target, void *Data) {
 	printf("%s\n", Target->Id);
-	return true;
+	return 0;
 }
 
 void target_list() {
-	HXmap_qfe(TargetCache, target_print_fn, 0);
+	stringmap_foreach(TargetCache, 0, (void *)target_print_fn);
 }
 
-static const luaL_Reg TargetMethods[] = {
-	{"__tostring", target_tostring},
-	{"__concat", target_concat},
-	{"__index", target_index},
-	{"__call", target_depends},
-	{"__div", target_div},
-	{"__mod", target_mod},
-	{0, 0}
-};
-
 void target_init() {
-	luaL_newmetatable(L, "target");
-	luaL_setfuncs(L, TargetMethods, 0);
-	TargetMetatable = luaL_ref(L, LUA_REGISTRYINDEX);
-	lua_pushcfunction(L, build_scan_target);
-	BuildScanTarget = luaL_ref(L, LUA_REGISTRYINDEX);
-	TargetCache = HXmap_init(HXMAPT_DEFAULT, HXMAP_SCKEY);
+	TargetT = ml_class(AnyT);
+	TargetT->index = target_depend;
+	FileTargetT = ml_class(TargetT);
+	MetaTargetT = ml_class(TargetT);
+	ScanTargetT = ml_class(TargetT);
+	SymbTargetT = ml_class(TargetT);
+	SymbTargetT->deref = symb_target_deref;
+	SymbTargetT->assign = symb_target_assign;
+	SHA256Method = ml_method("sha256");
+	MissingMethod = ml_method("missing");
+	ml_method_by_value(StringifyMethod, 0, target_file_stringify, StringBufferT, FileTargetT, 0);
+	ml_method_by_name("string", 0, target_file_to_string, 1, FileTargetT);
+	ml_method_by_name("->", 0, target_build, TargetT, AnyT, 0);
 }

@@ -1,6 +1,6 @@
 .PHONY: clean all
 
-all: rabs ml
+all: ml rabs
 
 sources = \
 	cache.c \
@@ -10,18 +10,19 @@ sources = \
 	util.c \
 	vfs.c \
 	builtins.s \
-	lfs.c \
 	sha256.c \
-	minilang.c
+	minilang.c \
+	stringmap.c \
+	stringbuffer.c
 
 CFLAGS += -I. -g
-LDFLAGS += -llua -lm -lgc -lsqlite3 -lHX -g
+LDFLAGS += -lm -lgc -lsqlite3 -lHX -g
 
-rabs: $(sources) *.h builtins.lua
+rabs: $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
-
-ml: minilang.* ml.* map.* sha256.*
-	gcc -g minilang.c ml.c map.c sha256.c -lgc -oml
+	
+ml: minilang.* ml.* stringmap.* sha256.*
+	gcc -g minilang.c ml.c stringmap.c sha256.c -lgc -oml
 
 clean:
 	rm ../../bin/rabs

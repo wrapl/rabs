@@ -5,6 +5,6 @@
 
 extern ml_t *ML;
 extern const char *RootPath;
-char *stringify(char *Buffer);
+extern ml_value_t *StringifyMethod;
 
 #endif
