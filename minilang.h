@@ -44,6 +44,7 @@ const char *ml_string_value(ml_value_t *Value);
 int ml_string_length(ml_value_t *Value);
 const char *ml_error_type(ml_value_t *Value);
 const char *ml_error_message(ml_value_t *Value);
+int ml_error_trace(ml_value_t *Value, int Level, const char **Source, int *Line);
 
 void ml_closure_hash(ml_value_t *Closure, unsigned char Hash[SHA256_BLOCK_SIZE]);
 

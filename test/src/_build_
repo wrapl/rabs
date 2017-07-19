@@ -1,0 +1,3 @@
+print("Hello world!\n")
+
+c_program(file("test"), [file("test.o")])

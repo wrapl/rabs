@@ -24,12 +24,18 @@ static void load_file(const char *FileName) {
 	printf("Loading: %s\n", FileName);
 	ml_value_t *Closure = ml_load(ML, FileName);
 	if (Closure->Type == ErrorT) {
-		printf("Error: %s\n", ml_error_message(Closure));
+		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Closure, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
 	ml_value_t *Result = ml_call(ML, Closure, 0, 0);
 	if (Result->Type == ErrorT) {
-		printf("Error: %s\n", ml_error_message(Result));
+		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
 }

@@ -1,0 +1,5 @@
+var add := fun(X, Y)
+	print('{X} ~ {Y} = {X ~ Y}\n')
+end
+
+add(100, 200)

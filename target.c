@@ -110,6 +110,9 @@ void target_update(target_t *Target) {
 				ml_value_t *Result = ml_inline(ML, Target->Build, 1, Target);
 				if (Result->Type == ErrorT) {
 					fprintf(stderr, "\e[31mError: %s: %s\e[0m", Target->Id, ml_error_message(Result));
+					const char *Source;
+					int Line;
+					for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 					exit(1);
 				}
 				cache_depends_set(Target->Id, DetectedDepends);
@@ -362,14 +365,14 @@ ml_value_t *target_file_copy(ml_t *ML, void *Data, int Count, ml_value_t **Args)
 	return Nil;
 }
 
-ml_value_t *target_div(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_div(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), 0);
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
 	return (ml_value_t *)Target;
 }
 
-ml_value_t *target_mod(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_mod(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Replacement = ml_string_value(Args[1]);
 	char *Path = concat(FileTarget->Path, ".", Replacement, 0);
@@ -667,5 +670,12 @@ void target_init() {
 	MissingMethod = ml_method("missing");
 	ml_method_by_value(StringifyMethod, 0, target_file_stringify, StringBufferT, FileTargetT, 0);
 	ml_method_by_name("string", 0, target_file_to_string, 1, FileTargetT);
-	ml_method_by_name("->", 0, target_build, TargetT, AnyT, 0);
+	ml_method_by_name("=>", 0, target_build, TargetT, AnyT, 0);
+	ml_method_by_name("/", 0, target_file_div, FileTargetT, StringT, 0);
+	ml_method_by_name("%", 0, target_file_mod, FileTargetT, StringT, 0);
+	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, 0);
+	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, 0);
+	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, 0);
+	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, 0);
+	ml_method_by_name("scan", 0, target_scan_new, TargetT, 0);
 }
