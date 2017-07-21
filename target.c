@@ -477,7 +477,7 @@ static ml_value_t *build_scan_target(ml_t *ML, void *Data, int Count, ml_value_t
 	stringmap_t Scans[1] = {STRINGMAP_INIT};
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 	cache_scan_set(Target->Id, Scans);
-	return 0;
+	return Nil;
 }
 
 ml_value_t *target_scan_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
