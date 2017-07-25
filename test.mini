@@ -1,5 +1,3 @@
-var add := fun(X, Y)
-	print('{X} ~ {Y} = {X ~ Y}\n')
-end
-
-add(100, 200)
+print(100, "\n");
+print(not 100, "\n");
+print(not nil, "\n");

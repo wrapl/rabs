@@ -1,3 +1,4 @@
+
 #define _GNU_SOURCE
 #include <gc/gc.h>
 #include <string.h>
@@ -14,9 +15,11 @@
 #include "cache.h"
 #include "minilang.h"
 #include "stringbuffer.h"
+#include "extras.h"
 
 #include <libHX/io.h>
 
+const char *ScriptName = "/_minibuild_";
 const char *RootPath = 0;
 ml_t *ML;
 
@@ -45,7 +48,7 @@ ml_value_t *subdir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	Path = concat(CurrentContext->Path, "/", Path, 0);
 	//printf("Path = %s\n", Path);
 	HX_mkdir(concat(RootPath, Path, 0), 0777);
-	const char *FileName = concat(RootPath, Path, "/_build_", 0);
+	const char *FileName = concat(RootPath, Path, ScriptName, 0);
 	//printf("FileName = %s\n", FileName);
 	FileName = vfs_resolve(CurrentContext->Mounts, FileName);
 	target_t *ParentDefault = CurrentContext->Default;
@@ -95,6 +98,8 @@ ml_value_t *context(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 ml_value_t *StringifyMethod;
 
 ml_value_t *stringify_nil(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
+	stringbuffer_add(Buffer, " ", 1);
 	return Args[0];
 }
 
@@ -187,9 +192,9 @@ ml_value_t *rabs_mkdir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 }
 
 static const char *find_root(const char *Path) {
-	char *FileName = (char *)GC_malloc(strlen(Path) + strlen("/_build_") + 1);
+	char *FileName = (char *)GC_malloc(strlen(Path) + strlen(ScriptName) + 1);
 	char *End = stpcpy(FileName, Path);
-	strcpy(End, "/_build_");
+	strcpy(End, ScriptName);
 	char Line[strlen("-- ROOT --\n")];
 	FILE *File = 0;
 loop:
@@ -206,7 +211,7 @@ loop:
 	}
 	while (--End > FileName) {
 		if (*End == '/') {
-			strcpy(End, "/_build_");
+			strcpy(End, ScriptName);
 			goto loop;
 		}
 	}
@@ -270,6 +275,7 @@ int main(int Argc, const char **Argv) {
 	stringmap_insert(Globals, "mkdir", ml_function(ML, rabs_mkdir));
 	stringmap_insert(Globals, "scope", ml_function(ML, scope));
 	stringmap_insert(Globals, "print", ml_function(ML, print));
+	stringmap_insert(Globals, "open", ml_function(ML, file_open));
 
 	StringifyMethod = ml_method(0);
 
@@ -314,6 +320,7 @@ int main(int Argc, const char **Argv) {
 	vfs_init();
 	target_init();
 	context_init();
+	extras_init();
 #ifdef LINUX
 	const char *Path = get_current_dir_name();
 #else
@@ -328,7 +335,7 @@ int main(int Argc, const char **Argv) {
 		cache_open(RootPath);
 		context_push("");
 		context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
-		load_file(concat(RootPath, "/_build_", 0));
+		load_file(concat(RootPath, ScriptName, 0));
 		target_t *Target;
 		if (TargetName) {
 			Target = target_get(TargetName);

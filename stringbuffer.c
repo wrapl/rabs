@@ -35,6 +35,7 @@ ssize_t stringbuffer_add(stringbuffer_t *Buffer, const char *String, size_t Leng
 		if (Cache) {
 			Next = Cache;
 			Cache = Cache->Next;
+			Next->Next = 0;
 		} else {
 			Next = new(stringbuffer_node_t);
 		}
@@ -79,13 +80,25 @@ const char *stringbuffer_get(stringbuffer_t *Buffer) {
 }
 
 ml_type_t StringBufferT[1] = {{
-	AnyT,
+	AnyT, "stringbuffer",
 	ml_default_hash,
 	ml_default_call,
-	ml_default_index,
 	ml_default_deref,
 	ml_default_assign,
 	ml_default_next,
 	ml_default_key
 }};
 
+int stringbuffer_foreach(stringbuffer_t *Buffer, void *Data, int (*callback)(const char *, size_t, void *)) {
+	stringbuffer_node_t *Node = Buffer->Nodes;
+	if (!Node) return 0;
+	while (Node->Next) {
+		if (callback(Node->Chars, NODE_SIZE, Data)) return 1;
+		Node = Node->Next;
+	}
+	return callback(Node->Chars, NODE_SIZE - Buffer->Space, Data);
+}
+
+void stringbuffer_init() {
+
+}

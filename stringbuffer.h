@@ -17,8 +17,10 @@ extern ml_type_t StringBufferT[1];
 
 #define STRINGBUFFER_INIT (stringbuffer_t){StringBufferT, 0,}
 
+void stringbuffer_init();
 ssize_t stringbuffer_add(stringbuffer_t *Buffer, const char *String, size_t Length);
 ssize_t stringbuffer_addf(stringbuffer_t *Buffer, const char *Format, ...);
 const char *stringbuffer_get(stringbuffer_t *Buffer);
+int stringbuffer_foreach(stringbuffer_t *Buffer, void *Data, int (*callback)(const char *, size_t, void *));
 
 #endif

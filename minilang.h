@@ -16,11 +16,10 @@ typedef ml_value_t *(*ml_setter_t)(ml_t *ML, void *Data, const char *Name, ml_va
 ml_t *ml_new(void *Data, ml_getter_t Get);
 void *ml_data(ml_t *ML);
 
-ml_type_t *ml_class(ml_type_t *Parent);
+ml_type_t *ml_class(ml_type_t *Parent, const char *Name);
 
 ml_value_t *ml_load(ml_t *ML, const char *FileName);
 ml_value_t *ml_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args);
-ml_value_t *ml_index(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args);
 
 ml_value_t *ml_inline(ml_t *ML, ml_value_t *Value, int Count, ...);
 
@@ -48,14 +47,15 @@ int ml_error_trace(ml_value_t *Value, int Level, const char **Source, int *Line)
 
 void ml_closure_hash(ml_value_t *Closure, unsigned char Hash[SHA256_BLOCK_SIZE]);
 
+void ml_list_append(ml_value_t *List, ml_value_t *Value);
 int ml_list_foreach(ml_value_t *List, void *Data, int (*callback)(ml_value_t *, void *));
 int ml_tree_foreach(ml_value_t *Tree, void *Data, int (*callback)(ml_value_t *, ml_value_t *, void *));
 
 struct ml_type_t {
 	const ml_type_t *Parent;
+	const char *Name;
 	long (*hash)(ml_t *, ml_value_t *);
 	ml_value_t *(*call)(ml_t *, ml_value_t *, int, ml_value_t **);
-	ml_value_t *(*index)(ml_t *, ml_value_t *, int, ml_value_t **);
 	ml_value_t *(*deref)(ml_t *ML, ml_value_t *);
 	ml_value_t *(*assign)(ml_t *ML, ml_value_t *, ml_value_t *);
 	ml_value_t *(*next)(ml_t *ML, ml_value_t *);
@@ -64,7 +64,6 @@ struct ml_type_t {
 
 long ml_default_hash(ml_t *ML, ml_value_t *Value);
 ml_value_t *ml_default_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args);
-ml_value_t *ml_default_index(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args);
 ml_value_t *ml_default_deref(ml_t *ML, ml_value_t *Ref);
 ml_value_t *ml_default_assign(ml_t *ML, ml_value_t *Ref, ml_value_t *Value);
 ml_value_t *ml_default_next(ml_t *ML, ml_value_t *Iter);

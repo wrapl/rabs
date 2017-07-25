@@ -109,7 +109,7 @@ void target_update(target_t *Target) {
 				chdir(concat(RootPath, CurrentContext->Path, 0));
 				ml_value_t *Result = ml_inline(ML, Target->Build, 1, Target);
 				if (Result->Type == ErrorT) {
-					fprintf(stderr, "\e[31mError: %s: %s\e[0m", Target->Id, ml_error_message(Result));
+					fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 					const char *Source;
 					int Line;
 					for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
@@ -213,11 +213,12 @@ static ml_value_t *target_file_stringify(ml_t *ML, void *Data, int Count, ml_val
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 		stringbuffer_add(Buffer, Path, strlen(Path));
 	}
+	stringbuffer_add(Buffer, " ", 1);
 	return Nil;
 }
 
 static ml_value_t *target_file_to_string(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	target_file_t *Target = (target_file_t *)Args[1];
+	target_file_t *Target = (target_file_t *)Args[0];
 	//target_depends_auto((target_t *)Target);
 	if (Target->Absolute) {
 		return ml_string(Target->Path, -1);
@@ -421,9 +422,9 @@ ml_value_t *target_depends_list(target_t *Depend, target_t *Target) {
 	return 0;
 }
 
-ml_value_t *target_depend(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
-	target_t *Target = (target_t *)Value;
-	for (int I = 0; I < Count; ++I) {
+ml_value_t *target_depend(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Args[0];
+	for (int I = 1; I < Count; ++I) {
 		ml_value_t *Arg = Args[I];
 		if (Arg->Type == ListT) {
 			ml_list_foreach(Arg, Target, (void *)target_depends_list);
@@ -432,7 +433,7 @@ ml_value_t *target_depend(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **A
 			stringmap_insert(Target->Depends, Depend->Id, Depend);
 		}
 	}
-	return Value;
+	return Args[0];
 }
 
 ml_value_t *target_build(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
@@ -473,7 +474,14 @@ static int build_scan_target_list(target_t *Depend, stringmap_t *Scans) {
 
 static ml_value_t *build_scan_target(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	target_scan_t *Target = (target_scan_t *)Args[0];
-	ml_value_t *Result = ml_inline(ML, Target->Scan, 1, Target);
+	ml_value_t *Result = ml_inline(ML, Target->Scan, 1, Target->Source);
+	if (Result->Type == ErrorT) {
+		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		exit(1);
+	}
 	stringmap_t Scans[1] = {STRINGMAP_INIT};
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 	cache_scan_set(Target->Id, Scans);
@@ -658,18 +666,18 @@ void target_list() {
 }
 
 void target_init() {
-	TargetT = ml_class(AnyT);
-	TargetT->index = target_depend;
-	FileTargetT = ml_class(TargetT);
-	MetaTargetT = ml_class(TargetT);
-	ScanTargetT = ml_class(TargetT);
-	SymbTargetT = ml_class(TargetT);
+	TargetT = ml_class(AnyT, "target");
+	FileTargetT = ml_class(TargetT, "file-target");
+	MetaTargetT = ml_class(TargetT, "meta-target");
+	ScanTargetT = ml_class(TargetT, "scan-target");
+	SymbTargetT = ml_class(TargetT, "symb-target");
 	SymbTargetT->deref = symb_target_deref;
 	SymbTargetT->assign = symb_target_assign;
 	SHA256Method = ml_method("sha256");
 	MissingMethod = ml_method("missing");
 	ml_method_by_value(StringifyMethod, 0, target_file_stringify, StringBufferT, FileTargetT, 0);
-	ml_method_by_name("string", 0, target_file_to_string, 1, FileTargetT);
+	ml_method_by_name("[]", 0, target_depend, TargetT, AnyT, 0);
+	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, 0);
 	ml_method_by_name("=>", 0, target_build, TargetT, AnyT, 0);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, StringT, 0);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, StringT, 0);
