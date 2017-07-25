@@ -1,5 +1,6 @@
 #include "minilang.h"
 #include "stringmap.h"
+#include "extras.h"
 #include <stdio.h>
 #include <gc.h>
 
@@ -9,7 +10,7 @@ static ml_value_t *global_get(ml_t *ML, void *Data, const char *Name) {
 	return stringmap_search(Globals, Name) ?: Nil;
 }
 
-static ml_value_t *global_print(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *print(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	ml_value_t *StringMethod = ml_method("string");
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = Args[I];
@@ -25,7 +26,8 @@ static ml_value_t *global_print(ml_t *ML, void *Data, int Count, ml_value_t **Ar
 }
 
 int main(int Argc, const char *Argv[]) {
-	stringmap_insert(Globals, "print", ml_function(0, global_print));
+	stringmap_insert(Globals, "print", ml_function(0, print));
+	stringmap_insert(Globals, "open", ml_function(0, file_open));
 	ml_t *ML = ml_new(0, global_get);
 	ml_value_t *Closure = ml_load(ML, Argv[1]);
 	if (Closure->Type == ErrorT) {

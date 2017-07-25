@@ -23,7 +23,7 @@ rabs: $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
 	
 ml: minilang.* ml.* stringmap.* sha256.*
-	gcc $(CFLAGS) minilang.c ml.c stringmap.c sha256.c -lgc -oml
+	gcc $(CFLAGS) minilang.c ml.c stringmap.c sha256.c extras.c stringbuffer.c -lgc -oml
 
 clean:
 	rm ../../bin/rabs
