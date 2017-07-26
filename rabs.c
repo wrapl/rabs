@@ -19,7 +19,7 @@
 
 #include <libHX/io.h>
 
-const char *ScriptName = "/_minibuild_";
+const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
 ml_t *ML;
 
@@ -48,7 +48,7 @@ ml_value_t *subdir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	Path = concat(CurrentContext->Path, "/", Path, 0);
 	//printf("Path = %s\n", Path);
 	HX_mkdir(concat(RootPath, Path, 0), 0777);
-	const char *FileName = concat(RootPath, Path, ScriptName, 0);
+	const char *FileName = concat(RootPath, Path, SystemName, 0);
 	//printf("FileName = %s\n", FileName);
 	FileName = vfs_resolve(CurrentContext->Mounts, FileName);
 	target_t *ParentDefault = CurrentContext->Default;
@@ -188,13 +188,13 @@ ml_value_t *rabs_mkdir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	if (HX_mkdir(Path, 0777) < 0) {
 		return ml_error("OSError", "failed to create directory");
 	}
-	return 0;
+	return Nil;
 }
 
 static const char *find_root(const char *Path) {
-	char *FileName = (char *)GC_malloc(strlen(Path) + strlen(ScriptName) + 1);
+	char *FileName = (char *)GC_malloc(strlen(Path) + strlen(SystemName) + 1);
 	char *End = stpcpy(FileName, Path);
-	strcpy(End, ScriptName);
+	strcpy(End, SystemName);
 	char Line[strlen("-- ROOT --\n")];
 	FILE *File = 0;
 loop:
@@ -211,7 +211,7 @@ loop:
 	}
 	while (--End > FileName) {
 		if (*End == '/') {
-			strcpy(End, ScriptName);
+			strcpy(End, SystemName);
 			goto loop;
 		}
 	}
@@ -335,7 +335,7 @@ int main(int Argc, const char **Argv) {
 		cache_open(RootPath);
 		context_push("");
 		context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
-		load_file(concat(RootPath, ScriptName, 0));
+		load_file(concat(RootPath, SystemName, 0));
 		target_t *Target;
 		if (TargetName) {
 			Target = target_get(TargetName);

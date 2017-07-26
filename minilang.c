@@ -2613,6 +2613,28 @@ static mlc_expr_t *ml_accept_string(mlc_scanner_t *Scanner) {
 }
 
 static int ml_parse(mlc_scanner_t *Scanner, ml_token_t Token) {
+	static int OperatorChars[] = {
+		['!'] = 1,
+		['@'] = 1,
+		['#'] = 1,
+		['$'] = 1,
+		['%'] = 1,
+		['^'] = 1,
+		['&'] = 1,
+		['*'] = 1,
+		['-'] = 1,
+		['+'] = 1,
+		['='] = 1,
+		['|'] = 1,
+		['\\'] = 1,
+		['~'] = 1,
+		['`'] = 1,
+		['/'] = 1,
+		['?'] = 1,
+		['<'] = 1,
+		['>'] = 1,
+		['.'] = 1
+	};
 	if (Scanner->Token == MLT_NONE) for (;;) {
 		char Char = Scanner->Next[0];
 		if (!Char) {
@@ -2747,9 +2769,9 @@ static int ml_parse(mlc_scanner_t *Scanner, ml_token_t Token) {
 				goto done;
 			}
 		}
-		if (isgraph(Char)) {
+		if (OperatorChars[Char]) {
 			const char *End = Scanner->Next;
-			for (Char = End[0]; !isalnum(Char) && isgraph(Char); Char = *++End);
+			for (Char = End[0]; OperatorChars[Char]; Char = *++End);
 			int Length = End - Scanner->Next;
 			char *Operator = snew(Length + 1);
 			strncpy(Operator, Scanner->Next, Length);

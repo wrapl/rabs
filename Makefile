@@ -1,6 +1,6 @@
 .PHONY: clean all
 
-all: ml rabs
+all: minilang minibuild
 
 sources = \
 	cache.c \
@@ -19,11 +19,12 @@ sources = \
 CFLAGS += -I. -g
 LDFLAGS += -lm -lgc -lsqlite3 -lHX -g
 
-rabs: $(sources) *.h
+minibuild: $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
 	
-ml: minilang.* ml.* stringmap.* sha256.*
-	gcc $(CFLAGS) minilang.c ml.c stringmap.c sha256.c extras.c stringbuffer.c -lgc -oml
+minilang: minilang.* ml.* stringmap.* sha256.*
+	gcc $(CFLAGS) minilang.c ml.c stringmap.c sha256.c extras.c stringbuffer.c -lgc -o$@
 
 clean:
-	rm ../../bin/rabs
+	rm minilang
+	rm minibuild

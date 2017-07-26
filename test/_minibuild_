@@ -24,7 +24,7 @@ CFLAGS := ['-O3', '-g']
 
 c_compile := fun(Object)
 	var Source := Object % "c"
-	execute('gcc', '-c', CFLAGS, '-o', Object, '-I', Source:dir, Source) 
+	execute('gcc', '-c', CFLAGS, '-o', Object, '-I', Source:dir, Source)
 end
 
 c_includes := fun(Source)
