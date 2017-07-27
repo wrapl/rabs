@@ -50,7 +50,9 @@ struct ml_t {
 };
 
 long ml_default_hash(ml_t *ML, ml_value_t *Value) {
-	return (long)(ptrdiff_t)Value->Type;
+	long Hash = 5381;
+	for (const char *P = Value->Type->Name; P[0]; ++P) Hash = ((Hash << 5) + Hash) + P[0];
+	return Hash;
 }
 
 ml_value_t *ml_default_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
@@ -137,11 +139,6 @@ ml_value_t *ml_inline(ml_t *ML, ml_value_t *Value, int Count, ...) {
 	return ml_call(ML, Value, Count, Args);
 }
 
-static long ml_function_hash(ml_t *ML, ml_value_t *Value) {
-	ml_function_t *Function = (ml_function_t *)Value;
-	return (long)(ptrdiff_t)Function->Callback;
-}
-
 static ml_value_t *ml_function_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
 	ml_function_t *Function = (ml_function_t *)Value;
 	return (Function->Callback)(ML, Function->Data, Count, Args);
@@ -149,7 +146,7 @@ static ml_value_t *ml_function_call(ml_t *ML, ml_value_t *Value, int Count, ml_v
 
 ml_type_t FunctionT[1] = {{
 	AnyT, "function",
-	ml_function_hash,
+	ml_default_hash,
 	ml_function_call,
 	ml_default_deref,
 	ml_default_assign,
@@ -371,6 +368,13 @@ static ml_method_node_t *ml_method_find(ml_method_node_t *Node, int Count, ml_va
 	return Node;
 }
 
+static long ml_method_hash(ml_t *ML, ml_value_t *Value) {
+	ml_method_t *Method = (ml_method_t *)Value;
+	long Hash = 5381;
+	for (const char *P = Method->Name;P[0]; ++P) Hash = ((Hash << 5) + Hash) + P[0];
+	return Hash;
+}
+
 ml_value_t *ml_method_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args) {
 	ml_method_t *Method = (ml_method_t *)Value;
 	ml_method_node_t *Node = ml_method_find(Method->Root, Count, Args);
@@ -389,7 +393,7 @@ ml_value_t *ml_method_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **
 
 ml_type_t MethodT[1] = {{
 	FunctionT, "method",
-	ml_default_hash,
+	ml_method_hash,
 	ml_method_call,
 	ml_default_deref,
 	ml_default_assign,
@@ -1857,8 +1861,19 @@ static inline ml_inst_t *ml_inst_new(int N, ml_source_t Source, ml_inst_t *(*run
 #define ML_COMPILE_HASH sha256_update(HashContext, (BYTE *)__FILE__ TOSTRING(__LINE__), strlen(__FILE__ TOSTRING(__LINE__)));
 
 static inline mlc_compiled_t ml_compile(mlc_function_t *Function, mlc_expr_t *Expr, SHA256_CTX *HashContext) {
+	//static int Indent = 0;
 	if (Expr) {
-		return Expr->compile(Function, Expr, HashContext);
+		//for (int I = Indent; --I >= 0;) printf("\t");
+		//printf("before compiling %s:%d Function->Top = %d\n", Expr->Source.Name, Expr->Source.Line, Function->Top);
+		//++Indent;
+		mlc_compiled_t Compiled = Expr->compile(Function, Expr, HashContext);
+		//--Indent;
+		//for (int I = Indent; --I >= 0;) printf("\t");
+		//printf("after compiling %s:%d Function->Top = %d\n", Expr->Source.Name, Expr->Source.Line, Function->Top);
+		//printf("after compiling %s:%d state =", Expr->Source.Name, Expr->Source.Line);
+		//for (int I = 0; I < 8; ++I) printf("%08x", HashContext->state[I]);
+		//printf("\n");
+		return Compiled;
 	} else {
 		ML_COMPILE_HASH
 		ml_inst_t *NilInst = ml_inst_new(1, (ml_source_t){"<internal>", 0}, mli_push_run);
@@ -1939,8 +1954,9 @@ static mlc_compiled_t ml_if_expr_compile(mlc_function_t *Function, mlc_if_expr_t
 		ml_inst_t **Slot = &Compiled.Exits;
 		while (Slot[0]) Slot = &Slot[0]->Params[0].Inst;
 		Slot[0] = BodyCompiled.Exits;
+	} else {
+		++Function->Top;
 	}
-	++Function->Top;
 	return Compiled;
 }
 
@@ -2156,7 +2172,7 @@ static mlc_compiled_t ml_with_expr_compile(mlc_function_t *Function, mlc_decl_ex
 }
 
 static mlc_compiled_t ml_for_expr_compile(mlc_function_t *Function, mlc_decl_expr_t *Expr, SHA256_CTX *HashContext) {
-	int OldTop = Function->Top + 1;
+	int OldTop = Function->Top;
 	mlc_decl_t *OldScope = Function->Decls;
 	mlc_expr_t *Child = Expr->Child;
 	mlc_compiled_t Compiled = ml_compile(Function, Child, HashContext);
@@ -2178,7 +2194,7 @@ static mlc_compiled_t ml_for_expr_compile(mlc_function_t *Function, mlc_decl_exp
 	ML_COMPILE_HASH
 	ml_inst_t *PopInst = ml_inst_new(1, Expr->Source, mli_pop_run);
 	PopInst->Params[0].Inst = NextInst;
-	mlc_loop_t Loop = {Function->Loop, PopInst, 0, Function->Top + 1, OldTop};
+	mlc_loop_t Loop = {Function->Loop, PopInst, 0, Function->Top + 1, OldTop + 1};
 	Function->Loop = &Loop;
 	mlc_compiled_t BodyCompiled = ml_compile(Function, Child->Next, HashContext);
 	ml_connect(BodyCompiled.Exits, PopInst);
@@ -2197,17 +2213,17 @@ static mlc_compiled_t ml_for_expr_compile(mlc_function_t *Function, mlc_decl_exp
 	Function->Loop = Loop.Up;
 	Function->Top = OldTop;
 	if (Child->Next->Next) {
+		mlc_compiled_t ElseCompiled = ml_compile(Function, Child->Next->Next, HashContext);
 		ML_COMPILE_HASH
-//		ml_inst_t *PopInst = ml_inst_new(1, Expr->Source, mli_pop_run);
-		--Function->Top;
+		ml_inst_t *PopInst = ml_inst_new(1, Expr->Source, mli_pop_run);
+		PopInst->Params[0].Inst = ElseCompiled.Start;
 		StartInst->Params[0].Inst = PopInst;
 		NextInst->Params[0].Inst = PopInst;
-		mlc_compiled_t ElseCompiled = ml_compile(Function, Child->Next->Next, HashContext);
-		PopInst->Params[0].Inst = ElseCompiled.Start;
 		ml_inst_t **Slot = &Compiled.Exits;
 		while (Slot[0]) Slot = &Slot[0]->Params[0].Inst;
 		Slot[0] = ElseCompiled.Exits;
 	} else {
+		++Function->Top;
 		NextInst->Params[0].Inst = Compiled.Exits;
 		StartInst->Params[0].Inst = NextInst;
 		Compiled.Exits = StartInst;
@@ -3208,6 +3224,7 @@ ml_type_t *ml_class(ml_type_t *Parent, const char *Name) {
 
 ml_value_t *ml_load(ml_t *ML, const char *FileName) {
 	FILE *File = fopen(FileName, "r");
+	if (!File) return ml_error("LoadError", "error opening %s", FileName);
 	mlc_scanner_t *Scanner = ml_scanner(ML, FileName, File, ml_file_read);
 	if (setjmp(ML->OnError)) return ML->Error;
 	mlc_expr_t *Expr = ml_accept_block(Scanner);

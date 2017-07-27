@@ -80,12 +80,18 @@ void target_update(target_t *Target) {
 			int8_t BuildHash[SHA256_BLOCK_SIZE];
 			if (Target->Build->Type == ClosureT) {
 				ml_closure_hash(Target->Build, BuildHash);
+				printf("CurrentHash =");
+				for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf(" %02hhx", BuildHash[I]);
+				printf("\n");
 			} else {
 				memset(BuildHash, 0, SHA256_BLOCK_SIZE);
 			}
 			stringmap_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
 			const char *BuildId = concat(Target->Id, "::build", 0);
 			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
+			printf("PreviousHash =");
+			for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf("%02hhx", Previous[I]);
+			printf("\n");
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
 				cache_hash_set(BuildId, 0, BuildHash);
 				DependsLastUpdated = CurrentVersion;
