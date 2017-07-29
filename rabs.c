@@ -14,18 +14,17 @@
 #include "util.h"
 #include "cache.h"
 #include "minilang.h"
-#include "stringbuffer.h"
-#include "extras.h"
+#include "ml_file.h"
 
 #include <libHX/io.h>
 
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
-ml_t *ML;
+ml_value_t *AppendMethod;
 
 static void load_file(const char *FileName) {
 	printf("Loading: %s\n", FileName);
-	ml_value_t *Closure = ml_load(ML, FileName);
+	ml_value_t *Closure = ml_load(FileName);
 	if (Closure->Type == ErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
 		const char *Source;
@@ -33,7 +32,7 @@ static void load_file(const char *FileName) {
 		for (int I = 0; ml_error_trace(Closure, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
-	ml_value_t *Result = ml_call(ML, Closure, 0, 0);
+	ml_value_t *Result = ml_call(Closure, 0, 0);
 	if (Result->Type == ErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
 		const char *Source;
@@ -43,7 +42,7 @@ static void load_file(const char *FileName) {
 	}
 }
 
-ml_value_t *subdir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	const char *Path = ml_string_value(Args[0]);
 	Path = concat(CurrentContext->Path, "/", Path, 0);
 	//printf("Path = %s\n", Path);
@@ -59,10 +58,10 @@ ml_value_t *subdir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	return Nil;
 }
 
-ml_value_t *scope(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	const char *Name = ml_string_value(Args[0]);
 	context_scope(Name);
-	ml_value_t *Result = ml_call(ML, Args[1], 0, 0);
+	ml_value_t *Result = ml_call(Args[1], 0, 0);
 	if (Result->Type == ErrorT) {
 		printf("Error: %s\n", ml_error_message(Result));
 		exit(1);
@@ -71,7 +70,7 @@ ml_value_t *scope(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	return Nil;
 }
 
-ml_value_t *include(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 	const char *FileName = ml_string_value(Args[0]);
 	if (FileName[0] != '/') {
 		FileName = concat(RootPath, CurrentContext->Path, "/", FileName, 0);
@@ -81,7 +80,7 @@ ml_value_t *include(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	return Nil;
 }
 
-ml_value_t *vmount(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
 	const char *Path = ml_string_value(Args[0]);
 	const char *Target = ml_string_value(Args[1]);
 	CurrentContext->Mounts = vfs_mount(CurrentContext->Mounts,
@@ -91,66 +90,14 @@ ml_value_t *vmount(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	return Nil;
 }
 
-ml_value_t *context(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
 	return ml_string(CurrentContext->Path, -1);
 }
 
-ml_value_t *StringifyMethod;
-
-ml_value_t *stringify_nil(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
-	stringbuffer_add(Buffer, " ", 1);
-	return Args[0];
-}
-
-ml_value_t *stringify_integer(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
-	stringbuffer_addf(Buffer, "%d", ml_integer_value(Args[1]));
-	stringbuffer_add(Buffer, " ", 1);
-	return Args[0];
-}
-
-ml_value_t *stringify_real(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
-	stringbuffer_addf(Buffer, "%f", ml_real_value(Args[1]));
-	stringbuffer_add(Buffer, " ", 1);
-	return Args[0];
-}
-
-ml_value_t *stringify_string(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
-	stringbuffer_add(Buffer, ml_string_value(Args[1]), ml_string_length(Args[1]));
-	stringbuffer_add(Buffer, " ", 1);
-	return Args[0];
-}
-
-static int stringify_list_value(ml_value_t *Value, stringbuffer_t *Buffer) {
-	ml_inline(ML, StringifyMethod, 2, Buffer, Value);
-	return 0;
-}
-
-ml_value_t *stringify_list(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
-	ml_list_foreach(Args[1], Buffer, (void *)stringify_list_value);
-	return Args[0];
-}
-
-static int stringify_tree_value(ml_value_t *Key, ml_value_t *Value, stringbuffer_t *Buffer) {
-	ml_inline(ML, StringifyMethod, 2, Buffer, Key);
-	ml_inline(ML, StringifyMethod, 2, Buffer, Value);
-	return 0;
-}
-
-ml_value_t *stringify_tree(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
-	ml_tree_foreach(Args[1], Buffer, (void *)stringify_tree_value);
-	return Args[0];
-}
-
-ml_value_t *execute(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t Buffer[1] = {STRINGBUFFER_INIT};
-	for (int I = 0; I < Count; ++I) ml_inline(ML, StringifyMethod, 2, Buffer, Args[I]);
-	const char *Command = stringbuffer_get(Buffer);
+ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
+	const char *Command = ml_stringbuffer_get(Buffer);
 	clock_t Start = clock();
 	printf("\e[34m%s\e[0m\n", Command);
 	if (system(Command)) {
@@ -162,29 +109,29 @@ ml_value_t *execute(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
-ml_value_t *shell(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t Buffer[1] = {STRINGBUFFER_INIT};
-	for (int I = 0; I < Count; ++I) ml_inline(ML, StringifyMethod, 2, Buffer, Args[I]);
-	const char *Command = stringbuffer_get(Buffer);
+ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
+	const char *Command = ml_stringbuffer_get(Buffer);
 	printf("\e[34m%s\e[0m\n", Command);
 	clock_t Start = clock();
 	FILE *File = popen(Command, "r");
 	char Chars[120];
 	while (!feof(File)) {
 		ssize_t Count = fread(Chars, 1, 120, File);
-		if (Count > 0) stringbuffer_add(Buffer, Chars, Count);
+		if (Count > 0) ml_stringbuffer_add(Buffer, Chars, Count);
 	}
 	pclose(File);
 	clock_t End = clock();
 	printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	size_t Length = Buffer->Length;
-	return ml_string(stringbuffer_get(Buffer), Length);
+	return ml_string(ml_stringbuffer_get(Buffer), Length);
 }
 
-ml_value_t *rabs_mkdir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t Buffer[1] = {STRINGBUFFER_INIT};
-	for (int I = 0; I < Count; ++I) ml_inline(ML, StringifyMethod, 2, Buffer, Args[I]);
-	const char *Path = stringbuffer_get(Buffer);
+ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) ml_inline(AppendMethod, 2, Buffer, Args[I]);
+	const char *Path = ml_stringbuffer_get(Buffer);
 	if (HX_mkdir(Path, 0777) < 0) {
 		return ml_error("OSError", "failed to create directory");
 	}
@@ -220,7 +167,7 @@ loop:
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
 
-static ml_value_t *rabs_ml_get(ml_t *ML, void *Data, const char *Name) {
+static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Name);
 	if (Value) {
 		target_t *Target = target_symb_new(Name);
@@ -232,12 +179,12 @@ static ml_value_t *rabs_ml_get(ml_t *ML, void *Data, const char *Name) {
 	}
 }
 
-static ml_value_t *rabs_ml_set(ml_t *ML, void *Data, const char *Name, ml_value_t *Value) {
+static ml_value_t *rabs_ml_set(void *Data, const char *Name, ml_value_t *Value) {
 	context_symb_set(CurrentContext, Name, Value);
 	return Value;
 }
 
-static ml_value_t *rabs_ml_global(ml_t *ML, void *Data, const char *Name) {
+static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
 	ml_value_t *Value = stringmap_search(Cache, Name);
 	if (!Value) {
@@ -247,12 +194,12 @@ static ml_value_t *rabs_ml_global(ml_t *ML, void *Data, const char *Name) {
 	return Value;
 }
 
-static ml_value_t *print(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 	ml_value_t *StringMethod = ml_method("string");
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = Args[I];
 		if (Result->Type != StringT) {
-			Result = ml_call(ML, StringMethod, 1, &Result);
+			Result = ml_call(StringMethod, 1, &Result);
 			if (Result->Type == ErrorT) return Result;
 			if (Result->Type != StringT) return ml_error("ResultError", "string method did not return string");
 		}
@@ -263,28 +210,20 @@ static ml_value_t *print(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 }
 
 int main(int Argc, const char **Argv) {
-	ML = ml_new(0, rabs_ml_global);
-	stringmap_insert(Globals, "vmount", ml_function(ML, vmount));
-	stringmap_insert(Globals, "subdir", ml_function(ML, subdir));
-	stringmap_insert(Globals, "file", ml_function(ML, target_file_new));
-	stringmap_insert(Globals, "meta", ml_function(ML, target_meta_new));
-	stringmap_insert(Globals, "include", ml_function(ML, include));
-	stringmap_insert(Globals, "context", ml_function(ML, context));
-	stringmap_insert(Globals, "execute", ml_function(ML, execute));
-	stringmap_insert(Globals, "shell", ml_function(ML, shell));
-	stringmap_insert(Globals, "mkdir", ml_function(ML, rabs_mkdir));
-	stringmap_insert(Globals, "scope", ml_function(ML, scope));
-	stringmap_insert(Globals, "print", ml_function(ML, print));
-	stringmap_insert(Globals, "open", ml_function(ML, file_open));
-
-	StringifyMethod = ml_method(0);
-
-	ml_method_by_value(StringifyMethod, 0, stringify_nil, StringBufferT, NilT, 0);
-	ml_method_by_value(StringifyMethod, 0, stringify_integer, StringBufferT, IntegerT, 0);
-	ml_method_by_value(StringifyMethod, 0, stringify_real, StringBufferT, RealT, 0);
-	ml_method_by_value(StringifyMethod, 0, stringify_string, StringBufferT, StringT, 0);
-	ml_method_by_value(StringifyMethod, 0, stringify_list, StringBufferT, ListT, 0);
-	ml_method_by_value(StringifyMethod, 0, stringify_tree, StringBufferT, TreeT, 0);
+	ml_init(rabs_ml_global);
+	AppendMethod = ml_method("append");
+	stringmap_insert(Globals, "vmount", ml_function(0, vmount));
+	stringmap_insert(Globals, "subdir", ml_function(0, subdir));
+	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
+	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
+	stringmap_insert(Globals, "include", ml_function(0, include));
+	stringmap_insert(Globals, "context", ml_function(0, context));
+	stringmap_insert(Globals, "execute", ml_function(0, execute));
+	stringmap_insert(Globals, "shell", ml_function(0, shell));
+	stringmap_insert(Globals, "mkdir", ml_function(0, rabs_mkdir));
+	stringmap_insert(Globals, "scope", ml_function(0, scope));
+	stringmap_insert(Globals, "print", ml_function(0, print));
+	stringmap_insert(Globals, "open", ml_function(0, ml_file_open));
 
 	const char *TargetName = 0;
 	int QueryOnly = 0;
@@ -320,7 +259,7 @@ int main(int Argc, const char **Argv) {
 	vfs_init();
 	target_init();
 	context_init();
-	extras_init();
+	ml_file_init();
 #ifdef LINUX
 	const char *Path = get_current_dir_name();
 #else

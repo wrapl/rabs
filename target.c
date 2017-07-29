@@ -38,7 +38,7 @@ static ml_value_t *MissingMethod;
 
 static ml_type_t *TargetT;
 
-static ml_value_t *build_scan_target(ml_t *ML, void *Data, int Count, ml_value_t **Args);
+static ml_value_t *build_scan_target(void *Data, int Count, ml_value_t **Args);
 
 void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]);
 
@@ -80,18 +80,18 @@ void target_update(target_t *Target) {
 			int8_t BuildHash[SHA256_BLOCK_SIZE];
 			if (Target->Build->Type == ClosureT) {
 				ml_closure_hash(Target->Build, BuildHash);
-				printf("CurrentHash =");
-				for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf(" %02hhx", BuildHash[I]);
-				printf("\n");
+				//printf("CurrentHash =");
+				//for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf("%02hhx", BuildHash[I]);
+				//printf("\n");
 			} else {
 				memset(BuildHash, 0, SHA256_BLOCK_SIZE);
 			}
 			stringmap_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
 			const char *BuildId = concat(Target->Id, "::build", 0);
 			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
-			printf("PreviousHash =");
-			for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf("%02hhx", Previous[I]);
-			printf("\n");
+			//printf("PreviousHash =");
+			//for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf("%02hhx", Previous[I]);
+			//printf("\n");
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
 				cache_hash_set(BuildId, 0, BuildHash);
 				DependsLastUpdated = CurrentVersion;
@@ -113,7 +113,7 @@ void target_update(target_t *Target) {
 				DetectedDepends = new(stringmap_t);
 				CurrentContext = Target->BuildContext;
 				chdir(concat(RootPath, CurrentContext->Path, 0));
-				ml_value_t *Result = ml_inline(ML, Target->Build, 1, Target);
+				ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 				if (Result->Type == ErrorT) {
 					fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 					const char *Source;
@@ -209,21 +209,21 @@ struct target_file_t {
 
 static ml_type_t *FileTargetT;
 
-static ml_value_t *target_file_stringify(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
-	stringbuffer_t *Buffer = (stringbuffer_t *)Args[0];
+static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_file_t *Target = (target_file_t *)Args[1];
 	//target_depends_auto((target_t *)Target);
 	if (Target->Absolute) {
-		stringbuffer_add(Buffer, Target->Path, strlen(Target->Path));
+		ml_stringbuffer_add(Buffer, Target->Path, strlen(Target->Path));
 	} else {
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
-		stringbuffer_add(Buffer, Path, strlen(Path));
+		ml_stringbuffer_add(Buffer, Path, strlen(Path));
 	}
-	stringbuffer_add(Buffer, " ", 1);
+	ml_stringbuffer_add(Buffer, " ", 1);
 	return Nil;
 }
 
-static ml_value_t *target_file_to_string(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	//target_depends_auto((target_t *)Target);
 	if (Target->Absolute) {
@@ -294,7 +294,7 @@ static target_t *target_file_check(const char *Path, int Absolute) {
 	return (target_t *)Target;
 }
 
-ml_value_t *target_file_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Path = ml_string_value(Args[0]);
 	target_t *Target;
 	if (Path[0] != '/') {
@@ -311,7 +311,7 @@ ml_value_t *target_file_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) 
 	return (ml_value_t *)Target;
 }
 
-ml_value_t *target_file_dir(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	char *Path;
 	int Absolute;
@@ -329,7 +329,7 @@ ml_value_t *target_file_dir(ml_t *ML, void *Data, int Count, ml_value_t **Args) 
 	return (ml_value_t *)Target;
 }
 
-ml_value_t *target_file_basename(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Path = FileTarget->Path;
 	const char *Last = Path;
@@ -337,7 +337,7 @@ ml_value_t *target_file_basename(ml_t *ML, void *Data, int Count, ml_value_t **A
 	return ml_string(concat(Last + 1, 0), -1);
 }
 
-ml_value_t *target_file_exists(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *FileName;
 	if (Target->Absolute) {
@@ -353,7 +353,7 @@ ml_value_t *target_file_exists(ml_t *ML, void *Data, int Count, ml_value_t **Arg
 	}
 }
 
-ml_value_t *target_file_copy(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Source = (target_file_t *)Args[0];
 	target_file_t *Dest = (target_file_t *)Args[1];
 	const char *SourcePath, *DestPath;
@@ -372,14 +372,14 @@ ml_value_t *target_file_copy(ml_t *ML, void *Data, int Count, ml_value_t **Args)
 	return Nil;
 }
 
-ml_value_t *target_file_div(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), 0);
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
 	return (ml_value_t *)Target;
 }
 
-ml_value_t *target_file_mod(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_file_mod(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Replacement = ml_string_value(Args[1]);
 	char *Path = concat(FileTarget->Path, ".", Replacement, 0);
@@ -411,7 +411,7 @@ static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, int8_
 	return Updated ? STATUS_UPDATED : STATUS_UNCHANGED;
 }*/
 
-ml_value_t *target_meta_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	if (Count < 0) return ml_error("ParamError", "missing parameter <name>");
 	const char *Name = ml_string_value(Args[0]);
 	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, 0);
@@ -428,7 +428,7 @@ ml_value_t *target_depends_list(target_t *Depend, target_t *Target) {
 	return 0;
 }
 
-ml_value_t *target_depend(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	for (int I = 1; I < Count; ++I) {
 		ml_value_t *Arg = Args[I];
@@ -442,7 +442,7 @@ ml_value_t *target_depend(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-ml_value_t *target_build(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_build(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
 	Target->Build = Args[1];
@@ -478,9 +478,9 @@ static int build_scan_target_list(target_t *Depend, stringmap_t *Scans) {
 	return 0;
 }
 
-static ml_value_t *build_scan_target(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *build_scan_target(void *Data, int Count, ml_value_t **Args) {
 	target_scan_t *Target = (target_scan_t *)Args[0];
-	ml_value_t *Result = ml_inline(ML, Target->Scan, 1, Target->Source);
+	ml_value_t *Result = ml_inline(Target->Scan, 1, Target->Source);
 	if (Result->Type == ErrorT) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
@@ -494,7 +494,7 @@ static ml_value_t *build_scan_target(ml_t *ML, void *Data, int Count, ml_value_t
 	return Nil;
 }
 
-ml_value_t *target_scan_new(ml_t *ML, void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	target_t *ParentTarget = (target_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	const char *Id = concat("scan:", ParentTarget->Id, "::", Name, 0);
@@ -519,13 +519,13 @@ struct target_symb_t {
 
 static ml_type_t *SymbTargetT;
 
-static ml_value_t *symb_target_deref(ml_t *ML, ml_value_t *Ref) {
+static ml_value_t *symb_target_deref(ml_value_t *Ref) {
 	target_symb_t *Target = (target_symb_t *)Ref;
 	context_t *Context = context_find(Target->Path);
 	return context_symb_get(Context, Target->Name);
 }
 
-static ml_value_t *symb_target_assign(ml_t *ML, ml_value_t *Ref, ml_value_t *Value) {
+static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 	target_symb_t *Target = (target_symb_t *)Ref;
 	context_t *Context = context_find(Target->Path);
 	context_symb_set(Context, Target->Name, Value);
@@ -681,7 +681,7 @@ void target_init() {
 	SymbTargetT->assign = symb_target_assign;
 	SHA256Method = ml_method("sha256");
 	MissingMethod = ml_method("missing");
-	ml_method_by_value(StringifyMethod, 0, target_file_stringify, StringBufferT, FileTargetT, 0);
+	ml_method_by_name("append", 0, target_file_stringify, StringBufferT, FileTargetT, 0);
 	ml_method_by_name("[]", 0, target_depend, TargetT, AnyT, 0);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, 0);
 	ml_method_by_name("=>", 0, target_build, TargetT, AnyT, 0);

@@ -24,12 +24,12 @@ CFLAGS := ['-O3', '-g']
 
 c_compile := fun(Object)
 	var Source := Object % "c"
-	execute('gcc', '-c', CFLAGS, '-o', Object, '-I', Source:dir, Source)
+	execute('gcc -c {CFLAGS} -o{Object} -I{Source:dir} {Source}')
 end
 
 c_includes := fun(Source)
 	var Files := []
-	var Lines := shell("gcc", CFLAGS, "-I", Source:dir, "-M", "-MG", Source)
+	var Lines := shell('gcc {CFLAGS} -I{Source:dir} -M -MG {Source}')
 	var Start, File := ""
 	var I := for J := 1 .. Lines:length do
 		if Lines[J, J + 2] = ": " then

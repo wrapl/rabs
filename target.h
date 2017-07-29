@@ -24,9 +24,9 @@ struct target_t {
 
 void target_init();
 
-ml_value_t *target_dir_new(ml_t *ML, void *Data, int Count, ml_value_t **Args);
-ml_value_t *target_file_new(ml_t *ML, void *Data, int Count, ml_value_t **Args);
-ml_value_t *target_meta_new(ml_t *ML, void *Data, int Count, ml_value_t **Args);
+ml_value_t *target_dir_new(void *Data, int Count, ml_value_t **Args);
+ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args);
+ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args);
 
 target_t *target_symb_new(const char *Name);
 

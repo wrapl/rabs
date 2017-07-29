@@ -2,26 +2,25 @@
 #define MINILANG_H
 
 #include "sha256.h"
+#include <stdlib.h>
 
-typedef struct ml_t ml_t;
 typedef struct ml_type_t ml_type_t;
 typedef struct ml_value_t ml_value_t;
 typedef struct ml_function_t ml_function_t;
 
-typedef ml_value_t *(*ml_callback_t)(ml_t *ML, void *Data, int Count, ml_value_t **Args);
+typedef ml_value_t *(*ml_callback_t)(void *Data, int Count, ml_value_t **Args);
 
-typedef ml_value_t *(*ml_getter_t)(ml_t *ML, void *Data, const char *Name);
-typedef ml_value_t *(*ml_setter_t)(ml_t *ML, void *Data, const char *Name, ml_value_t *Value);
+typedef ml_value_t *(*ml_getter_t)(void *Data, const char *Name);
+typedef ml_value_t *(*ml_setter_t)(void *Data, const char *Name, ml_value_t *Value);
 
-ml_t *ml_new(void *Data, ml_getter_t Get);
-void *ml_data(ml_t *ML);
+void ml_init(ml_getter_t Get);
 
 ml_type_t *ml_class(ml_type_t *Parent, const char *Name);
 
-ml_value_t *ml_load(ml_t *ML, const char *FileName);
-ml_value_t *ml_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args);
+ml_value_t *ml_load(const char *FileName);
+ml_value_t *ml_call(ml_value_t *Value, int Count, ml_value_t **Args);
 
-ml_value_t *ml_inline(ml_t *ML, ml_value_t *Value, int Count, ...);
+ml_value_t *ml_inline(ml_value_t *Value, int Count, ...);
 
 void ml_method_by_name(const char *Method, void *Data, ml_callback_t Function, ...);
 void ml_method_by_value(ml_value_t *Method, void *Data, ml_callback_t Function, ...);
@@ -41,6 +40,7 @@ long ml_integer_value(ml_value_t *Value);
 double ml_real_value(ml_value_t *Value);
 const char *ml_string_value(ml_value_t *Value);
 int ml_string_length(ml_value_t *Value);
+
 const char *ml_error_type(ml_value_t *Value);
 const char *ml_error_message(ml_value_t *Value);
 int ml_error_trace(ml_value_t *Value, int Level, const char **Source, int *Line);
@@ -54,20 +54,20 @@ int ml_tree_foreach(ml_value_t *Tree, void *Data, int (*callback)(ml_value_t *, 
 struct ml_type_t {
 	const ml_type_t *Parent;
 	const char *Name;
-	long (*hash)(ml_t *, ml_value_t *);
-	ml_value_t *(*call)(ml_t *, ml_value_t *, int, ml_value_t **);
-	ml_value_t *(*deref)(ml_t *ML, ml_value_t *);
-	ml_value_t *(*assign)(ml_t *ML, ml_value_t *, ml_value_t *);
-	ml_value_t *(*next)(ml_t *ML, ml_value_t *);
-	ml_value_t *(*key)(ml_t *ML, ml_value_t *);
+	long (*hash)(ml_value_t *);
+	ml_value_t *(*call)(ml_value_t *, int, ml_value_t **);
+	ml_value_t *(*deref)(ml_value_t *);
+	ml_value_t *(*assign)(ml_value_t *, ml_value_t *);
+	ml_value_t *(*next)(ml_value_t *);
+	ml_value_t *(*key)(ml_value_t *);
 };
 
-long ml_default_hash(ml_t *ML, ml_value_t *Value);
-ml_value_t *ml_default_call(ml_t *ML, ml_value_t *Value, int Count, ml_value_t **Args);
-ml_value_t *ml_default_deref(ml_t *ML, ml_value_t *Ref);
-ml_value_t *ml_default_assign(ml_t *ML, ml_value_t *Ref, ml_value_t *Value);
-ml_value_t *ml_default_next(ml_t *ML, ml_value_t *Iter);
-ml_value_t *ml_default_key(ml_t *ML, ml_value_t *Iter);
+long ml_default_hash(ml_value_t *Value);
+ml_value_t *ml_default_call(ml_value_t *Value, int Count, ml_value_t **Args);
+ml_value_t *ml_default_deref(ml_value_t *Ref);
+ml_value_t *ml_default_assign(ml_value_t *Ref, ml_value_t *Value);
+ml_value_t *ml_default_next(ml_value_t *Iter);
+ml_value_t *ml_default_key(ml_value_t *Iter);
 
 extern ml_type_t AnyT[];
 extern ml_type_t NilT[];
@@ -95,5 +95,23 @@ struct ml_function_t {
 	ml_callback_t Callback;
 	void *Data;
 };
+
+typedef struct ml_stringbuffer_t ml_stringbuffer_t;
+typedef struct ml_stringbuffer_node_t ml_stringbuffer_node_t;
+
+struct ml_stringbuffer_t {
+	const ml_type_t *Type;
+	ml_stringbuffer_node_t *Nodes;
+	size_t Space, Length;
+};
+
+extern ml_type_t StringBufferT[1];
+
+#define ML_STRINGBUFFER_INIT (ml_stringbuffer_t){StringBufferT, 0,}
+
+ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_t Length);
+ssize_t ml_stringbuffer_addf(ml_stringbuffer_t *Buffer, const char *Format, ...);
+const char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer);
+int ml_stringbuffer_foreach(ml_stringbuffer_t *Buffer, void *Data, int (*callback)(const char *, size_t, void *));
 
 #endif

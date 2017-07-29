@@ -12,9 +12,8 @@ sources = \
 	builtins.s \
 	sha256.c \
 	minilang.c \
-	stringmap.c \
-	stringbuffer.c \
-	extras.c
+	ml_file.c \
+	stringmap.c
 
 CFLAGS += -I. -g
 LDFLAGS += -lm -lgc -lsqlite3 -lHX -g
@@ -23,7 +22,7 @@ minibuild: $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
 	
 minilang: minilang.* ml.* stringmap.* sha256.*
-	gcc $(CFLAGS) minilang.c ml.c stringmap.c sha256.c extras.c stringbuffer.c -lgc -o$@
+	gcc $(CFLAGS) minilang.c ml_file.c ml.c stringmap.c sha256.c -lgc -o$@
 
 clean:
 	rm minilang

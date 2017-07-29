@@ -28,7 +28,7 @@ context_t *context_push(const char *Path) {
 	CurrentContext = Context;
 	chdir(concat(RootPath, CurrentContext->Path, 0));
 	Context->Locals[0] = STRINGMAP_INIT;
-	target_t *Default = Context->Default = (target_t *)target_meta_new(ML, 0, 1, &DefaultString);
+	target_t *Default = Context->Default = (target_t *)target_meta_new(0, 1, &DefaultString);
 	stringmap_insert(Context->Locals, "DEFAULT", Default);
 	stringmap_insert(ContextCache, Context->Path, Context);
 	return Context;
