@@ -1,3 +1,8 @@
-var X := :apple
+var X := 1;
 
-print('X = {X}\n')
+var S := 'hello
+X is {X}
+{100} is a number
+'
+
+print(S)

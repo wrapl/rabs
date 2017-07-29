@@ -2746,13 +2746,14 @@ static mlc_expr_t *ml_accept_string(mlc_scanner_t *Scanner) {
 	}
 	int Length = 0;
 	const char *End = Scanner->Next;
-	while (End[0] != '\'' && End[0] != '{') {
-		if (!End[0]) {
-			Scanner->Error = ml_error("ParseError", "end of line while parsing string");
-			ml_error_trace_add(Scanner->Error, Scanner->Source);
-			longjmp(Scanner->OnError, 1);
+	while (End[0] && End[0] != '\'' && End[0] != '{') {
+		if (End[0] == '\\') {
+			if (!*++End) {
+				Scanner->Error = ml_error("ParseError", "end of line while parsing string");
+				ml_error_trace_add(Scanner->Error, Scanner->Source);
+				longjmp(Scanner->OnError, 1);
+			}
 		}
-		if (End[0] == '\\') ++End;
 		++Length;
 		++End;
 	}
@@ -2783,7 +2784,21 @@ static mlc_expr_t *ml_accept_string(mlc_scanner_t *Scanner) {
 		Expr = (mlc_expr_t *)ValueExpr;
 	}
 	Scanner->Next = End + 1;
-	if (End[0] == '{') {
+	if (!End[0]) {
+		Scanner->Next = (Scanner->read)(Scanner->Data);
+		++Scanner->Source.Line;
+		if (!Scanner->Next) {
+			Scanner->Error = ml_error("ParseError", "end of input while parsing string");
+			ml_error_trace_add(Scanner->Error, Scanner->Source);
+			longjmp(Scanner->OnError, 1);
+		}
+		mlc_expr_t *Next = ml_accept_string(Scanner);
+		if (Expr) {
+			Expr->Next = Next;
+		} else {
+			Expr = Next;
+		}
+	} else if (End[0] == '{') {
 		mlc_expr_t *Embedded = ml_accept_expression(Scanner, EXPR_DEFAULT);
 		ml_accept(Scanner, MLT_RIGHT_BRACE);
 		Embedded->Next = ml_accept_string(Scanner);
