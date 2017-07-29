@@ -219,7 +219,6 @@ static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Arg
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 		ml_stringbuffer_add(Buffer, Path, strlen(Path));
 	}
-	ml_stringbuffer_add(Buffer, " ", 1);
 	return Nil;
 }
 
