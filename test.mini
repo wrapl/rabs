@@ -1,8 +1,1 @@
-var X := 1;
-
-var S := 'hello
-X is {X}
-{100} is a number
-'
-
-print(S)
+print("Hello world!\n")

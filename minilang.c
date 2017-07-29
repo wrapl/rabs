@@ -287,6 +287,91 @@ static ml_value_t *ml_string_length_value(void *Data, int Count, ml_value_t **Ar
 	return ml_integer(((ml_string_t *)Args[0])->Length);
 }
 
+typedef struct ml_string_splitter_t {
+	const ml_type_t *Type;
+	const char *Next;
+	const char *Pattern;
+	ml_value_t *Current;
+	size_t Length, Index;
+} ml_string_splitter_t;
+
+static ml_value_t *ml_string_splitter_deref(ml_value_t *Ref) {
+	ml_string_splitter_t *Splitter = (ml_string_splitter_t *)Ref;
+	return Splitter->Current;
+}
+
+static ml_value_t *ml_string_splitter_next(ml_value_t *Ref) {
+	ml_string_splitter_t *Splitter = (ml_string_splitter_t *)Ref;
+	const char *Subject = Splitter->Next;
+	if (!Subject) return Nil;
+	const char *Pattern = Splitter->Pattern;
+	size_t Length = Splitter->Length;
+	const char *Next = strstr(Subject, Pattern);
+	while (Next == Subject) {
+		Subject += Length;
+		Next = strstr(Subject, Pattern);
+	}
+	if (!Subject[0]) return Nil;
+	if (Next) {
+		size_t MatchLength = Next - Subject;
+		char *Match = snew(MatchLength + 1);
+		memcpy(Match, Subject, MatchLength);
+		Match[MatchLength] = 0;
+		Splitter->Current = ml_string(Match, MatchLength);
+		Splitter->Next = Next + Length;
+	} else {
+		const char *Rest = Subject;
+		Splitter->Current = ml_string(Subject, strlen(Subject));
+		Splitter->Next = 0;
+	}
+	return (ml_value_t *)Splitter;
+}
+
+static ml_value_t *ml_string_splitter_key(ml_value_t *Ref) {
+	ml_string_splitter_t *Iter = (ml_string_splitter_t *)Ref;
+	return ml_integer(Iter->Index);
+}
+
+ml_type_t MLStringSplitter[1] = {{
+	AnyT, "string-splitter",
+	ml_default_hash,
+	ml_default_call,
+	ml_string_splitter_deref,
+	ml_default_assign,
+	ml_string_splitter_next,
+	ml_string_splitter_key
+}};
+
+ml_value_t *ml_string_split(void *Data, int Count, ml_value_t **Args) {
+	const char *Subject = ml_string_value(Args[0]);
+	const char *Pattern = ml_string_value(Args[1]);
+	size_t Length = strlen(Pattern);
+	const char *Next = strstr(Subject, Pattern);
+	while (Next == Subject) {
+		Subject += Length;
+		Next = strstr(Subject, Pattern);
+	}
+	if (!Subject[0]) return Nil;
+	ml_string_splitter_t *Splitter = new(ml_string_splitter_t);
+	Splitter->Type = MLStringSplitter;
+	Splitter->Pattern = Pattern;
+	Splitter->Index = 1;
+	Splitter->Length = Length;
+	if (Next) {
+		size_t MatchLength = Next - Subject;
+		char *Match = snew(MatchLength + 1);
+		memcpy(Match, Subject, MatchLength);
+		Match[MatchLength] = 0;
+		Splitter->Current = ml_string(Match, MatchLength);
+		Splitter->Next = Next + Length;
+	} else {
+		const char *Rest = Subject;
+		Splitter->Current = ml_string(Subject, strlen(Subject));
+		Splitter->Next = 0;
+	}
+	return (ml_value_t *)Splitter;
+}
+
 ml_value_t *ml_string_match(void *Data, int Count, ml_value_t **Args) {
 	const char *Subject = ml_string_value(Args[0]);
 	const char *Pattern = ml_string_value(Args[1]);
@@ -1765,7 +1850,8 @@ void ml_init(ml_getter_t Get) {
 	ml_method_by_name("string", 0, ml_integer_to_string, IntegerT, 0);
 	ml_method_by_name("string", 0, ml_real_to_string, RealT, 0);
 	ml_method_by_name("string", 0, ml_identity, StringT, 0);
-	ml_method_by_name("/", 0, ml_string_match, StringT, StringT, 0);
+	ml_method_by_name("/", 0, ml_string_split, StringT, StringT, 0);
+	ml_method_by_name("%", 0, ml_string_match, StringT, StringT, 0);
 
 	AppendMethod = ml_method("append");
 	ml_method_by_value(AppendMethod, 0, stringify_nil, StringBufferT, NilT, 0);

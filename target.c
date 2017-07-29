@@ -433,7 +433,7 @@ ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 		ml_value_t *Arg = Args[I];
 		if (Arg->Type == ListT) {
 			ml_list_foreach(Arg, Target, (void *)target_depends_list);
-		} else {
+		} else if (Arg != Nil) {
 			target_t *Depend = (target_t *)Arg;
 			stringmap_insert(Target->Depends, Depend->Id, Depend);
 		}
