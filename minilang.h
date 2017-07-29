@@ -89,6 +89,7 @@ struct ml_value_t {
 };
 
 extern ml_value_t Nil[];
+extern ml_value_t Some[];
 
 struct ml_function_t {
 	const ml_type_t *Type;
