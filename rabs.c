@@ -64,6 +64,9 @@ ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	ml_value_t *Result = ml_call(Args[1], 0, 0);
 	if (Result->Type == ErrorT) {
 		printf("Error: %s\n", ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
 	context_pop();

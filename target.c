@@ -512,38 +512,37 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 
 struct target_symb_t {
 	TARGET_FIELDS
-	const char *Name;
-	const char *Path;
+	const char *Name, *Context;
 };
 
 static ml_type_t *SymbTargetT;
 
 static ml_value_t *symb_target_deref(ml_value_t *Ref) {
 	target_symb_t *Target = (target_symb_t *)Ref;
-	context_t *Context = context_find(Target->Path);
+	context_t *Context = context_find(Target->Context);
 	return context_symb_get(Context, Target->Name);
 }
 
 static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 	target_symb_t *Target = (target_symb_t *)Ref;
-	context_t *Context = context_find(Target->Path);
+	context_t *Context = context_find(Target->Context);
 	context_symb_set(Context, Target->Name, Value);
 	return Value;
 }
 
 static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
-	context_t *Context = context_find(Target->Path);
+	context_t *Context = context_find(Target->Context);
 	ml_value_t *Value = context_symb_get(Context, Target->Name);
 	target_value_hash(Value, Target->Hash);
 	return 0;
 }
 
 target_t *target_symb_new(const char *Name) {
-	const char *Id = concat("symb:", CurrentContext->Path, CurrentContext->Name, "/", Name, 0);
+	const char *Id = concat("symb:", CurrentContext->Name, "/", Name, 0);
 	target_symb_t *Target = (target_symb_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
 		Target = target_new(target_symb_t, SymbTargetT, Id);
-		Target->Path = CurrentContext->Path;
+		Target->Context = CurrentContext->Name;
 		Target->Name = Name;
 	}
 	return (target_t *)Target;
@@ -650,7 +649,7 @@ target_t *target_find(const char *Id) {
 		char *Path = GC_malloc_atomic(PathLength);
 		memcpy(Path, Id + 5, PathLength);
 		Path[PathLength] = 0;
-		Target->Path = Path;
+		Target->Context = Path;
 		Target->Name = Name + 1;
 		return (target_t *)Target;
 	}

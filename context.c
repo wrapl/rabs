@@ -19,7 +19,7 @@ context_t *context_push(const char *Path) {
 	context_t *Context = (context_t *)GC_malloc(sizeof(context_t));
 	Context->Parent = CurrentContext;
 	Context->Path = Path;
-	Context->Name = "";
+	Context->Name = Path;
 	if (CurrentContext) {
 		Context->Mounts = CurrentContext->Mounts;
 	} else {
@@ -30,7 +30,7 @@ context_t *context_push(const char *Path) {
 	Context->Locals[0] = STRINGMAP_INIT;
 	target_t *Default = Context->Default = (target_t *)target_meta_new(0, 1, &DefaultString);
 	stringmap_insert(Context->Locals, "DEFAULT", Default);
-	stringmap_insert(ContextCache, Context->Path, Context);
+	stringmap_insert(ContextCache, Context->Name, Context);
 	return Context;
 }
 
@@ -47,8 +47,7 @@ context_t *context_scope(const char *Name) {
 	CurrentContext = Context;
 	Context->Default = Context->Parent->Default;
 	Context->Locals[0] = STRINGMAP_INIT;
-	const char *Id = concat(Context->Path, Context->Name, 0);
-	stringmap_insert(ContextCache, Id, Context);
+	stringmap_insert(ContextCache, Context->Name, Context);
 	return Context;
 }
 

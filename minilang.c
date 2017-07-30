@@ -2133,6 +2133,7 @@ static inline mlc_compiled_t ml_compile(mlc_function_t *Function, mlc_expr_t *Ex
 		ML_COMPILE_HASH
 		ml_inst_t *NilInst = ml_inst_new(1, (ml_source_t){"<internal>", 0}, mli_push_run);
 		NilInst->Params[1].Value = Nil;
+		++Function->Top;
 		return (mlc_compiled_t){NilInst, NilInst};
 	}
 }
