@@ -1,5 +1,9 @@
 -- ROOT --
 
+for File in shell("ls ..") / "\n" do
+	print('{File}\n')
+end
+
 if not PLATFORM then
 	PLATFORM := shell("uname")[1, -1]
 end

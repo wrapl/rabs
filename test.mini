@@ -1,20 +1,18 @@
-var Trees := []
-
-for I := 1 .. 5 do
-	var T := {}
-	for J := 1 .. (I + 3) do
-		T['{I}{J}'] := '{I} x {J}'
-	end
-	Trees:put(T)
-	print('Trees[{I}] has size {Trees[I]:size}\n')
+var Z := fun()
+	print("Not changed!\n")
 end
 
-for T in Trees do
-	print('Tree!, #T = {T:size}\n')
-	for V, K in T do
-		if K = '33' then
-			print('\tV = {V}, Z = {Z}, #T = {T:size}\n')
-			exit
+var test := fun(X)
+	if X > 10 then
+		var A := 'A'
+		var B := 'B'
+		var C := 'C'
+		Z := fun()
+			print('A = {A}, B = {B}, C = {C}\n')
 		end
 	end
 end
+
+test(20)
+
+Z()
