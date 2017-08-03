@@ -280,7 +280,7 @@ static int target_file_missing(target_file_t *Target) {
 	return !!stat(FileName, Stat);
 }
 
-static target_t *target_file_check(const char *Path, int Absolute) {
+target_t *target_file_check(const char *Path, int Absolute) {
 	Path = concat(Path, 0);
 	const char *Id = concat("file:", Path, 0);
 	target_file_t *Target = (target_file_t *)stringmap_search(TargetCache, Id);

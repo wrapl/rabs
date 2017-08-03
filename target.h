@@ -38,5 +38,6 @@ target_t *target_find(const char *Id);
 target_t *target_get(const char *Id);
 void target_push(target_t *Target);
 void target_list();
+target_t *target_file_check(const char *Path, int Absolute);
 
 #endif
