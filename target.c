@@ -15,8 +15,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include <libHX/io.h>
-
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 #define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
 #define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
@@ -366,8 +364,19 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 	} else {
 		DestPath = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Dest->Path, 0));
 	}
-	int Error = HX_copy_file(SourcePath, DestPath, 0);
-	if (Error < 0) return ml_error("FileError", "file copy failed");
+	int SourceFile = open(SourcePath, O_RDONLY);
+	if (SourceFile < 0) return ml_error("FileError", "could not open source %s", SourcePath);
+	int DestFile = open(DestPath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IRGRP| S_IROTH | S_IWUSR | S_IWGRP| S_IWOTH);
+	if (DestFile < 0) {
+		close(SourceFile);
+		return ml_error("FileError", "could not open destination %s", DestPath);
+	}
+	char *Buffer = snew(4096);
+	int Length;
+	while ((Length = read(SourceFile, Buffer, 4096)) > 0 && write(DestFile, Buffer, Length) > 0);
+	close(SourceFile);
+	close(DestFile);
+	if (Length < 0) return ml_error("FileError", "file copy failed");
 	return Nil;
 }
 

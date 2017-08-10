@@ -16,14 +16,11 @@
 #include "minilang.h"
 #include "ml_file.h"
 
-#include <libHX/io.h>
-
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
 
 static void load_file(const char *FileName) {
-	printf("Loading: %s\n", FileName);
 	ml_value_t *Closure = ml_load(FileName);
 	if (Closure->Type == ErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
@@ -42,11 +39,31 @@ static void load_file(const char *FileName) {
 	}
 }
 
+static int mkdir_p(char *Path) {
+	if (!Path[0]) return -1;
+	struct stat Stat[1];
+	for (char *P = Path + 1; P[0]; ++P) {
+		if (P[0] == '/') {
+			P[0] = 0;
+			if (lstat(Path, Stat) < 0) {
+				int Result = mkdir(Path, 0777);
+				if (Result < 0) return Result;
+			}
+			P[0] = '/';
+		}
+	}
+	if (lstat(Path, Stat) < 0) {
+		int Result = mkdir(Path, 0777);
+		if (Result < 0) return Result;
+	}
+	return 0;
+}
+
 ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	const char *Path = ml_string_value(Args[0]);
 	Path = concat(CurrentContext->Path, "/", Path, 0);
 	//printf("Path = %s\n", Path);
-	HX_mkdir(concat(RootPath, Path, 0), 0777);
+	mkdir_p(concat(RootPath, Path, 0));
 	const char *FileName = concat(RootPath, Path, SystemName, 0);
 	//printf("FileName = %s\n", FileName);
 	FileName = vfs_resolve(CurrentContext->Mounts, FileName);
@@ -134,9 +151,9 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) ml_inline(AppendMethod, 2, Buffer, Args[I]);
-	const char *Path = ml_stringbuffer_get(Buffer);
-	if (HX_mkdir(Path, 0777) < 0) {
-		return ml_error("OSError", "failed to create directory");
+	char *Path = ml_stringbuffer_get(Buffer);
+	if (mkdir_p(Path) < 0) {
+		return ml_error("FileError", "error creating directory %s", Path);
 	}
 	return Nil;
 }

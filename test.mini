@@ -8,6 +8,7 @@ var test := fun(X)
 		var B := 'B'
 		var C := 'C'
 		Z := fun()
+			print('C = {C}\n')
 			print('A = {A}, B = {B}, C = {C}\n')
 		end
 	end

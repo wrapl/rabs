@@ -16,7 +16,7 @@ sources = \
 	stringmap.c
 
 CFLAGS += -I. -g
-LDFLAGS += -lm -lgc -lsqlite3 -lHX -g
+LDFLAGS += -lm -lgc -lsqlite3 -g
 
 minibuild: $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@

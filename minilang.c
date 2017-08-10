@@ -687,8 +687,12 @@ ml_value_t *ml_tree_search(ml_tree_t *Tree, ml_value_t *Key) {
 	ml_tree_node_t *Node = Tree->Root;
 	long Hash = ml_hash(Key);
 	while (Node) {
-		int Compare = Hash - Node->Hash;
-		if (!Compare) {
+		int Compare;
+		if (Hash < Node->Hash) {
+			Compare = -1;
+		} else if (Hash > Node->Hash) {
+			Compare = 1;
+		} else {
 			ml_value_t *Args[2] = {Key, Node->Key};
 			ml_value_t *Result = ml_method_call(CompareMethod, 2, Args);
 			if (Result->Type == IntegerT) {
@@ -761,8 +765,12 @@ static ml_value_t *ml_tree_insert_internal(ml_tree_t *Tree, ml_tree_node_t **Slo
 		Node->Value = Value;
 		return 0;
 	}
-	int Compare = Hash - Slot[0]->Hash;
-	if (!Compare) {
+	int Compare;
+	if (Hash < Slot[0]->Hash) {
+		Compare = -1;
+	} else if (Hash > Slot[0]->Hash) {
+		Compare = 1;
+	} else {
 		ml_value_t *Args[2] = {Key, Slot[0]->Key};
 		ml_value_t *Result = ml_method_call(CompareMethod, 2, Args);
 		if (Result->Type == IntegerT) {
@@ -796,10 +804,14 @@ static void ml_tree_remove_depth_helper(ml_tree_node_t *Node) {
 	}
 }
 
-ml_value_t *ml_tree_remove_internal(ml_tree_t *Tree, ml_tree_node_t **Slot, long Hash, ml_value_t *Key) {
+static ml_value_t *ml_tree_remove_internal(ml_tree_t *Tree, ml_tree_node_t **Slot, long Hash, ml_value_t *Key) {
 	if (!Slot[0]) return Nil;
-	int Compare = Hash - Slot[0]->Hash;
-	if (!Compare) {
+	int Compare;
+	if (Hash < Slot[0]->Hash) {
+		Compare = -1;
+	} else if (Hash > Slot[0]->Hash) {
+		Compare = 1;
+	} else {
 		ml_value_t *Args[2] = {Key, Slot[0]->Key};
 		ml_value_t *Result = ml_method_call(CompareMethod, 2, Args);
 		if (Result->Type == IntegerT) {
@@ -983,7 +995,7 @@ ml_value_t *ml_property(void *Data, const char *Name, ml_getter_t Get, ml_setter
 typedef struct ml_closure_info_t {
 	ml_inst_t *Entry;
 	int FrameSize;
-	int NumParams;
+	int NumParams, NumUpValues;
 	unsigned char Hash[SHA256_BLOCK_SIZE];
 } ml_closure_info_t;
 
@@ -1195,24 +1207,27 @@ ssize_t ml_stringbuffer_addf(ml_stringbuffer_t *Buffer, const char *Format, ...)
 	return ml_stringbuffer_add(Buffer, String, Length);
 }
 
-const char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer) {
-	if (Buffer->Length == 0) return "";
+char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer) {
 	char *String = GC_malloc_atomic(Buffer->Length + 1);
-	char *P = String;
-	ml_stringbuffer_node_t *Node = Buffer->Nodes;
-	while (Node->Next) {
-		memcpy(P, Node->Chars, ML_STRINGBUFFER_NODE_SIZE);
-		P += ML_STRINGBUFFER_NODE_SIZE;
-		Node = Node->Next;
+	if (Buffer->Length == 0) {
+		String[0] = 0;
+	} else {
+		char *P = String;
+		ml_stringbuffer_node_t *Node = Buffer->Nodes;
+		while (Node->Next) {
+			memcpy(P, Node->Chars, ML_STRINGBUFFER_NODE_SIZE);
+			P += ML_STRINGBUFFER_NODE_SIZE;
+			Node = Node->Next;
+		}
+		memcpy(P, Node->Chars, ML_STRINGBUFFER_NODE_SIZE - Buffer->Space);
+		P += ML_STRINGBUFFER_NODE_SIZE - Buffer->Space;
+		*P++ = 0;
+		ml_stringbuffer_node_t **Slot = &Cache;
+		while (Slot[0]) Slot = &Slot[0]->Next;
+		Slot[0] = Buffer->Nodes;
+		Buffer->Nodes = 0;
+		Buffer->Length = Buffer->Space = 0;
 	}
-	memcpy(P, Node->Chars, ML_STRINGBUFFER_NODE_SIZE - Buffer->Space);
-	P += ML_STRINGBUFFER_NODE_SIZE - Buffer->Space;
-	*P++ = 0;
-	ml_stringbuffer_node_t **Slot = &Cache;
-	while (Slot[0]) Slot = &Slot[0]->Next;
-	Slot[0] = Buffer->Nodes;
-	Buffer->Nodes = 0;
-	Buffer->Length = Buffer->Space = 0;
 	return String;
 }
 
@@ -2004,11 +2019,12 @@ ml_inst_t *mli_local_run(ml_inst_t *Inst, ml_frame_t *Frame) {
 
 ml_inst_t *mli_closure_run(ml_inst_t *Inst, ml_frame_t *Frame) {
 	// closure <entry> <frame_size> <num_params> <num_upvalues> <upvalue_1> ...
-	ml_closure_t *Closure = xnew(ml_closure_t, Inst->Params[4].Count, ml_value_t *);
+	ml_closure_info_t *Info = Inst->Params[1].ClosureInfo;
+	ml_closure_t *Closure = xnew(ml_closure_t, Info->NumUpValues, ml_value_t *);
 	Closure->Type = ClosureT;
-	Closure->Info = Inst->Params[1].ClosureInfo;
-	for (int I = 0; I < Inst->Params[2].Count; ++I) {
-		int Index = Inst->Params[3 + I].Index;
+	Closure->Info = Info;
+	for (int I = 0; I < Info->NumUpValues; ++I) {
+		int Index = Inst->Params[2 + I].Index;
 		if (Index < 0) {
 			Closure->UpValues[I] = Frame->UpValues[~Index];
 		} else {
@@ -2354,6 +2370,15 @@ static mlc_compiled_t ml_var_expr_compile(mlc_function_t *Function, mlc_decl_exp
 	return Compiled;
 }
 
+static mlc_compiled_t ml_def_expr_compile(mlc_function_t *Function, mlc_decl_expr_t *Expr, SHA256_CTX *HashContext) {
+	mlc_compiled_t Compiled = ml_compile(Function, Expr->Child, HashContext);
+	mlc_decl_t *Decl = Expr->Decl;
+	Decl->Index = Function->Top - 1;
+	Decl->Next = Function->Decls;
+	Function->Decls = Decl;
+	return Compiled;
+}
+
 static mlc_compiled_t ml_with_expr_compile(mlc_function_t *Function, mlc_decl_expr_t *Expr, SHA256_CTX *HashContext) {
 	int OldTop = Function->Top + 1;
 	mlc_decl_t *OldScope = Function->Decls;
@@ -2595,16 +2620,16 @@ static mlc_compiled_t ml_fun_expr_compile(mlc_function_t *Function, mlc_fun_expr
 	int NumUpValues = 0;
 	for (mlc_upvalue_t *UpValue = SubFunction->UpValues; UpValue; UpValue = UpValue->Next) ++NumUpValues;
 	ML_COMPILE_HASH
-	ml_inst_t *ClosureInst = ml_inst_new(3 + NumUpValues, Expr->Source, mli_closure_run);
+	ml_inst_t *ClosureInst = ml_inst_new(2 + NumUpValues, Expr->Source, mli_closure_run);
 	ml_param_t *Params = ClosureInst->Params;
 	ml_closure_info_t *Info = new(ml_closure_info_t);
 	Info->Entry = Compiled.Start;
 	Info->FrameSize = SubFunction->Size;
 	Info->NumParams = NumParams;
+	Info->NumUpValues = NumUpValues;
 	sha256_final(SubHashContext, Info->Hash);
 	Params[1].ClosureInfo = Info;
-	Params[2].Count = NumUpValues;
-	int Index = 3;
+	int Index = 2;
 	for (mlc_upvalue_t *UpValue = SubFunction->UpValues; UpValue; UpValue = UpValue->Next) Params[Index++].Index = UpValue->Index;
 	if (++Function->Top >= Function->Size) Function->Size = Function->Top + 1;
 	return (mlc_compiled_t){ClosureInst, ClosureInst};
@@ -2694,6 +2719,7 @@ typedef enum ml_token_t {
 	MLT_OR,
 	MLT_NOT,
 	MLT_OLD,
+	MLT_DEF,
 	MLT_VAR,
 	MLT_IDENT,
 	MLT_LEFT_PAREN,
@@ -2738,6 +2764,7 @@ const char *MLTokens[] = {
 	"or", // MLT_OR,
 	"not", // MLT_NOT,
 	"old", // MLT_OLD,
+	"def", // MLT_DEF,
 	"var", // MLT_VAR,
 	"<identifier>", // MLT_IDENT,
 	"(", // MLT_LEFT_PAREN,
