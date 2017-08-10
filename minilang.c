@@ -1414,8 +1414,8 @@ ml_comp_method_number_number(gre, >)
 ml_comp_method_number_number(leq, <=)
 ml_comp_method_number_number(geq, >=)
 
-static ml_integer_t One[1] = {{IntegerT, -1}};
-static ml_integer_t NegOne[1] = {{IntegerT, 1}};
+static ml_integer_t One[1] = {{IntegerT, 1}};
+static ml_integer_t NegOne[1] = {{IntegerT, -1}};
 static ml_integer_t Zero[1] = {{IntegerT, 0}};
 
 static ml_value_t *ml_compare_integer_integer(void *Data, int Count, ml_value_t **Args) {
