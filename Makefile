@@ -9,7 +9,6 @@ sources = \
 	target.c \
 	util.c \
 	vfs.c \
-	builtins.s \
 	sha256.c \
 	minilang.c \
 	ml_file.c \
