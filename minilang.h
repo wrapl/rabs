@@ -13,11 +13,12 @@ typedef ml_value_t *(*ml_callback_t)(void *Data, int Count, ml_value_t **Args);
 typedef ml_value_t *(*ml_getter_t)(void *Data, const char *Name);
 typedef ml_value_t *(*ml_setter_t)(void *Data, const char *Name, ml_value_t *Value);
 
-void ml_init(ml_getter_t Get);
+void ml_init();
 
 ml_type_t *ml_class(ml_type_t *Parent, const char *Name);
 
-ml_value_t *ml_load(const char *FileName);
+ml_value_t *ml_load(ml_getter_t GlobalGet, void *Globals, const char *FileName);
+void ml_console(ml_getter_t GlobalGet, void *Globals);
 ml_value_t *ml_call(ml_value_t *Value, int Count, ml_value_t **Args);
 
 ml_value_t *ml_inline(ml_value_t *Value, int Count, ...);

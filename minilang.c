@@ -10,6 +10,8 @@
 #include <setjmp.h>
 #include <ctype.h>
 #include <regex.h>
+#include "linenoise.h"
+#include "stringmap.h"
 
 #define MAX_TRACE 16
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
@@ -78,7 +80,6 @@ ml_value_t *ml_default_key(ml_value_t *Iter) {
 
 ml_value_t *CompareMethod;
 ml_value_t *AppendMethod;
-ml_getter_t GlobalGet;
 
 ml_type_t AnyT[1] = {{
 	0, "any",
@@ -128,8 +129,6 @@ long ml_hash(ml_value_t *Value) {
 }
 
 ml_value_t *ml_call(ml_value_t *Value, int Count, ml_value_t **Args) {
-	Value = Value->Type->deref(Value);
-	for (int I = 0; I < Count; ++I) Args[I] = Args[I]->Type->deref(Args[I]);
 	return Value->Type->call(Value, Count, Args);
 }
 
@@ -139,7 +138,7 @@ ml_value_t *ml_inline(ml_value_t *Value, int Count, ...) {
 	va_start(List, Count);
 	for (int I = 0; I < Count; ++I) Args[I] = va_arg(List, ml_value_t *);
 	va_end(List);
-	return ml_call(Value, Count, Args);
+	return Value->Type->call(Value, Count, Args);
 }
 
 static ml_value_t *ml_function_call(ml_value_t *Value, int Count, ml_value_t **Args) {
@@ -160,6 +159,7 @@ ml_type_t FunctionT[1] = {{
 ml_value_t *ml_function(void *Data, ml_callback_t Callback) {
 	ml_function_t *Function = new(ml_function_t);
 	Function->Type = FunctionT;
+	Function->Data = Data;
 	Function->Callback = Callback;
 	return (ml_value_t *)Function;
 }
@@ -567,6 +567,7 @@ ml_value_t *ml_reference(ml_value_t **Address) {
 	if (Address == 0) {
 		Reference = xnew(ml_reference_t, 1, ml_value_t *);
 		Reference->Address = Reference->Value;
+		Reference->Value[0] = Nil;
 	} else {
 		Reference = new(ml_reference_t);
 		Reference->Address = Address;
@@ -1763,8 +1764,7 @@ static ml_value_t *ml_return_nil(void *Data, int Count, ml_value_t **Args) {
 	return Nil;
 }
 
-void ml_init(ml_getter_t Get) {
-	GlobalGet = Get;
+void ml_init() {
 	Methods = anew(ml_method_t *, MaxMethods);
 	CompareMethod = ml_method("?");
 	ml_method_by_name("?", 0, ml_return_nil, NilT, AnyT, 0);
@@ -1889,7 +1889,9 @@ ml_inst_t *mli_exit_run(ml_inst_t *Inst, ml_frame_t *Frame) {
 ml_inst_t *mli_call_run(ml_inst_t *Inst, ml_frame_t *Frame) {
 	int Count = Inst->Params[1].Count;
 	ml_value_t *Function = Frame->Top[~Count];
+	Function = Function->Type->deref(Function);
 	ml_value_t **Args = Frame->Top - Count;
+	for (int I = 0; I < Count; ++I) Args[I] = Args[I]->Type->deref(Args[I]);
 	ml_value_t *Result = ml_call(Function, Count, Args);
 	for (int I = Count; --I >= 0;) (--Frame->Top)[0] = 0;
 	Frame->Top[-1] = Result;
@@ -1905,6 +1907,7 @@ ml_inst_t *mli_const_call_run(ml_inst_t *Inst, ml_frame_t *Frame) {
 	int Count = Inst->Params[1].Count;
 	ml_value_t *Function = Inst->Params[2].Value;
 	ml_value_t **Args = Frame->Top - Count;
+	for (int I = 0; I < Count; ++I) Args[I] = Args[I]->Type->deref(Args[I]);
 	ml_value_t *Result = ml_call(Function, Count, Args);
 	if (Count == 0) {
 		++Frame->Top;
@@ -2052,6 +2055,7 @@ typedef struct { ml_inst_t *Start, *Exits; } mlc_compiled_t;
 
 struct mlc_function_t {
 	ml_getter_t GlobalGet;
+	void *Globals;
 	mlc_function_t *Up;
 	mlc_decl_t *Decls;
 	mlc_loop_t *Loop;
@@ -2612,7 +2616,7 @@ struct mlc_fun_expr_t {
 
 static mlc_compiled_t ml_fun_expr_compile(mlc_function_t *Function, mlc_fun_expr_t *Expr, SHA256_CTX *HashContext) {
 	// closure <entry> <frame_size> <num_params> <num_upvalues> <upvalue_1> ...
-	mlc_function_t SubFunction[1] = {{Function->GlobalGet, 0,}};
+	mlc_function_t SubFunction[1] = {{Function->GlobalGet, Function->Globals, 0,}};
 	SubFunction->Up = Function;
 	int NumParams = 0;
 	mlc_decl_t **ParamSlot = &SubFunction->Decls;
@@ -2686,7 +2690,7 @@ static mlc_compiled_t ml_ident_expr_compile(mlc_function_t *Function, mlc_ident_
 	sha256_update(HashContext, (BYTE *)Expr->Ident, strlen(Expr->Ident));
 	ML_COMPILE_HASH
 	ml_inst_t *ValueInst = ml_inst_new(2, Expr->Source, mli_push_run);
-	ValueInst->Params[1].Value = (GlobalGet)(0, Expr->Ident);
+	ValueInst->Params[1].Value = (Function->GlobalGet)(Function->Globals, Expr->Ident);
 	if (++Function->Top >= Function->Size) Function->Size = Function->Top + 1;
 	return (mlc_compiled_t){ValueInst, ValueInst};
 }
@@ -3090,14 +3094,6 @@ static void ml_accept(mlc_scanner_t *Scanner, ml_token_t Token) {
 	longjmp(Scanner->OnError, 1);
 }
 
-static const char *ml_file_read(void *Data) {
-	FILE *File = (FILE *)Data;
-	char *Line = 0;
-	size_t Length;
-	if (getline(&Line, &Length, File) < 0) return 0;
-	return Line;
-}
-
 static mlc_expr_t *ml_parse_term(mlc_scanner_t *Scanner) {
 	if (ml_parse(Scanner, MLT_IF)) {
 		mlc_if_expr_t *IfExpr = new(mlc_if_expr_t);
@@ -3497,6 +3493,39 @@ static mlc_expr_t *ml_accept_block(mlc_scanner_t *Scanner) {
 	return 0; // Unreachable
 }
 
+static mlc_expr_t *ml_accept_command(mlc_scanner_t *Scanner, stringmap_t *Vars) {
+	while (ml_parse(Scanner, MLT_EOL));
+	mlc_decl_expr_t *BlockExpr = new(mlc_decl_expr_t);
+	BlockExpr->compile = ml_block_expr_compile;
+	BlockExpr->Source = Scanner->Source;
+	mlc_expr_t **ExprSlot = &BlockExpr->Child;
+	if (ml_parse(Scanner, MLT_VAR)) {
+		do {
+			ml_accept(Scanner, MLT_IDENT);
+			const char *Ident = Scanner->Ident;
+			ml_value_t *Ref = ml_reference(0);
+			stringmap_insert(Vars, Ident, Ref);
+			if (ml_parse(Scanner, MLT_ASSIGN)) {
+				mlc_value_expr_t *RefExpr = new(mlc_value_expr_t);
+				RefExpr->compile = ml_value_expr_compile;
+				RefExpr->Source = Scanner->Source;
+				RefExpr->Value = Ref;
+				mlc_parent_expr_t *AssignExpr = new(mlc_parent_expr_t);
+				AssignExpr->compile = ml_assign_expr_compile;
+				AssignExpr->Source = Scanner->Source;
+				AssignExpr->Child = (mlc_expr_t *)RefExpr;
+				RefExpr->Next = ml_accept_expression(Scanner, EXPR_DEFAULT);
+				ExprSlot[0] = (mlc_expr_t *)AssignExpr;
+				ExprSlot = &AssignExpr->Next;
+			}
+		} while (ml_parse(Scanner, MLT_COMMA));
+	} else {
+		mlc_expr_t *Expr = ExprSlot[0] = ml_accept_expression(Scanner, EXPR_DEFAULT);
+		ExprSlot = &Expr->Next;
+	}
+	return (mlc_expr_t *)BlockExpr;
+}
+
 ml_type_t *ml_class(ml_type_t *Parent, const char *Name) {
 	ml_type_t *Type = new(ml_type_t);
 	Type->Parent = Parent;
@@ -3510,14 +3539,22 @@ ml_type_t *ml_class(ml_type_t *Parent, const char *Name) {
 	return Type;
 }
 
-ml_value_t *ml_load(const char *FileName) {
+static const char *ml_file_read(void *Data) {
+	FILE *File = (FILE *)Data;
+	char *Line = 0;
+	size_t Length;
+	if (getline(&Line, &Length, File) < 0) return 0;
+	return Line;
+}
+
+ml_value_t *ml_load(ml_getter_t GlobalGet, void *Globals, const char *FileName) {
 	FILE *File = fopen(FileName, "r");
 	if (!File) return ml_error("LoadError", "error opening %s", FileName);
 	mlc_scanner_t *Scanner = ml_scanner(FileName, File, ml_file_read);
 	if (setjmp(Scanner->OnError)) return Scanner->Error;
 	mlc_expr_t *Expr = ml_accept_block(Scanner);
 	ml_accept(Scanner, MLT_EOI);
-	mlc_function_t Function[1] = {{GlobalGet, 0,}};
+	mlc_function_t Function[1] = {{GlobalGet, Globals, 0,}};
 	SHA256_CTX HashContext[1];
 	sha256_init(HashContext);
 	mlc_compiled_t Compiled = ml_compile(Function, Expr, HashContext);
@@ -3529,4 +3566,68 @@ ml_value_t *ml_load(const char *FileName) {
 	Info->FrameSize = Function->Size;
 	sha256_final(HashContext, Info->Hash);
 	return (ml_value_t *)Closure;
+}
+
+typedef struct ml_console_t {
+	ml_getter_t ParentGetter;
+	void *ParentGlobals;
+	const char *Prompt;
+	stringmap_t Globals[1];
+} ml_console_t;
+
+static ml_value_t *ml_console_global_get(ml_console_t *Console, const char *Name) {
+	return stringmap_search(Console->Globals, Name) ?: (Console->ParentGetter)(Console->ParentGlobals, Name);
+}
+
+static const char *ml_line_read(ml_console_t *Console) {
+	const char *Line = linenoise(Console->Prompt);
+	if (!Line) return 0;
+	int Length = strlen(Line);
+	char *Buffer = snew(Length + 2);
+	memcpy(Buffer, Line, Length);
+	Buffer[Length] = '\n';
+	Buffer[Length + 1] = 0;
+	return Buffer;
+}
+
+void ml_console(ml_getter_t GlobalGet, void *Globals) {
+	ml_console_t Console[1] = {{
+		GlobalGet, Globals, "--> ",
+		{STRINGMAP_INIT}
+	}};
+	mlc_scanner_t *Scanner = ml_scanner("console", Console, (void *)ml_line_read);
+	mlc_function_t Function[1] = {{(void *)ml_console_global_get, Console, 0,}};
+	SHA256_CTX HashContext[1];
+	sha256_init(HashContext);
+	ml_value_t *StringMethod = ml_method("string");
+	if (setjmp(Scanner->OnError)) {
+		printf("Error: %s\n", ml_error_message(Scanner->Error));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Scanner->Error, I, &Source, &Line); ++I) printf("\t%s:%d\n", Source, Line);
+	}
+	while (!ml_parse(Scanner, MLT_EOI)) {
+		mlc_expr_t *Expr = ml_accept_command(Scanner, Console->Globals);
+		mlc_compiled_t Compiled = ml_compile(Function, Expr, HashContext);
+		ml_connect(Compiled.Exits, 0);
+		ml_closure_t *Closure = new(ml_closure_t);
+		ml_closure_info_t *Info = Closure->Info = new(ml_closure_info_t);
+		Closure->Type = ClosureT;
+		Info->Entry = Compiled.Start;
+		Info->FrameSize = Function->Size;
+		ml_value_t *Result = ml_closure_call((ml_value_t *)Closure, 0, 0);
+		if (Result->Type == ErrorT) {
+			printf("Error: %s\n", ml_error_message(Result));
+			const char *Source;
+			int Line;
+			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\t%s:%d\n", Source, Line);
+		} else {
+			ml_value_t *String = ml_call(StringMethod, 1, &Result);
+			if (String->Type == StringT) {
+				printf("%s\n", ml_string_value(String));
+			} else {
+				printf("<%s>\n", Result->Type->Name);
+			}
+		}
+	}
 }

@@ -1,12 +1,12 @@
 var Z := fun() print("Not changed!\n")
 
-def add := fun(A, B) A + B
+var add := fun(A, B) A + B
 
-def test := fun(X) do
+var test := fun(X) do
 	if X > 10 then
 		var A := 'A'
 		var B := 'B'
-		def C := 'C'
+		var C := 'C'
 		Z := fun() do
 			print('C = {C}\n')
 			print('add({10}, {29}) = {add(10, 29)}\n')

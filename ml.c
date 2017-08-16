@@ -29,21 +29,25 @@ int main(int Argc, const char *Argv[]) {
 	stringmap_insert(Globals, "print", ml_function(0, print));
 	stringmap_insert(Globals, "open", ml_function(0, ml_file_open));
 	ml_init(global_get);
-	ml_value_t *Closure = ml_load(Argv[1]);
-	if (Closure->Type == ErrorT) {
-		printf("Error: %s\n", ml_error_message(Closure));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Closure, I, &Source, &Line); ++I) printf("\t%s:%d\n", Source, Line);
-		return 1;
-	}
-	ml_value_t *Result = ml_call(Closure, 0, 0);
-	if (Result->Type == ErrorT) {
-		printf("Error: %s\n", ml_error_message(Result));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\t%s:%d\n", Source, Line);
-		return 1;
+	if (Argc > 1) {
+		ml_value_t *Closure = ml_load(global_get, 0, Argv[1]);
+		if (Closure->Type == ErrorT) {
+			printf("Error: %s\n", ml_error_message(Closure));
+			const char *Source;
+			int Line;
+			for (int I = 0; ml_error_trace(Closure, I, &Source, &Line); ++I) printf("\t%s:%d\n", Source, Line);
+			return 1;
+		}
+		ml_value_t *Result = ml_call(Closure, 0, 0);
+		if (Result->Type == ErrorT) {
+			printf("Error: %s\n", ml_error_message(Result));
+			const char *Source;
+			int Line;
+			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\t%s:%d\n", Source, Line);
+			return 1;
+		}
+	} else {
+		ml_console(global_get, Globals);
 	}
 	return 0;
 }

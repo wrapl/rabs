@@ -20,8 +20,37 @@ const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
 
+static stringmap_t Globals[1] = {STRINGMAP_INIT};
+
+static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
+	ml_value_t *Value = context_symb_get(CurrentContext, Name);
+	if (Value) {
+		target_t *Target = target_symb_new(Name);
+		target_depends_auto(Target);
+		target_update(Target);
+		return Value;
+	} else {
+		return stringmap_search(Globals, Name) ?: Nil;
+	}
+}
+
+static ml_value_t *rabs_ml_set(void *Data, const char *Name, ml_value_t *Value) {
+	context_symb_set(CurrentContext, Name, Value);
+	return Value;
+}
+
+static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
+	static stringmap_t Cache[1] = {STRINGMAP_INIT};
+	ml_value_t *Value = stringmap_search(Cache, Name);
+	if (!Value) {
+		Value = ml_property(Data, Name, rabs_ml_get, rabs_ml_set, 0, 0);
+		stringmap_insert(Cache, Name, Value);
+	}
+	return Value;
+}
+
 static void load_file(const char *FileName) {
-	ml_value_t *Closure = ml_load(FileName);
+	ml_value_t *Closure = ml_load(rabs_ml_global, 0, FileName);
 	if (Closure->Type == ErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
 		const char *Source;
@@ -185,35 +214,6 @@ loop:
 	return 0;
 }
 
-static stringmap_t Globals[1] = {STRINGMAP_INIT};
-
-static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
-	ml_value_t *Value = context_symb_get(CurrentContext, Name);
-	if (Value) {
-		target_t *Target = target_symb_new(Name);
-		target_depends_auto(Target);
-		target_update(Target);
-		return Value;
-	} else {
-		return stringmap_search(Globals, Name) ?: Nil;
-	}
-}
-
-static ml_value_t *rabs_ml_set(void *Data, const char *Name, ml_value_t *Value) {
-	context_symb_set(CurrentContext, Name, Value);
-	return Value;
-}
-
-static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
-	static stringmap_t Cache[1] = {STRINGMAP_INIT};
-	ml_value_t *Value = stringmap_search(Cache, Name);
-	if (!Value) {
-		Value = ml_property(Data, Name, rabs_ml_get, rabs_ml_set, 0, 0);
-		stringmap_insert(Cache, Name, Value);
-	}
-	return Value;
-}
-
 static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 	ml_value_t *StringMethod = ml_method("string");
 	for (int I = 0; I < Count; ++I) {
@@ -230,7 +230,7 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 }
 
 int main(int Argc, const char **Argv) {
-	ml_init(rabs_ml_global);
+	ml_init();
 	AppendMethod = ml_method("append");
 	stringmap_insert(Globals, "vmount", ml_function(0, vmount));
 	stringmap_insert(Globals, "subdir", ml_function(0, subdir));
