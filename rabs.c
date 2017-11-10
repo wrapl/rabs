@@ -1,8 +1,5 @@
+
 #define _GNU_SOURCE
-#include <lua.h>
-#include <lauxlib.h>
-#include <lualib.h>
-#include <lfs.h>
 #include <gc/gc.h>
 #include <string.h>
 #include <unistd.h>
@@ -11,218 +8,189 @@
 #include <sys/types.h>
 #include <errno.h>
 #include <time.h>
+#include <stdio.h>
 #include "target.h"
 #include "context.h"
 #include "util.h"
 #include "cache.h"
-#include <libHX/io.h>
+#include "minilang.h"
+#include "ml_file.h"
 
+const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
-static int RabsEnv;
-lua_State *L;
+ml_value_t *AppendMethod;
 
-static void load_file(lua_State *L, const char *FileName) {
-	//printf("\n\nLoad: %s\n", Path);
-	//printf("Loading: %s\n", FileName);
-	lua_pushcfunction(L, msghandler);
-	if (luaL_loadfile(L, FileName) != LUA_OK) {
-		fprintf(stderr, "\e[31mError: %s\e[0m", lua_tostring(L, -1));
-		exit(1);
+static stringmap_t Globals[1] = {STRINGMAP_INIT};
+
+static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
+	ml_value_t *Value = context_symb_get(CurrentContext, Name);
+	if (Value) {
+		target_t *Target = target_symb_new(Name);
+		target_depends_auto(Target);
+		target_update(Target);
+		return Value;
+	} else {
+		return stringmap_search(Globals, Name) ?: Nil;
 	}
-	lua_rawgeti(L, LUA_REGISTRYINDEX, RabsEnv);
-	lua_setupvalue(L, -2, 1);
-	if (lua_pcall(L, 0, 0, -2) != LUA_OK) {
-		fprintf(stderr, "\e[31mError: %s\e[0m", lua_tostring(L, -1));
-		exit(1);
-	}
-	lua_pop(L, 1);
 }
 
-int subdir(lua_State *L) {
-	const char *Path = luaL_checkstring(L, 1);
+static ml_value_t *rabs_ml_set(void *Data, const char *Name, ml_value_t *Value) {
+	context_symb_set(CurrentContext, Name, Value);
+	return Value;
+}
+
+static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
+	static stringmap_t Cache[1] = {STRINGMAP_INIT};
+	ml_value_t *Value = stringmap_search(Cache, Name);
+	if (!Value) {
+		Value = ml_property(Data, Name, rabs_ml_get, rabs_ml_set, 0, 0);
+		stringmap_insert(Cache, Name, Value);
+	}
+	return Value;
+}
+
+static void load_file(const char *FileName) {
+	ml_value_t *Closure = ml_load(rabs_ml_global, 0, FileName);
+	if (Closure->Type == ErrorT) {
+		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Closure, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		exit(1);
+	}
+	ml_value_t *Result = ml_call(Closure, 0, 0);
+	if (Result->Type == ErrorT) {
+		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		exit(1);
+	}
+}
+
+static int mkdir_p(char *Path) {
+	if (!Path[0]) return -1;
+	struct stat Stat[1];
+	for (char *P = Path + 1; P[0]; ++P) {
+		if (P[0] == '/') {
+			P[0] = 0;
+			if (lstat(Path, Stat) < 0) {
+				int Result = mkdir(Path, 0777);
+				if (Result < 0) return Result;
+			}
+			P[0] = '/';
+		}
+	}
+	if (lstat(Path, Stat) < 0) {
+		int Result = mkdir(Path, 0777);
+		if (Result < 0) return Result;
+	}
+	return 0;
+}
+
+ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
+	const char *Path = ml_string_value(Args[0]);
 	Path = concat(CurrentContext->Path, "/", Path, 0);
 	//printf("Path = %s\n", Path);
-	HX_mkdir(concat(RootPath, Path, 0), 0777);
-	const char *FileName = concat(RootPath, Path, "/_build_", 0);
+	mkdir_p(concat(RootPath, Path, 0));
+	const char *FileName = concat(RootPath, Path, SystemName, 0);
 	//printf("FileName = %s\n", FileName);
 	FileName = vfs_resolve(CurrentContext->Mounts, FileName);
 	target_t *ParentDefault = CurrentContext->Default;
 	context_push(Path);
 	target_depends_add(ParentDefault, CurrentContext->Default);
-	load_file(L, FileName);
+	load_file(FileName);
 	context_pop();
-	return 0;
+	return Nil;
 }
 
-int scope(lua_State *L) {
-	const char *Name = luaL_checkstring(L, 1);
+ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
+	const char *Name = ml_string_value(Args[0]);
 	context_scope(Name);
-	lua_pushcfunction(L, msghandler);
-	lua_pushvalue(L, 2);
-	if (lua_pcall(L, 0, 0, -2) != LUA_OK) {
-		fprintf(stderr, "\e[31mError: %s\e[0m", lua_tostring(L, -1));
+	ml_value_t *Result = ml_call(Args[1], 0, 0);
+	if (Result->Type == ErrorT) {
+		printf("Error: %s\n", ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
-	lua_pop(L, 1);
 	context_pop();
-	return 0;
+	return Nil;
 }
 
-int include(lua_State *L) {
-	const char *FileName = luaL_checkstring(L, 1);
+ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
+	const char *FileName = ml_string_value(Args[0]);
 	if (FileName[0] != '/') {
 		FileName = concat(RootPath, CurrentContext->Path, "/", FileName, 0);
 		FileName = vfs_resolve(CurrentContext->Mounts, FileName);
 	}
-	load_file(L, FileName);
-	return 0;
+	load_file(FileName);
+	return Nil;
 }
 
-int vmount(lua_State *L) {
-	const char *Path = luaL_checkstring(L, 1);
-	const char *Target = luaL_checkstring(L, 2);
+ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
+	const char *Path = ml_string_value(Args[0]);
+	const char *Target = ml_string_value(Args[1]);
 	CurrentContext->Mounts = vfs_mount(CurrentContext->Mounts,
 		concat(CurrentContext->Path, "/", Path, 0),
 		concat(CurrentContext->Path, "/", Target, 0)
 	);
-	return 0;
+	return Nil;
 }
 
-int context(lua_State *L) {
-	lua_pushstring(L, CurrentContext->Path);
-	return 1;
+ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
+	return ml_string(CurrentContext->Path, -1);
 }
 
-char *stringify(char *Buffer) {
-	switch (lua_type(L, -1)) {
-	case LUA_TNIL: return Buffer;
-	case LUA_TNUMBER: if (lua_isinteger(L, -1)) {
-		return Buffer + sprintf(Buffer, "%d", lua_tointeger(L, -1));
-	} else {
-		return Buffer + sprintf(Buffer, "%f", lua_tonumber(L, -1));
-	}
-	case LUA_TBOOLEAN: return stpcpy(Buffer, lua_toboolean(L, -1) ? "true" : "false");
-	case LUA_TSTRING: return stpcpy(Buffer, lua_tostring(L, -1));
-	case LUA_TTABLE: {
-		int Length = luaL_len(L, -1);
-		for (int I = 1; I <= Length; ++I) {
-			if (I > 1) *(Buffer++) = ' ';
-			lua_rawgeti(L, -1, I);
-			Buffer = stringify(Buffer);
-			lua_pop(L, 1);
-		}
-		return Buffer;
-	}
-	case LUA_TFUNCTION: {
-		lua_pushcfunction(L, msghandler);
-		lua_pushvalue(L, -2);
-		if (lua_pcall(L, 0, 1, -2) != LUA_OK) {
-			fprintf(stderr, "\e[31mError: %s\e[0m", lua_tostring(L, -1));
-			exit(1);
-		}
-		Buffer = stringify(Buffer);
-		lua_pop(L, 2);
-		return Buffer;
-	}
-	}
-	target_t *Target = luaL_checkudata(L, -1, "target");
-	lua_pushcfunction(L, target_tostring);
-	lua_pushvalue(L, -2);
-	lua_call(L, 1, 1);
-	Buffer = stpcpy(Buffer, lua_tostring(L, -1));
-	lua_pop(L, 1);
-	return Buffer;
-}
-
-int execute(lua_State *L) {
-	char *Buffer = GC_malloc_atomic(8192);
-	int N = lua_gettop(L);
-	lua_pushvalue(L, 1);
-	char *Next = stringify(Buffer);
-	lua_pop(L, 1);
-	for (int I = 2; I <= N; ++I) {
-		*Next++ = ' ';
-		lua_pushvalue(L, I);
-		Next = stringify(Next);
-		lua_pop(L, 1);
-	}
+ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
+	const char *Command = ml_stringbuffer_get(Buffer);
 	clock_t Start = clock();
-	printf("\e[34m%s\e[0m\n", Buffer);
-	if (system(Buffer)) {
-		return luaL_error(L, "Process returned non-zero exit code");
+	printf("\e[34m%s\e[0m\n", Command);
+	if (system(Command)) {
+		return ml_error("ExecuteError", "process returned non-zero exit code");
 	} else {
 		clock_t End = clock();
 		printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
-		return 0;
+		return Nil;
 	}
 }
 
-int shell(lua_State *L) {
-	char *Buffer = GC_malloc_atomic(8192);
-	int N = lua_gettop(L);
-	lua_pushvalue(L, 1);
-	char *Next = stringify(Buffer);
-	lua_pop(L, 1);
-	for (int I = 2; I <= N; ++I) {
-		*Next++ = ' ';
-		lua_pushvalue(L, I);
-		Next = stringify(Next);
-		lua_pop(L, 1);
-	}
-	printf("\e[34m%s\e[0m\n", Buffer);
+ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
+	const char *Command = ml_stringbuffer_get(Buffer);
+	printf("\e[34m%s\e[0m\n", Command);
 	clock_t Start = clock();
-	FILE *File = popen(Buffer, "r");
-	luaL_Buffer Output[1];
-	luaL_buffinit(L, Output);
+	FILE *File = popen(Command, "r");
+	char Chars[120];
 	while (!feof(File)) {
-		ssize_t Count = fread(Buffer, 1, 8192, File);
-		luaL_addlstring(Output, Buffer, Count);
+		ssize_t Count = fread(Chars, 1, 120, File);
+		if (Count > 0) ml_stringbuffer_add(Buffer, Chars, Count);
 	}
 	pclose(File);
-	luaL_pushresult(Output);
 	clock_t End = clock();
 	printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
-	return 1;
+	size_t Length = Buffer->Length;
+	return ml_string(ml_stringbuffer_get(Buffer), Length);
 }
 
-int lua_mkdir(lua_State *L) {
-	char *Buffer = GC_malloc_atomic(8192);
-	int N = lua_gettop(L);
-	lua_pushvalue(L, 1);
-	char *Next = stringify(Buffer);
-	lua_pop(L, 1);
-	for (int I = 2; I <= N; ++I) {
-		*Next++ = '/';
-		lua_pushvalue(L, I);
-		Next = stringify(Next);
-		lua_pop(L, 1);
+ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) ml_inline(AppendMethod, 2, Buffer, Args[I]);
+	char *Path = ml_stringbuffer_get(Buffer);
+	if (mkdir_p(Path) < 0) {
+		return ml_error("FileError", "error creating directory %s", Path);
 	}
-	if (HX_mkdir(Buffer, 0777) < 0) {
-		return luaL_error(L, "Failed to create directory");
-	}
-	return 0;
-}
-
-int rabs_index(lua_State *L) {
-	const char *Name = lua_tostring(L, 2);
-	if (context_symb_get(CurrentContext, Name)) {
-		target_t *Target = target_symb_new(Name);
-		target_depends_auto(Target);
-		target_update(Target);
-	}
-	return 1;
-}
-
-int rabs_newindex(lua_State *L) {
-	const char *Name = lua_tostring(L, 2);
-	context_symb_set(Name);
-	return 0;
+	return Nil;
 }
 
 static const char *find_root(const char *Path) {
-	char *FileName = (char *)GC_malloc(strlen(Path) + strlen("/_build_") + 1);
+	char *FileName = (char *)GC_malloc(strlen(Path) + strlen(SystemName) + 1);
 	char *End = stpcpy(FileName, Path);
-	strcpy(End, "/_build_");
+	strcpy(End, SystemName);
 	char Line[strlen("-- ROOT --\n")];
 	FILE *File = 0;
 loop:
@@ -239,55 +207,43 @@ loop:
 	}
 	while (--End > FileName) {
 		if (*End == '/') {
-			strcpy(End, "/_build_");
+			strcpy(End, SystemName);
 			goto loop;
 		}
 	}
 	return 0;
 }
 
-static const luaL_Reg Globals[] = {
-	{"vmount", vmount},
-	{"subdir", subdir},
-	{"file", target_file_new},
-	{"meta", target_meta_new},
-	{"include", include},
-	{"context", context},
-	{"execute", execute},
-	{"shell", shell},
-	{"mkdir", lua_mkdir},
-	{"scope", scope},
-	{0, 0}
-};
-
-static const luaL_Reg RabsMethods[] = {
-	{"__index", rabs_index},
-	{"__newindex", rabs_newindex},
-	{0, 0}
-};
-
-static void *lua_alloc(void *Data, void *P, size_t Old, size_t New) {
-	if (P) {
-		return GC_realloc(P, New);
-	} else {
-		return GC_malloc(New);
+static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
+	ml_value_t *StringMethod = ml_method("string");
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Result = Args[I];
+		if (Result->Type != StringT) {
+			Result = ml_call(StringMethod, 1, &Result);
+			if (Result->Type == ErrorT) return Result;
+			if (Result->Type != StringT) return ml_error("ResultError", "string method did not return string");
+		}
+		fputs(ml_string_value(Result), stdout);
 	}
+	fflush(stdout);
+	return Nil;
 }
 
-extern char LuaBuiltins[];
-
 int main(int Argc, const char **Argv) {
-	L = lua_newstate(lua_alloc, 0);
-	luaL_openlibs(L);
-	luaopen_lfs(L);
-	if (luaL_loadstring(L, LuaBuiltins) != LUA_OK) {
-		fprintf(stderr, "\e[31mError: %s\e[0m", lua_tostring(L, -1));
-		exit(1);
-	}
-	if (lua_pcall(L, 0, 0, 0) != LUA_OK) {
-		fprintf(stderr, "\e[31mError: %s\e[0m", lua_tostring(L, -1));
-		exit(1);
-	}
+	ml_init();
+	AppendMethod = ml_method("append");
+	stringmap_insert(Globals, "vmount", ml_function(0, vmount));
+	stringmap_insert(Globals, "subdir", ml_function(0, subdir));
+	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
+	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
+	stringmap_insert(Globals, "include", ml_function(0, include));
+	stringmap_insert(Globals, "context", ml_function(0, context));
+	stringmap_insert(Globals, "execute", ml_function(0, execute));
+	stringmap_insert(Globals, "shell", ml_function(0, shell));
+	stringmap_insert(Globals, "mkdir", ml_function(0, rabs_mkdir));
+	stringmap_insert(Globals, "scope", ml_function(0, scope));
+	stringmap_insert(Globals, "print", ml_function(0, print));
+	stringmap_insert(Globals, "open", ml_function(0, ml_file_open));
 
 	const char *TargetName = 0;
 	int QueryOnly = 0;
@@ -300,11 +256,10 @@ int main(int Argc, const char **Argv) {
 				char *Equals = strchr(Define, '=');
 				if (Equals) {
 					*Equals = 0;
-					lua_pushstring(L, Equals + 1);
+					stringmap_insert(Globals, Define, ml_string(Equals + 1, -1));
 				} else {
-					lua_pushboolean(L, 1);
-				};
-				lua_setglobal(L, Define);
+					stringmap_insert(Globals, Define, ml_integer(1));
+				}
 				break;
 			};
 			case 'q': {
@@ -324,12 +279,7 @@ int main(int Argc, const char **Argv) {
 	vfs_init();
 	target_init();
 	context_init();
-	lua_createtable(L, 0, sizeof(Globals) / sizeof(luaL_Reg));
-	luaL_setfuncs(L, Globals, 0);
-	luaL_newmetatable(L, "rabs");
-	luaL_setfuncs(L, RabsMethods, 0);
-	lua_setmetatable(L, -2);
-	RabsEnv = luaL_ref(L, LUA_REGISTRYINDEX);
+	ml_file_init();
 #ifdef LINUX
 	const char *Path = get_current_dir_name();
 #else
@@ -343,10 +293,8 @@ int main(int Argc, const char **Argv) {
 		printf("RootPath = %s, Path = %s\n", RootPath, Path);
 		cache_open(RootPath);
 		context_push("");
-		lua_pushinteger(L, CurrentVersion);
-		context_symb_set("VERSION");
-		lua_pop(L, 1);
-		load_file(L, concat(RootPath, "/_build_", 0));
+		context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
+		load_file(concat(RootPath, SystemName, 0));
 		target_t *Target;
 		if (TargetName) {
 			Target = target_get(TargetName);

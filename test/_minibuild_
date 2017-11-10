@@ -1,0 +1,92 @@
+-- ROOT --
+
+for File in shell("ls ..") / "\n" do
+	print('{File}\n')
+end
+
+if not PLATFORM then
+	PLATFORM := shell("uname")[1, -1]
+end
+
+if not OS then
+	if PLATFORM = "Linux" then
+		var File := open("/etc/os-release", "r"), Line
+		loop while Line := File:read
+			if Line[1, 4] = "ID=" then
+				OS := Line[4, 0]
+				exit
+			end
+		end
+		File:close
+	end
+end
+
+print('PLATFORM = {PLATFORM}\n')
+print('OS = {OS}\n')
+
+CFLAGS := ['-O3', '-g']
+
+c_compile := fun(Object)
+	var Source := Object % "c"
+	execute('gcc -c {CFLAGS} -o{Object} -I{Source:dir} {Source}')
+end
+
+c_includes := fun(Source)
+	var Files := []
+	var Lines := shell('gcc {CFLAGS} -I{Source:dir} -M -MG {Source}')
+	var Start, File := ""
+	var I := for J := 1 .. Lines:length do
+		if Lines[J, J + 2] = ": " then
+			exit J + 2
+		end
+	end
+	loop while I <= Lines:length
+		var Char := Lines[I]
+		if Char <= " " then
+			if File != "" then
+				Files:put(file(File))
+				File := ""
+			end
+		elseif Char = "\\" then
+			I := old + 1
+			Char := Lines[I]
+			if Char = " " then
+				File := '{old} '
+			end
+		else
+			File := '{old}{Char}'
+		end
+		I := old + 1
+	end
+	return Files
+end
+
+asm_compile := fun(Object)
+end
+
+asm_includes := fun(Source)
+	return []
+end
+
+c_program := fun(Executable, Objects, Libraries)
+	Objects := Objects or []
+	Libraries := Libraries or []
+	for Object in Objects do
+		var SourceC := Object % "c"
+		var SourceAsm := Object % "asm"
+		if SourceC:exists then
+			var ScanC := SourceC:scan("INCLUDES", c_includes)
+			Object[SourceC, ScanC] => c_compile
+		elseif SourceAsm:exists then
+			var ScanAsm := SourceAsm:scan("INCLUDES", asm_includes)
+			Object[SourceAsm, ScanAsm] => asm_compile
+		end
+	end
+	Executable[Objects, Libraries] => fun(Executable)
+		execute('gcc', '-o', Executable, Objects, Libraries, LDFLAGS)
+	end
+	DEFAULT[Executable]
+end
+
+subdir("src")
+

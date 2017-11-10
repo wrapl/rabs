@@ -8,6 +8,11 @@
 #include <string.h>
 #include <gc.h>
 
+#define new(T) ((T *)GC_MALLOC(sizeof(T)))
+#define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
+#define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
+#define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
+
 static sqlite3 *Cache;
 static sqlite3_stmt *HashGetStatement;
 static sqlite3_stmt *HashSetStatement;
@@ -26,7 +31,7 @@ static int version_callback(void *Data, int NumCols, char **Values, char **Names
 }
 
 void cache_open(const char *RootPath) {
-	const char *CacheFileName = concat(RootPath, "/_build_.db", 0);
+	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", 0);
 	if (sqlite3_open_v2(CacheFileName, &Cache, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
@@ -165,62 +170,60 @@ void cache_last_check_set(const char *Id) {
 	sqlite3_reset(LastCheckSetStatement);
 }
 
-struct HXmap *cache_depends_get(const char *Id) {
+stringmap_t *cache_depends_get(const char *Id) {
 	sqlite3_bind_text(DependsGetStatement, 1, Id, -1, SQLITE_STATIC);
-	struct HXmap *Depends = 0;
+	stringmap_t *Depends = 0;
 	while (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
-		if (Depends == 0) Depends = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
+		if (Depends == 0) Depends = new(stringmap_t);
 		const char *DependId = sqlite3_column_text(DependsGetStatement, 0);
-		HXmap_add(Depends, target_find(DependId), 0);
+		stringmap_insert(Depends, DependId, target_find(DependId));
 	}
 	sqlite3_reset(DependsGetStatement);
 	return Depends;
 }
 
-bool cache_depends_set_fn(const struct HXmap_node *Node, void *Arg) {
-	target_t *Target = (target_t *)Node->key;
-	sqlite3_bind_text(DependsInsertStatement, 2, Target->Id, -1, SQLITE_STATIC);
+int cache_depends_set_fn(const char *Id, target_t *Target, void *Arg) {
+	sqlite3_bind_text(DependsInsertStatement, 2, Id, -1, SQLITE_STATIC);
 	sqlite3_step(DependsInsertStatement);
 	sqlite3_reset(DependsInsertStatement);
-	return true;
+	return 0;
 }
 
-void cache_depends_set(const char *Id, struct HXmap *Depends) {
+void cache_depends_set(const char *Id, stringmap_t *Depends) {
 	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
 	sqlite3_bind_text(DependsDeleteStatement, 1, Id, -1, SQLITE_STATIC);
 	sqlite3_step(DependsDeleteStatement);
 	sqlite3_reset(DependsDeleteStatement);
 	sqlite3_bind_text(DependsInsertStatement, 1, Id, -1, SQLITE_STATIC);
-	HXmap_qfe(Depends, cache_depends_set_fn, 0);
+	stringmap_foreach(Depends, 0, (void *)cache_depends_set_fn);
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
 }
 
-struct HXmap *cache_scan_get(const char *Id) {
+stringmap_t *cache_scan_get(const char *Id) {
 	sqlite3_bind_text(ScanGetStatement, 1, Id, -1, SQLITE_STATIC);
-	struct HXmap *Scans = 0;
+	stringmap_t *Scans = 0;
 	while (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
-		if (Scans == 0) Scans = HXmap_init(HXMAPT_DEFAULT, HXMAP_SINGULAR);
+		if (Scans == 0) Scans = new(stringmap_t);
 		const char *ScanId = sqlite3_column_text(ScanGetStatement, 0);
-		HXmap_add(Scans, target_find(ScanId), 0);
+		stringmap_insert(Scans, ScanId, target_find(ScanId));
 	}
 	sqlite3_reset(ScanGetStatement);
 	return Scans;
 }
 
-bool cache_scan_set_fn(const struct HXmap_node *Node, void *Arg) {
-	target_t *Target = (target_t *)Node->key;
+int cache_scan_set_fn(const char *Id, target_t *Target, void *Arg) {
 	sqlite3_bind_text(ScanInsertStatement, 2, Target->Id, -1, SQLITE_STATIC);
 	sqlite3_step(ScanInsertStatement);
 	sqlite3_reset(ScanInsertStatement);
-	return true;
+	return 0;
 }
 
-void cache_scan_set(const char *Id, struct HXmap *Scans) {
+void cache_scan_set(const char *Id, stringmap_t *Scans) {
 	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
 	sqlite3_bind_text(ScanDeleteStatement, 1, Id, -1, SQLITE_STATIC);
 	sqlite3_step(ScanDeleteStatement);
 	sqlite3_reset(ScanDeleteStatement);
 	sqlite3_bind_text(ScanInsertStatement, 1, Id, -1, SQLITE_STATIC);
-	HXmap_qfe(Scans, cache_scan_set_fn, 0);
+	stringmap_foreach(Scans, 0, (void *)cache_scan_set_fn);
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
 }

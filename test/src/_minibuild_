@@ -1,0 +1,1 @@
+c_program(file("test"), [file("test.o")])

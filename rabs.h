@@ -1,10 +1,9 @@
 #ifndef RABS_H
 #define RABS_H
 
-#include <lua.h>
+#include "minilang.h"
 
-extern lua_State *L;
-extern const char *RootPath;
-char *stringify(char *Buffer);
+extern const char *RootPath, *SystemName;
+extern ml_value_t *StringifyMethod;
 
 #endif
