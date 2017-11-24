@@ -15,7 +15,7 @@ sources = \
 	stringmap.c \
 	linenoise.c
 
-CFLAGS += -I. -g
+CFLAGS += -I. -g -pthread
 LDFLAGS += -lm -lgc -lsqlite3 -g
 
 minibuild: $(sources) *.h

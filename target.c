@@ -10,6 +10,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#define GC_THREADS
 #include <gc.h>
 #include <errno.h>
 #include <stdint.h>
@@ -20,6 +21,12 @@
 #define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
 #define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
 
+enum {
+	STATE_UNCHECKED = 0,
+	STATE_CHECKING = -1,
+	STATE_CHECKED = -2
+};
+
 typedef struct target_file_t target_file_t;
 typedef struct target_meta_t target_meta_t;
 typedef struct target_scan_t target_scan_t;
@@ -27,18 +34,27 @@ typedef struct target_symb_t target_symb_t;
 
 extern const char *RootPath;
 static stringmap_t TargetCache[1] = {STRINGMAP_INIT};
-struct target_t *CurrentTarget = 0;
-static stringmap_t *DetectedDepends = 0;
 static int BuiltTargets = 0;
+
+pthread_mutex_t GlobalLock[1] = {PTHREAD_MUTEX_INITIALIZER};
+static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
 
 static ml_value_t *SHA256Method;
 static ml_value_t *MissingMethod;
 
 static ml_type_t *TargetT;
 
+__thread target_t *CurrentTarget = 0;
+__thread stringmap_t *CurrentDetectedDepends = 0;
+
+static target_t *BuildQueue = 0;
+
 static ml_value_t *build_scan_target(void *Data, int Count, ml_value_t **Args);
 
 void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]);
+
+static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]);
+static int target_missing(target_t *Target);
 
 static ml_function_t BuildScanTarget[1] = {{FunctionT, build_scan_target, 0}};
 
@@ -46,9 +62,14 @@ void target_depends_add(target_t *Target, target_t *Depend) {
 	if (Target != Depend) stringmap_insert(Target->Depends, Depend->Id, Depend);
 }
 
-int depends_update_fn(const char *Key, target_t *Depend, int *DependsLastUpdated) {
-	target_update(Depend);
-	if (Depend->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depend->LastUpdated;
+int depends_update_fn(const char *Key, target_t *Depend, target_t *Target) {
+	if (Depend->LastUpdated == STATE_UNCHECKED) target_update(Depend);
+	if (Depend->LastUpdated == STATE_CHECKED) {
+		++Target->WaitCount;
+		stringmap_insert(Depend->Targets, Target->Id, Target);
+	} else {
+		if (Depend->LastUpdated > Target->DependsLastUpdated) Target->DependsLastUpdated = Depend->LastUpdated;
+	}
 	return 0;
 }
 
@@ -57,24 +78,67 @@ int depends_print_fn(const char *Key, target_t *Depend, int *DependsLastUpdated)
 	return 0;
 }
 
-static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]);
-static int target_missing(target_t *Target);
+static void target_queue_build(target_t *Target) {
+	Target->Next = BuildQueue;
+	BuildQueue = Target;
+}
+
+int depends_updated_fn(const char *Key, target_t *Target, target_t *Depend) {
+	if (Depend->LastUpdated > Target->DependsLastUpdated) Target->DependsLastUpdated = Depend->LastUpdated;
+	if (--Target->WaitCount == 0) target_queue_build(Target);
+	return 0;
+}
+
+static void target_do_build(target_t *Target) {
+	printf("\e[33mtarget_build(%s)\e[0m\n", Target->Id);
+	int8_t Previous[SHA256_BLOCK_SIZE];
+	int LastUpdated, LastChecked;
+	time_t FileTime;
+	cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);
+	if (Target->Build) {
+		CurrentContext = Target->BuildContext;
+		if ((Target->DependsLastUpdated > LastChecked) || target_missing(Target)) {
+			CurrentTarget = Target;
+			stringmap_t *DetectedDepends = CurrentDetectedDepends = new(stringmap_t);
+			ml_value_t *Result = ml_inline(Target->Build, 1, Target);
+			if (Result->Type == ErrorT) {
+				fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
+				const char *Source;
+				int Line;
+				for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+				exit(1);
+			}
+			cache_depends_set(Target->Id, DetectedDepends);
+		}
+	}
+	FileTime = target_hash(Target, FileTime, Previous);
+	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
+		Target->LastUpdated = CurrentVersion;
+		cache_hash_set(Target->Id, FileTime, Target->Hash);
+	} else {
+		Target->LastUpdated = LastUpdated;
+		cache_last_check_set(Target->Id);
+	}
+	stringmap_foreach(Target->Targets, Target, (void *)depends_updated_fn);
+	memset(Target->Depends, 0, sizeof(Target->Depends));
+	memset(Target->Targets, 0, sizeof(Target->Targets));
+	pthread_cond_broadcast(TargetAvailable);
+}
 
 void target_update(target_t *Target) {
-	if (Target->LastUpdated == -1) {
+	if (Target->LastUpdated == STATE_CHECKING) {
 		printf("\e[31mError: build cycle with %s\e[0m\n", Target->Id);
 		exit(1);
 	}
-	if (Target->LastUpdated == 0) {
-		Target->LastUpdated = -1;
+	if (Target->LastUpdated == STATE_UNCHECKED) {
+		Target->LastUpdated = STATE_CHECKING;
 		++BuiltTargets;
 		//printf("\e[32m[%d/%d] \e[33mtarget_update(%s)\e[0m\n", BuiltTargets, TargetCache->items, Target->Id);
-		int DependsLastUpdated = 0;
-		stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_update_fn);
+		stringmap_foreach(Target->Depends, Target, (void *)depends_update_fn);
 		int8_t Previous[SHA256_BLOCK_SIZE];
 		int LastUpdated, LastChecked;
 		time_t FileTime;
-		if (Target->Build) {	
+		if (Target->Build) {
 			int8_t BuildHash[SHA256_BLOCK_SIZE];
 			if (Target->Build->Type == ClosureT) {
 				ml_closure_hash(Target->Build, BuildHash);
@@ -92,49 +156,23 @@ void target_update(target_t *Target) {
 			//printf("\n");
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
 				cache_hash_set(BuildId, 0, BuildHash);
-				DependsLastUpdated = CurrentVersion;
+				Target->DependsLastUpdated = CurrentVersion;
 				printf("\t\e[35m<build function updated>\e[0m\n");
 			} else if (PreviousDetectedDepends) {
-				stringmap_foreach(PreviousDetectedDepends, &DependsLastUpdated, (void *)depends_update_fn);
+				stringmap_foreach(PreviousDetectedDepends, Target, (void *)depends_update_fn);
 			}
-			cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);
-			if ((DependsLastUpdated > LastChecked) || target_missing(Target)) {
-				printf("\e[33mtarget_build(%s) Depends = %d, Last Updated = %d\e[0m\n", Target->Id, DependsLastUpdated, LastChecked);
-				stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_print_fn);
-				if (PreviousDetectedDepends) {
-					stringmap_foreach(PreviousDetectedDepends, &DependsLastUpdated, (void *)depends_print_fn);
-				}
-				target_t *PreviousTarget = CurrentTarget;
-				stringmap_t *PreviousDepends = DetectedDepends;
-				context_t *PreviousContext = CurrentContext;
-				CurrentTarget = Target;
-				DetectedDepends = new(stringmap_t);
-				CurrentContext = Target->BuildContext;
-				chdir(concat(RootPath, CurrentContext->Path, 0));
-				ml_value_t *Result = ml_inline(Target->Build, 1, Target);
-				if (Result->Type == ErrorT) {
-					fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
-					const char *Source;
-					int Line;
-					for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
-					exit(1);
-				}
-				cache_depends_set(Target->Id, DetectedDepends);
-				CurrentTarget = PreviousTarget;
-				DetectedDepends = PreviousDepends;
-				CurrentContext = PreviousContext;
-				chdir(concat(RootPath, CurrentContext->Path, 0));
-			}
+			Target->LastUpdated = STATE_CHECKED;
+			if (Target->WaitCount == 0) target_queue_build(Target);
 		} else {
 			cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);	
-		}
-		FileTime = target_hash(Target, FileTime, Previous);
-		if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
-			Target->LastUpdated = CurrentVersion;
-			cache_hash_set(Target->Id, FileTime, Target->Hash);
-		} else {
-			Target->LastUpdated = LastUpdated;
-			cache_last_check_set(Target->Id);
+			FileTime = target_hash(Target, FileTime, Previous);
+			if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
+				Target->LastUpdated = CurrentVersion;
+				cache_hash_set(Target->Id, FileTime, Target->Hash);
+			} else {
+				Target->LastUpdated = LastUpdated;
+				cache_last_check_set(Target->Id);
+			}
 		}
 	}
 }
@@ -183,7 +221,7 @@ void target_query(target_t *Target) {
 
 void target_depends_auto(target_t *Depend) {
 	if (CurrentTarget && CurrentTarget != Depend && !stringmap_search(CurrentTarget->Depends, Depend->Id)) {
-		stringmap_insert(DetectedDepends, Depend->Id, Depend);
+		stringmap_insert(CurrentDetectedDepends, Depend->Id, Depend);
 	}
 }
 
@@ -676,6 +714,47 @@ int target_print_fn(const char *Key, target_t *Target, void *Data) {
 
 void target_list() {
 	stringmap_foreach(TargetCache, 0, (void *)target_print_fn);
+}
+
+static pthread_t *Threads;
+int RunningThreads;
+
+static void *target_thread_fn(void *Arg) {
+	int Index = (int)Arg;
+	printf("[%d]: Starting build thread\n", Index);
+	pthread_mutex_lock(GlobalLock);
+	for (;;) {
+		while (!BuildQueue) {
+			printf("[%d]: No target in build queue, %d threads running\n", Index, RunningThreads);
+			if (--RunningThreads == 0) {
+				pthread_cond_signal(TargetAvailable);
+				pthread_mutex_unlock(GlobalLock);
+				return 0;
+			}
+			pthread_cond_wait(TargetAvailable, GlobalLock);
+			++RunningThreads;
+		}
+		target_t *Target = BuildQueue;
+		printf("[%d]: Building %s\n", Index, Target->Id);
+		BuildQueue = Target->Next;
+		target_do_build(Target);
+	}
+}
+
+void target_threads_start(int NumThreads) {
+	pthread_mutex_init(GlobalLock, 0);
+	pthread_mutex_lock(GlobalLock);
+	pthread_cond_init(TargetAvailable, 0);
+	RunningThreads = NumThreads + 1;
+	Threads = anew(pthread_t, NumThreads);
+	for (int I = 0; I < NumThreads; ++I) GC_pthread_create(Threads + I, 0, target_thread_fn, (void *)I);
+}
+
+void target_threads_wait(int NumThreads) {
+	--RunningThreads;
+	pthread_cond_broadcast(TargetAvailable);
+	pthread_mutex_unlock(GlobalLock);
+	for (int I = 0; I < NumThreads; ++I) GC_pthread_join(Threads[I], 0);
 }
 
 void target_init() {

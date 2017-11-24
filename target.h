@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <stdint.h>
+#include <pthread.h>
 #include "stringmap.h"
 #include "sha256.h"
 #include "minilang.h"
@@ -11,11 +12,15 @@ typedef struct target_t target_t;
 
 #define TARGET_FIELDS \
 	const ml_type_t *Type; \
+	pthread_mutex_t Lock[1]; \
+	target_t *Next; \
 	ml_value_t *Build; \
+	int WaitCount, DependsLastUpdated; \
 	int LastUpdated; \
 	struct context_t *BuildContext; \
 	const char *Id; \
 	stringmap_t Depends[1]; \
+	stringmap_t Targets[1]; \
 	int8_t Hash[SHA256_BLOCK_SIZE];
 
 struct target_t {
@@ -39,5 +44,7 @@ target_t *target_get(const char *Id);
 void target_push(target_t *Target);
 void target_list();
 target_t *target_file_check(const char *Path, int Absolute);
+void target_threads_start(int NumThreads);
+void target_threads_wait(int NumThreads);
 
 #endif

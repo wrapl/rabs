@@ -9,7 +9,7 @@ typedef struct context_t context_t;
 
 struct context_t {
 	context_t *Parent;
-	const char *Path, *Name;
+	const char *Path, *Name, *FullPath;
 	const vmount_t *Mounts;
 	struct target_t *Default;
 	stringmap_t Locals[1];
@@ -26,6 +26,6 @@ void context_pop();
 ml_value_t *context_symb_get(context_t *Context, const char *Name);
 void context_symb_set(context_t *Context, const char *Name, ml_value_t *Value);
 
-extern context_t *CurrentContext;
+extern __thread context_t *CurrentContext;
 
 #endif
