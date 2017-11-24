@@ -1,9 +1,5 @@
 -- ROOT --
 
-for File in shell("ls ..") / "\n" do
-	print('{File}\n')
-end
-
 if not PLATFORM then
 	PLATFORM := shell("uname")[1, -1]
 end
@@ -26,12 +22,12 @@ print('OS = {OS}\n')
 
 CFLAGS := ['-O3', '-g']
 
-c_compile := fun(Object)
+c_compile := fun(Object) do
 	var Source := Object % "c"
 	execute('gcc -c {CFLAGS} -o{Object} -I{Source:dir} {Source}')
 end
 
-c_includes := fun(Source)
+c_includes := fun(Source) do
 	var Files := []
 	var Lines := shell('gcc {CFLAGS} -I{Source:dir} -M -MG {Source}')
 	var Start, File := ""
@@ -61,14 +57,14 @@ c_includes := fun(Source)
 	return Files
 end
 
-asm_compile := fun(Object)
+asm_compile := fun(Object) do
 end
 
-asm_includes := fun(Source)
+asm_includes := fun(Source) do
 	return []
 end
 
-c_program := fun(Executable, Objects, Libraries)
+c_program := fun(Executable, Objects, Libraries) do
 	Objects := Objects or []
 	Libraries := Libraries or []
 	for Object in Objects do
@@ -82,7 +78,7 @@ c_program := fun(Executable, Objects, Libraries)
 			Object[SourceAsm, ScanAsm] => asm_compile
 		end
 	end
-	Executable[Objects, Libraries] => fun(Executable)
+	Executable[Objects, Libraries] => fun(Executable) do
 		execute('gcc', '-o', Executable, Objects, Libraries, LDFLAGS)
 	end
 	DEFAULT[Executable]
