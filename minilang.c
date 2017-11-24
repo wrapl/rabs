@@ -3499,7 +3499,9 @@ static mlc_expr_t *ml_accept_command(mlc_scanner_t *Scanner, stringmap_t *Vars) 
 	BlockExpr->compile = ml_block_expr_compile;
 	BlockExpr->Source = Scanner->Source;
 	mlc_expr_t **ExprSlot = &BlockExpr->Child;
-	if (ml_parse(Scanner, MLT_VAR)) {
+	if (ml_parse(Scanner, MLT_EOI)) {
+		return (mlc_expr_t *)-1;
+	} else if (ml_parse(Scanner, MLT_VAR)) {
 		do {
 			ml_accept(Scanner, MLT_IDENT);
 			const char *Ident = Scanner->Ident;
@@ -3523,6 +3525,7 @@ static mlc_expr_t *ml_accept_command(mlc_scanner_t *Scanner, stringmap_t *Vars) 
 		mlc_expr_t *Expr = ExprSlot[0] = ml_accept_expression(Scanner, EXPR_DEFAULT);
 		ExprSlot = &Expr->Next;
 	}
+	ml_parse(Scanner, MLT_SEMICOLON);
 	return (mlc_expr_t *)BlockExpr;
 }
 
@@ -3605,9 +3608,12 @@ void ml_console(ml_getter_t GlobalGet, void *Globals) {
 		const char *Source;
 		int Line;
 		for (int I = 0; ml_error_trace(Scanner->Error, I, &Source, &Line); ++I) printf("\t%s:%d\n", Source, Line);
+		Scanner->Token = MLT_NONE;
+		Scanner->Next = "";
 	}
-	while (!ml_parse(Scanner, MLT_EOI)) {
+	for (;;) {
 		mlc_expr_t *Expr = ml_accept_command(Scanner, Console->Globals);
+		if (Expr == (mlc_expr_t *)-1) return;
 		mlc_compiled_t Compiled = ml_compile(Function, Expr, HashContext);
 		ml_connect(Compiled.Exits, 0);
 		ml_closure_t *Closure = new(ml_closure_t);
