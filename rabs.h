@@ -1,10 +1,12 @@
 #ifndef RABS_H
 #define RABS_H
 
-#include <lua.h>
+#include <pthread.h>
+#include "minilang.h"
 
-extern lua_State *L;
-extern const char *RootPath;
-char *stringify(char *Buffer);
+extern pthread_mutex_t GlobalLock[1];
+extern const char *RootPath, *SystemName;
+extern ml_value_t *StringifyMethod;
+extern __thread const char *CurrentPath;
 
 #endif

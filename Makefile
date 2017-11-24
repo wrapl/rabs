@@ -1,6 +1,6 @@
 .PHONY: clean all
 
-all: rabs ml
+all: minilang minibuild
 
 sources = \
 	cache.c \
@@ -9,19 +9,21 @@ sources = \
 	target.c \
 	util.c \
 	vfs.c \
-	builtins.s \
-	lfs.c \
 	sha256.c \
-	minilang.c
+	minilang.c \
+	ml_file.c \
+	stringmap.c \
+	linenoise.c
 
-CFLAGS += -I. -g
-LDFLAGS += -llua -lm -lgc -lsqlite3 -lHX -g
+CFLAGS += -I. -g -pthread
+LDFLAGS += -lm -lgc -lsqlite3 -g
 
-rabs: $(sources) *.h builtins.lua
+minibuild: $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
-
-ml: minilang.* ml.* map.* sha256.*
-	gcc -g minilang.c ml.c map.c sha256.c -lgc -oml
+	
+minilang: minilang.* ml.* stringmap.* sha256.*
+	gcc $(CFLAGS) minilang.c ml_file.c ml.c stringmap.c sha256.c linenoise.c -lgc -o$@
 
 clean:
-	rm ../../bin/rabs
+	rm minilang
+	rm minibuild

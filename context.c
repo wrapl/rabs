@@ -3,37 +3,36 @@
 #include "util.h"
 #include "cache.h"
 #include "target.h"
+#include "stringmap.h"
 #include <gc.h>
 #include <unistd.h>
 
-context_t *CurrentContext = 0;
-static struct HXmap *ContextCache;
+__thread context_t *CurrentContext = 0;
+static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
+static ml_value_t *DefaultString;
 
 context_t *context_find(const char *Path) {
-	return HXmap_get(ContextCache, Path);
+	return stringmap_search(ContextCache, Path);
 }
 
 context_t *context_push(const char *Path) {
 	context_t *Context = (context_t *)GC_malloc(sizeof(context_t));
 	Context->Parent = CurrentContext;
 	Context->Path = Path;
-	Context->Name = "";
+	Context->Name = Path;
+	Context->FullPath = concat(RootPath, Path, 0);
 	if (CurrentContext) {
 		Context->Mounts = CurrentContext->Mounts;
 	} else {
 		Context->Mounts = 0;
 	}
 	CurrentContext = Context;
-	chdir(concat(RootPath, CurrentContext->Path, 0));
-	lua_createtable(L, 0, 0);
-	lua_pushstring(L, "DEFAULT");
-	lua_pushcfunction(L, target_meta_new);
-	lua_pushvalue(L, -2);
-	lua_call(L, 1, 1);
-	Context->Default = luaL_checkudata(L, -1, "target");
-	lua_rawset(L, -3);
-	Context->Locals = luaL_ref(L, LUA_REGISTRYINDEX);
-	HXmap_add(ContextCache, Context->Path, Context);
+	Context->Locals[0] = STRINGMAP_INIT;
+	target_t *Default = Context->Default = (target_t *)target_meta_new(0, 1, &DefaultString);
+	stringmap_insert(Context->Locals, "DEFAULT", Default);
+	target_t *BuildDir = target_file_check(vfs_resolve(Context->Mounts, Path), 0);
+	stringmap_insert(Context->Locals, "BUILDDIR", BuildDir);
+	stringmap_insert(ContextCache, Context->Name, Context);
 	return Context;
 }
 
@@ -42,6 +41,7 @@ context_t *context_scope(const char *Name) {
 	Context->Parent = CurrentContext;
 	Context->Path = CurrentContext->Path;
 	Context->Name = concat(CurrentContext->Name, ":", Name, 0);
+	Context->FullPath = CurrentContext->FullPath;
 	if (CurrentContext) {
 		Context->Mounts = CurrentContext->Mounts;
 	} else {
@@ -49,10 +49,8 @@ context_t *context_scope(const char *Name) {
 	}
 	CurrentContext = Context;
 	Context->Default = Context->Parent->Default;
-	lua_createtable(L, 0, 0);
-	Context->Locals = luaL_ref(L, LUA_REGISTRYINDEX);
-	const char *Id = concat(Context->Path, Context->Name, 0);
-	HXmap_add(ContextCache, Id, Context);
+	Context->Locals[0] = STRINGMAP_INIT;
+	stringmap_insert(ContextCache, Context->Name, Context);
 	return Context;
 }
 
@@ -61,42 +59,19 @@ void context_pop() {
 	chdir(concat(RootPath, CurrentContext->Path, 0));
 }
 
-int context_symb_get(context_t *Context, const char *Name) {
+ml_value_t *context_symb_get(context_t *Context, const char *Name) {
 	while (Context) {
-		lua_rawgeti(L, LUA_REGISTRYINDEX, Context->Locals);
-		lua_pushstring(L, Name);
-		if (lua_rawget(L, -2) != LUA_TNIL) {
-			lua_remove(L, -2);
-			return 1;
-		}
-		lua_pop(L, 2);
+		ml_value_t *Value = stringmap_search(Context->Locals, Name);
+		if (Value) return Value;
 		Context = Context->Parent;
 	}
-	lua_getglobal(L, Name);
 	return 0;
 }
 
-void context_symb_set(const char *Name) {
-	lua_rawgeti(L, LUA_REGISTRYINDEX, CurrentContext->Locals);
-	lua_pushstring(L, Name);
-	lua_pushvalue(L, -3);
-	lua_rawset(L, -3);
-	lua_pop(L, 1);
-}
-
-int msghandler(lua_State *L) {
-	const char *Msg = lua_tostring(L, 1);
-	if (!Msg) {
-		if (luaL_callmeta(L, 1, "__tostring") && lua_type(L, -1) == LUA_TSTRING) {
-			return 1;
-		} else {
-			Msg = lua_pushfstring(L, "(error object is a %s value)", luaL_typename(L, 1));
-		}
-	}
-	luaL_traceback(L, L, Msg, 1);
-	return 1;
+void context_symb_set(context_t *Context, const char *Name, ml_value_t *Value) {
+	stringmap_insert(Context->Locals, Name, Value);
 }
 
 void context_init() {
-	ContextCache = HXmap_init(HXMAPT_DEFAULT, HXMAP_SCKEY);
+	DefaultString = ml_string("DEFAULT", -1);
 }
