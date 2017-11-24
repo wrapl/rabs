@@ -7,7 +7,7 @@
 #include <gc.h>
 #include <unistd.h>
 
-context_t *CurrentContext = 0;
+__thread context_t *CurrentContext = 0;
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;
 
@@ -20,13 +20,13 @@ context_t *context_push(const char *Path) {
 	Context->Parent = CurrentContext;
 	Context->Path = Path;
 	Context->Name = Path;
+	Context->FullPath = concat(RootPath, Path, 0);
 	if (CurrentContext) {
 		Context->Mounts = CurrentContext->Mounts;
 	} else {
 		Context->Mounts = 0;
 	}
 	CurrentContext = Context;
-	chdir(concat(RootPath, CurrentContext->Path, 0));
 	Context->Locals[0] = STRINGMAP_INIT;
 	target_t *Default = Context->Default = (target_t *)target_meta_new(0, 1, &DefaultString);
 	stringmap_insert(Context->Locals, "DEFAULT", Default);
@@ -41,6 +41,7 @@ context_t *context_scope(const char *Name) {
 	Context->Parent = CurrentContext;
 	Context->Path = CurrentContext->Path;
 	Context->Name = concat(CurrentContext->Name, ":", Name, 0);
+	Context->FullPath = CurrentContext->FullPath;
 	if (CurrentContext) {
 		Context->Mounts = CurrentContext->Mounts;
 	} else {

@@ -1,5 +1,5 @@
-
 #define _GNU_SOURCE
+
 #include <gc/gc.h>
 #include <string.h>
 #include <unistd.h>
@@ -15,6 +15,7 @@
 #include "cache.h"
 #include "minilang.h"
 #include "ml_file.h"
+#include "rabs.h"
 
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
@@ -147,14 +148,29 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
 	const char *Command = ml_stringbuffer_get(Buffer);
+	printf("\e[34m%s: %s\e[0m\n", CurrentContext->FullPath, Command);
 	clock_t Start = clock();
-	printf("\e[34m%s\e[0m\n", Command);
-	if (system(Command)) {
-		return ml_error("ExecuteError", "process returned non-zero exit code");
+	chdir(CurrentContext->FullPath);
+	FILE *File = popen(Command, "r");
+	pthread_mutex_unlock(GlobalLock);
+	char Chars[120];
+	while (!feof(File)) {
+		ssize_t Size = fread(Chars, 1, 120, File);
+		if (Size == -1) break;
+		//fwrite(Chars, 1, Size, stdout);
+	}
+	int Result = pclose(File);
+	clock_t End = clock();
+	pthread_mutex_lock(GlobalLock);
+	printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
+	if (WIFEXITED(Result)) {
+		if (WEXITSTATUS(Result) != 0) {
+			return ml_error("ExecuteError", "process returned non-zero exit code");
+		} else {
+			return Nil;
+		}
 	} else {
-		clock_t End = clock();
-		printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
-		return Nil;
+		return ml_error("ExecuteError", "process exited abnormally");
 	}
 }
 
@@ -164,17 +180,30 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	const char *Command = ml_stringbuffer_get(Buffer);
 	printf("\e[34m%s\e[0m\n", Command);
 	clock_t Start = clock();
+	chdir(CurrentContext->FullPath);
 	FILE *File = popen(Command, "r");
+	pthread_mutex_unlock(GlobalLock);
 	char Chars[120];
 	while (!feof(File)) {
-		ssize_t Count = fread(Chars, 1, 120, File);
-		if (Count > 0) ml_stringbuffer_add(Buffer, Chars, Count);
+		ssize_t Size = fread(Chars, 1, 120, File);
+		if (Size == -1) break;
+		pthread_mutex_lock(GlobalLock);
+		if (Size > 0) ml_stringbuffer_add(Buffer, Chars, Size);
+		pthread_mutex_unlock(GlobalLock);
 	}
-	pclose(File);
+	int Result = pclose(File);
 	clock_t End = clock();
+	pthread_mutex_lock(GlobalLock);
 	printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
-	size_t Length = Buffer->Length;
-	return ml_string(ml_stringbuffer_get(Buffer), Length);
+	if (WIFEXITED(Result)) {
+		if (WEXITSTATUS(Result) != 0) {
+			return ml_error("ExecuteError", "process returned non-zero exit code");
+		} else {
+			return ml_string(ml_stringbuffer_get(Buffer), Buffer->Length);
+		}
+	} else {
+		return ml_error("ExecuteError", "process exited abnormally");
+	}
 }
 
 ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
@@ -230,6 +259,7 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 }
 
 int main(int Argc, const char **Argv) {
+	GC_init();
 	ml_init();
 	AppendMethod = ml_method("append");
 	stringmap_insert(Globals, "vmount", ml_function(0, vmount));
@@ -248,6 +278,7 @@ int main(int Argc, const char **Argv) {
 	const char *TargetName = 0;
 	int QueryOnly = 0;
 	int ListTargets = 0;
+	int NumThreads = 1;
 	for (int I = 1; I < Argc; ++I) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
@@ -270,11 +301,22 @@ int main(int Argc, const char **Argv) {
 				ListTargets = 1;
 				break;
 			}
+			case 'p': {
+				if (Argv[I][2]) {
+					NumThreads = atoi(Argv[I] + 2);
+				} else {
+					NumThreads = atoi(Argv[++I]);
+				}
+			}
+			case 't': {
+				GC_disable();
+			}
 			};
 		} else {
 			TargetName = Argv[I];
 		};
 	};
+	target_threads_start(NumThreads);
 
 	vfs_init();
 	target_init();
@@ -316,6 +358,7 @@ int main(int Argc, const char **Argv) {
 			target_query(Target);
 		} else {
 			target_update(Target);
+			target_threads_wait(NumThreads);
 		}
 	}
 	return 0;
