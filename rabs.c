@@ -175,9 +175,11 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 }
 
 ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
+	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
 	const char *Command = ml_stringbuffer_get(Buffer);
+	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	printf("\e[34m%s\e[0m\n", Command);
 	clock_t Start = clock();
 	chdir(CurrentContext->FullPath);
@@ -191,6 +193,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 		if (Size > 0) ml_stringbuffer_add(Buffer, Chars, Size);
 		pthread_mutex_unlock(GlobalLock);
 	}
+	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	int Result = pclose(File);
 	clock_t End = clock();
 	pthread_mutex_lock(GlobalLock);
@@ -199,7 +202,10 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 		if (WEXITSTATUS(Result) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
 		} else {
-			return ml_string(ml_stringbuffer_get(Buffer), Buffer->Length);
+			printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
+			ml_value_t *Result = ml_string(ml_stringbuffer_get(Buffer), Buffer->Length);
+			printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
+			return Result;
 		}
 	} else {
 		return ml_error("ExecuteError", "process exited abnormally");
@@ -217,7 +223,7 @@ ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 }
 
 static const char *find_root(const char *Path) {
-	char *FileName = (char *)GC_malloc(strlen(Path) + strlen(SystemName) + 1);
+	char *FileName = (char *)GC_malloc_atomic(strlen(Path) + strlen(SystemName) + 1);
 	char *End = stpcpy(FileName, Path);
 	strcpy(End, SystemName);
 	char Line[strlen("-- ROOT --\n")];
@@ -260,6 +266,7 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 
 int main(int Argc, const char **Argv) {
 	GC_init();
+	GC_set_max_heap_size(67108864);
 	ml_init();
 	AppendMethod = ml_method("append");
 	stringmap_insert(Globals, "vmount", ml_function(0, vmount));

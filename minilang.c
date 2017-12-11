@@ -6,7 +6,9 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
+#define GC_THREADS
 #include <gc.h>
+#include <gc/gc_typed.h>
 #include <setjmp.h>
 #include <ctype.h>
 #include <regex.h>
@@ -18,6 +20,7 @@
 #define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
 #define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
 #define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
+#define fnew(T) ((T *)GC_MALLOC_STUBBORN(sizeof(T)))
 
 typedef struct ml_reference_t ml_reference_t;
 typedef struct ml_integer_t ml_integer_t;
@@ -157,10 +160,11 @@ ml_type_t FunctionT[1] = {{
 }};
 
 ml_value_t *ml_function(void *Data, ml_callback_t Callback) {
-	ml_function_t *Function = new(ml_function_t);
+	ml_function_t *Function = fnew(ml_function_t);
 	Function->Type = FunctionT;
 	Function->Data = Data;
 	Function->Callback = Callback;
+	GC_end_stubborn_change(Function);
 	return (ml_value_t *)Function;
 }
 
@@ -196,9 +200,10 @@ ml_type_t IntegerT[1] = {{
 }};
 
 ml_value_t *ml_integer(long Value) {
-	ml_integer_t *Integer = new(ml_integer_t);
+	ml_integer_t *Integer = fnew(ml_integer_t);
 	Integer->Type = IntegerT;
 	Integer->Value = Value;
+	GC_end_stubborn_change(Integer);
 	return (ml_value_t *)Integer;
 }
 
@@ -226,9 +231,10 @@ ml_type_t RealT[1] = {{
 }};
 
 ml_value_t *ml_real(double Value) {
-	ml_real_t *Real = new(ml_real_t);
+	ml_real_t *Real = fnew(ml_real_t);
 	Real->Type = RealT;
 	Real->Value = Value;
+	GC_end_stubborn_change(Real);
 	return (ml_value_t *)Real;
 }
 
@@ -369,10 +375,11 @@ ml_type_t StringT[1] = {{
 }};
 
 ml_value_t *ml_string(const char *Value, int Length) {
-	ml_string_t *String = new(ml_string_t);
+	ml_string_t *String = fnew(ml_string_t);
 	String->Type = StringT;
 	String->Value = Value;
 	String->Length = Length >= 0 ? Length : strlen(Value);
+	GC_end_stubborn_change(String);
 	return (ml_value_t *)String;
 }
 
@@ -383,10 +390,11 @@ int ml_is_string(ml_value_t *Value) {
 static ml_value_t *ml_string_new(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) ml_inline(AppendMethod, 2, (ml_value_t *)Buffer, Args[I]);
-	ml_string_t *String = new(ml_string_t);
+	ml_string_t *String = fnew(ml_string_t);
 	String->Type = StringT;
 	String->Length = Buffer->Length;
 	String->Value = ml_stringbuffer_get(Buffer);
+	GC_end_stubborn_change(String);
 	return (ml_value_t *)String;
 }
 
@@ -1168,6 +1176,8 @@ struct ml_stringbuffer_node_t {
 };
 
 static ml_stringbuffer_node_t *Cache = 0;
+static int NumStringBuffers = 0;
+static GC_descr StringBufferDesc = 0;
 
 ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_t Length) {
 	size_t Remaining = Length;
@@ -1187,7 +1197,8 @@ ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_
 			Cache = Cache->Next;
 			Next->Next = 0;
 		} else {
-			Next = new(ml_stringbuffer_node_t);
+			Next = (ml_stringbuffer_node_t *)GC_malloc_explicitly_typed(sizeof(ml_stringbuffer_node_t), StringBufferDesc);
+			printf("Allocating stringbuffer: %d in total\n", ++NumStringBuffers);
 		}
 		Node = Slot[0] = Next;
 		Slot = &Node->Next;
@@ -1837,6 +1848,9 @@ void ml_init() {
 	ml_method_by_value(AppendMethod, 0, stringify_method, StringBufferT, MethodT, 0);
 	ml_method_by_value(AppendMethod, 0, stringify_list, StringBufferT, ListT, 0);
 	ml_method_by_value(AppendMethod, 0, stringify_tree, StringBufferT, TreeT, 0);
+
+	GC_word StringBufferLayout[] = {1};
+	StringBufferDesc = GC_make_descriptor(StringBufferLayout, 1);
 }
 
 ml_inst_t *mli_push_run(ml_inst_t *Inst, ml_frame_t *Frame) {
@@ -3545,7 +3559,7 @@ ml_type_t *ml_class(ml_type_t *Parent, const char *Name) {
 static const char *ml_file_read(void *Data) {
 	FILE *File = (FILE *)Data;
 	char *Line = 0;
-	size_t Length;
+	size_t Length = 0;
 	if (getline(&Line, &Length, File) < 0) return 0;
 	return Line;
 }
@@ -3557,6 +3571,7 @@ ml_value_t *ml_load(ml_getter_t GlobalGet, void *Globals, const char *FileName) 
 	if (setjmp(Scanner->OnError)) return Scanner->Error;
 	mlc_expr_t *Expr = ml_accept_block(Scanner);
 	ml_accept(Scanner, MLT_EOI);
+	fclose(File);
 	mlc_function_t Function[1] = {{GlobalGet, Globals, 0,}};
 	SHA256_CTX HashContext[1];
 	sha256_init(HashContext);
