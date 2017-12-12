@@ -10,16 +10,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#define GC_THREADS
 #include <gc.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
-
-#define new(T) ((T *)GC_MALLOC(sizeof(T)))
-#define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
-#define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
-#define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
 
 enum {
 	STATE_UNCHECKED = 0,
@@ -125,7 +119,7 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 		Target->LastUpdated = LastUpdated;
 		cache_last_check_set(Target->Id);
 	}
-	GC_gcollect();
+	//GC_gcollect();
 	printf("\e[32m[%d] Built %s @ %d (%d targets, %d bytes)\e[0m\n", ThreadIndex, Target->Id, LastUpdated, NumTargets, GC_get_heap_size());
 	stringmap_foreach(Target->Targets, Target, (void *)depends_updated_fn);
 	memset(Target->Depends, 0, sizeof(Target->Depends));
@@ -226,7 +220,7 @@ void target_depends_auto(target_t *Depend) {
 static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id) {
 	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	++NumTargets;
-	target_t *Target = (target_t *)GC_malloc(Size);
+	target_t *Target = (target_t *)GC_MALLOC(Size);
 	Target->Type = Type;
 	Target->Id = Id;
 	Target->Build = 0;
@@ -719,7 +713,7 @@ target_t *target_find(const char *Id) {
 			if (*Name == '/') break;
 		}
 		size_t PathLength = Name - Id - 5;
-		char *Path = GC_malloc_atomic(PathLength);
+		char *Path = snew(PathLength);
 		memcpy(Path, Id + 5, PathLength);
 		Path[PathLength] = 0;
 		Target->Context = Path;
@@ -762,6 +756,7 @@ static void *target_thread_fn(void *Arg) {
 		}
 		target_t *Target = BuildQueue;
 		BuildQueue = Target->Next;
+		Target->Next = 0;
 		target_do_build(Index, Target);
 	}
 	return 0;

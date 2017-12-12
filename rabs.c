@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <gc/gc.h>
 #include <string.h>
 #include <unistd.h>
@@ -185,13 +183,13 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	chdir(CurrentContext->FullPath);
 	FILE *File = popen(Command, "r");
 	pthread_mutex_unlock(GlobalLock);
-	char Chars[120];
+	char Chars[ML_STRINGBUFFER_NODE_SIZE];
 	while (!feof(File)) {
-		ssize_t Size = fread(Chars, 1, 120, File);
+		ssize_t Size = fread(Chars, 1, ML_STRINGBUFFER_NODE_SIZE, File);
 		if (Size == -1) break;
-		pthread_mutex_lock(GlobalLock);
+		//pthread_mutex_lock(GlobalLock);
 		if (Size > 0) ml_stringbuffer_add(Buffer, Chars, Size);
-		pthread_mutex_unlock(GlobalLock);
+		//pthread_mutex_unlock(GlobalLock);
 	}
 	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	int Result = pclose(File);
@@ -223,7 +221,7 @@ ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 }
 
 static const char *find_root(const char *Path) {
-	char *FileName = (char *)GC_malloc_atomic(strlen(Path) + strlen(SystemName) + 1);
+	char *FileName = snew(strlen(Path) + strlen(SystemName));
 	char *End = stpcpy(FileName, Path);
 	strcpy(End, SystemName);
 	char Line[strlen("-- ROOT --\n")];
@@ -264,8 +262,20 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 	return Nil;
 }
 
+static void rabs_dump_func(void *Ptr, int Data) {
+	void *Base = GC_base(Ptr);
+	printf("%d @ %s:%d\n", GC_size(Ptr), ((const char **)Base)[0], ((int *)Base)[1]);
+}
+
+static void *rabs_oom_func(size_t Size) {
+	GC_dump();
+	GC_apply_to_all_blocks(rabs_dump_func, 0);
+	return 0;
+}
+
 int main(int Argc, const char **Argv) {
-	GC_init();
+	GC_INIT();
+	GC_set_oom_fn(rabs_oom_func);
 	GC_set_max_heap_size(67108864);
 	ml_init();
 	AppendMethod = ml_method("append");
@@ -332,7 +342,7 @@ int main(int Argc, const char **Argv) {
 #ifdef LINUX
 	const char *Path = get_current_dir_name();
 #else
-	char *Path = (char *)GC_malloc_atomic(1024);
+	char *Path = snew(1024);
 	getcwd(Path, 1024);
 #endif
 	RootPath = find_root(Path);

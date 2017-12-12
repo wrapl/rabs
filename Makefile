@@ -15,13 +15,13 @@ sources = \
 	stringmap.c \
 	linenoise.c
 
-CFLAGS += -I. -Igc/include -g -pthread
+CFLAGS += -I. -Igc/include -g -pthread -DGC_THREADS -D_GNU_SOURCE -DGC_DEBUG
 LDFLAGS += -lm -ldl -lsqlite3 -g gc/lib/libgc.a
 
-minibuild: $(sources) *.h
+minibuild: Makefile $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
 	
-minilang: minilang.* ml.* stringmap.* sha256.*
+minilang: Makefile minilang.* ml.* stringmap.* sha256.*
 	gcc $(CFLAGS) minilang.c ml_file.c ml.c stringmap.c sha256.c linenoise.c -lgc -o$@
 
 clean:

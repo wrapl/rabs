@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdarg.h>
 
+#define snew(N) ((char *)GC_MALLOC_ATOMIC(N + 1))
+
 char *concat(const char *S, ...) {
 	size_t L = strlen(S);
 	va_list Args;
@@ -13,7 +15,7 @@ char *concat(const char *S, ...) {
 		L += strlen(T);
 	}
 	va_end(Args);
-	char *C = GC_malloc_atomic(L + 1);
+	char *C = snew(L);
 	char *P = stpcpy(C, S);
 	va_start(Args, S);
 	for (;;) {

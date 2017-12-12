@@ -1,12 +1,9 @@
-#define _GNU_SOURCE
-
 #include "minilang.h"
 #include "sha256.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <string.h>
-#define GC_THREADS
 #include <gc.h>
 #include <gc/gc_typed.h>
 #include <setjmp.h>
@@ -16,11 +13,6 @@
 #include "stringmap.h"
 
 #define MAX_TRACE 16
-#define new(T) ((T *)GC_MALLOC(sizeof(T)))
-#define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
-#define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
-#define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
-#define fnew(T) ((T *)GC_MALLOC_STUBBORN(sizeof(T)))
 
 typedef struct ml_reference_t ml_reference_t;
 typedef struct ml_integer_t ml_integer_t;
@@ -1168,14 +1160,12 @@ int ml_error_trace(ml_value_t *Value, int Level, const char **Source, int *Line)
 	return 1;
 }
 
-#define ML_STRINGBUFFER_NODE_SIZE 120
-
 struct ml_stringbuffer_node_t {
 	ml_stringbuffer_node_t *Next;
 	char Chars[ML_STRINGBUFFER_NODE_SIZE];
 };
 
-static ml_stringbuffer_node_t *Cache = 0;
+static __thread ml_stringbuffer_node_t *Cache = 0;
 static int NumStringBuffers = 0;
 static GC_descr StringBufferDesc = 0;
 
@@ -1220,7 +1210,7 @@ ssize_t ml_stringbuffer_addf(ml_stringbuffer_t *Buffer, const char *Format, ...)
 }
 
 char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer) {
-	char *String = GC_malloc_atomic(Buffer->Length + 1);
+	char *String = snew(Buffer->Length);
 	if (Buffer->Length == 0) {
 		String[0] = 0;
 	} else {

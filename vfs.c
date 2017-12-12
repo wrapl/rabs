@@ -5,6 +5,8 @@
 #include "vfs.h"
 #include "util.h"
 
+#define new(T) ((T *)GC_MALLOC(sizeof(T)))
+
 struct vmount_t {
 	const vmount_t *Previous;
 	const char *Path;
@@ -14,7 +16,7 @@ struct vmount_t {
 extern const char *RootPath;
 
 const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target) {
-	vmount_t *Mount = (vmount_t *)GC_malloc(sizeof(vmount_t));
+	vmount_t *Mount = new(vmount_t);
 	Mount->Previous = Previous;
 	Mount->Path = concat(RootPath, Path, 0);
 	Mount->Target = concat(RootPath, Target, 0);
