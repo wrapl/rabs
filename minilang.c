@@ -2123,7 +2123,7 @@ static inline mlc_compiled_t ml_compile(mlc_function_t *Function, mlc_expr_t *Ex
 		return Compiled;
 	} else {
 		ML_COMPILE_HASH
-		ml_inst_t *NilInst = ml_inst_new(1, (ml_source_t){"<internal>", 0}, mli_push_run);
+		ml_inst_t *NilInst = ml_inst_new(2, (ml_source_t){"<internal>", 0}, mli_push_run);
 		NilInst->Params[1].Value = Nil;
 		++Function->Top;
 		return (mlc_compiled_t){NilInst, NilInst};
@@ -2285,7 +2285,7 @@ static mlc_compiled_t ml_loop_expr_compile(mlc_function_t *Function, mlc_parent_
 
 static mlc_compiled_t ml_next_expr_compile(mlc_function_t *Function, mlc_expr_t *Expr, SHA256_CTX *HashContext) {
 	ML_COMPILE_HASH
-	ml_inst_t *NilInst = ml_inst_new(1, (ml_source_t){"<internal>", 0}, mli_push_run);
+	ml_inst_t *NilInst = ml_inst_new(2, (ml_source_t){"<internal>", 0}, mli_push_run);
 	NilInst->Params[1].Value = Nil;
 	if (Function->Top > Function->Loop->NextTop) {
 		ML_COMPILE_HASH
@@ -2589,7 +2589,7 @@ static mlc_compiled_t ml_const_call_expr_compile(mlc_function_t *Function, mlc_c
 	long ValueHash = ml_hash(Expr->Value);
 	sha256_update(HashContext, (void *)&ValueHash, sizeof(ValueHash));
 	ML_COMPILE_HASH
-	ml_inst_t *CallInst = ml_inst_new(2, Expr->Source, mli_const_call_run);
+	ml_inst_t *CallInst = ml_inst_new(3, Expr->Source, mli_const_call_run);
 	CallInst->Params[2].Value = Expr->Value;
 	if (Expr->Child) {
 		int NumArgs = 1;

@@ -15,8 +15,8 @@ sources = \
 	stringmap.c \
 	linenoise.c
 
-CFLAGS += -I. -Igc/include -g -pthread -DGC_THREADS -D_GNU_SOURCE -DGC_DEBUG
-LDFLAGS += -lm -ldl -lsqlite3 -g -lgc #gc/lib/libgc.a
+CFLAGS += -std=gnu99 -I. -Igc/include -g -pthread -DGC_THREADS -D_GNU_SOURCE -DGC_DEBUG
+LDFLAGS += -lm -ldl -lsqlite3 -g -lgc
 
 minibuild: Makefile $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
