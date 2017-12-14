@@ -281,7 +281,7 @@ static void rabs_dump_func(void *Ptr, int Data) {
 
 static void *rabs_oom_func(size_t Size) {
 	GC_dump();
-	GC_apply_to_all_blocks(rabs_dump_func, 0);
+	//GC_apply_to_all_blocks(rabs_dump_func, 0);
 	return 0;
 }
 

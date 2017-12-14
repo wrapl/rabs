@@ -71,11 +71,7 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS exprs(id TEXT, value TEXT);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE INDEX IF NOT EXISTS exprs_idx ON exprs(id);", 0, 0, 0) != SQLITE_OK) {
+	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS exprs(id TEXT PRIMARY KEY, value TEXT);", 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -119,7 +115,7 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_prepare_v2(Cache, "INSERT INTO exprs(id, value) VALUES(?, ?)", -1, &ExprSetStatement, 0) != SQLITE_OK) {
+	if (sqlite3_prepare_v2(Cache, "REPLACE INTO exprs(id, value) VALUES(?, ?)", -1, &ExprSetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}

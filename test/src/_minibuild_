@@ -1,3 +1,18 @@
 print("Here!\n")
 
+Config := file("config") => fun(Target) do
+	var File := open('{Target}', "w")
+	File:write("#!/bin/sh\n")
+	File:write("echo \"-g\"\n")
+	File:close()
+	execute("chmod +x", Target)
+end
+
+TEST_CFLAGS := expr("CFLAGS")[Config] => fun() shell(Config)[1, -1]
+
+CFLAGS := old + [TEST_CFLAGS]
+
+file("test.o")[TEST_CFLAGS]
+file("test2.o")[TEST_CFLAGS]
+
 c_program(file("test"), [file("test.o"), file("test2.o")])

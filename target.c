@@ -467,6 +467,15 @@ struct target_expr_t {
 
 static ml_type_t *ExprTargetT;
 
+static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Args) {
+	ml_value_t *AppendMethod = ml_method("append");
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
+	target_expr_t *Target = (target_expr_t *)Args[1];
+	target_depends_auto((target_t *)Target);
+	ml_value_t *Value = cache_expr_get(Target->Id);
+	return ml_inline(AppendMethod, 2, Buffer, Value);
+}
+
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
 	ml_value_t *StringMethod = ml_method("string");
 	target_expr_t *Target = (target_expr_t *)Args[0];
@@ -829,6 +838,7 @@ void target_init() {
 	SHA256Method = ml_method("sha256");
 	MissingMethod = ml_method("missing");
 	ml_method_by_name("append", 0, target_file_stringify, StringBufferT, FileTargetT, 0);
+	ml_method_by_name("append", 0, target_expr_stringify, StringBufferT, ExprTargetT, 0);
 	ml_method_by_name("[]", 0, target_depend, TargetT, AnyT, 0);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, 0);
 	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, 0);

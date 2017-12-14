@@ -20,7 +20,7 @@ end
 print('PLATFORM = {PLATFORM}\n')
 print('OS = {OS}\n')
 
-CFLAGS := ['-O3', '-g']
+CFLAGS := ['-O3']
 
 c_compile := fun(Object) do
 	var Source := Object % "c"
@@ -84,5 +84,6 @@ c_program := fun(Executable, Objects, Libraries) do
 	DEFAULT[Executable]
 end
 
-subdir("src")
+vmount("obj", "src")
+subdir("obj")
 
