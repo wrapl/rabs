@@ -1210,7 +1210,7 @@ ssize_t ml_stringbuffer_addf(ml_stringbuffer_t *Buffer, const char *Format, ...)
 }
 
 char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer) {
-	char *String = snew(Buffer->Length);
+	char *String = snew(Buffer->Length + 1);
 	if (Buffer->Length == 0) {
 		String[0] = 0;
 	} else {

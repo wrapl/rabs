@@ -15,7 +15,7 @@ char *concat(const char *S, ...) {
 		L += strlen(T);
 	}
 	va_end(Args);
-	char *C = snew(L);
+	char *C = snew(L + 1);
 	char *P = stpcpy(C, S);
 	va_start(Args, S);
 	for (;;) {

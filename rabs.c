@@ -216,7 +216,7 @@ ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 }
 
 static const char *find_root(const char *Path) {
-	char *FileName = snew(strlen(Path) + strlen(SystemName));
+	char *FileName = snew(strlen(Path) + strlen(SystemName) + 1);
 	char *End = stpcpy(FileName, Path);
 	strcpy(End, SystemName);
 	char Line[strlen("-- ROOT --\n")];

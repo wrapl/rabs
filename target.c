@@ -760,7 +760,7 @@ target_t *target_find(const char *Id) {
 			if (*Name == '/') break;
 		}
 		size_t PathLength = Name - Id - 5;
-		char *Path = snew(PathLength);
+		char *Path = snew(PathLength + 1);
 		memcpy(Path, Id + 5, PathLength);
 		Path[PathLength] = 0;
 		Target->Context = Path;
