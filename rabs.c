@@ -173,11 +173,9 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 }
 
 ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
 	const char *Command = ml_stringbuffer_get(Buffer);
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	printf("\e[34m%s\e[0m\n", Command);
 	clock_t Start = clock();
 	chdir(CurrentContext->FullPath);
@@ -191,7 +189,6 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 		if (Size > 0) ml_stringbuffer_add(Buffer, Chars, Size);
 		//pthread_mutex_unlock(GlobalLock);
 	}
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	int Result = pclose(File);
 	clock_t End = clock();
 	pthread_mutex_lock(GlobalLock);
@@ -200,9 +197,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 		if (WEXITSTATUS(Result) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
 		} else {
-			printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 			ml_value_t *Result = ml_string(ml_stringbuffer_get(Buffer), Buffer->Length);
-			printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 			return Result;
 		}
 	} else {
@@ -262,6 +257,23 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 	return Nil;
 }
 
+static ml_value_t *ml_getenv(void *Data, int Count, ml_value_t **Args) {
+	const char *Key = ml_string_value(Args[0]);
+	const char *Value = getenv(Key);
+	if (Value) {
+		return ml_string(Value, -1);
+	} else {
+		return Nil;
+	}
+}
+
+static ml_value_t *ml_setenv(void *Data, int Count, ml_value_t **Args) {
+	const char *Key = ml_string_value(Args[0]);
+	const char *Value = ml_string_value(Args[1]);
+	setenv(Key, Value, 1);
+	return Nil;
+}
+
 static void rabs_dump_func(void *Ptr, int Data) {
 	void *Base = GC_base(Ptr);
 	printf("%d @ %s:%d\n", GC_size(Ptr), ((const char **)Base)[0], ((int *)Base)[1]);
@@ -283,6 +295,7 @@ int main(int Argc, const char **Argv) {
 	stringmap_insert(Globals, "subdir", ml_function(0, subdir));
 	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
 	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
+	stringmap_insert(Globals, "expr", ml_function(0, target_expr_new));
 	stringmap_insert(Globals, "include", ml_function(0, include));
 	stringmap_insert(Globals, "context", ml_function(0, context));
 	stringmap_insert(Globals, "execute", ml_function(0, execute));
@@ -291,6 +304,8 @@ int main(int Argc, const char **Argv) {
 	stringmap_insert(Globals, "scope", ml_function(0, scope));
 	stringmap_insert(Globals, "print", ml_function(0, print));
 	stringmap_insert(Globals, "open", ml_function(0, ml_file_open));
+	stringmap_insert(Globals, "getenv", ml_function(0, ml_getenv));
+	stringmap_insert(Globals, "setenv", ml_function(0, ml_setenv));
 
 	const char *TargetName = 0;
 	int QueryOnly = 0;

@@ -20,6 +20,8 @@ static sqlite3_stmt *DependsInsertStatement;
 static sqlite3_stmt *ScanGetStatement;
 static sqlite3_stmt *ScanDeleteStatement;
 static sqlite3_stmt *ScanInsertStatement;
+static sqlite3_stmt *ExprGetStatement;
+static sqlite3_stmt *ExprSetStatement;
 int CurrentVersion = 1;
 
 static int version_callback(void *Data, int NumCols, char **Values, char **Names) {
@@ -69,6 +71,14 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
+	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS exprs(id TEXT, value TEXT);", 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	if (sqlite3_exec(Cache, "CREATE INDEX IF NOT EXISTS exprs_idx ON exprs(id);", 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
 	if (sqlite3_prepare_v2(Cache, "SELECT hash, last_updated, last_checked, file_time FROM hashes WHERE id = ?", -1, &HashGetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
@@ -102,6 +112,14 @@ void cache_open(const char *RootPath) {
 		exit(1);
 	}
 	if (sqlite3_prepare_v2(Cache, "INSERT INTO depends(id, depend) VALUES(?, ?)", -1, &DependsInsertStatement, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	if (sqlite3_prepare_v2(Cache, "SELECT value FROM exprs WHERE id = ?", -1, &ExprGetStatement, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	if (sqlite3_prepare_v2(Cache, "INSERT INTO exprs(id, value) VALUES(?, ?)", -1, &ExprSetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -223,4 +241,24 @@ void cache_scan_set(const char *Id, stringmap_t *Scans) {
 	sqlite3_bind_text(ScanInsertStatement, 1, Id, -1, SQLITE_STATIC);
 	stringmap_foreach(Scans, 0, (void *)cache_scan_set_fn);
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
+}
+
+ml_value_t *cache_expr_get(const char *Id) {
+	sqlite3_bind_text(ExprGetStatement, 1, Id, -1, SQLITE_STATIC);
+	ml_value_t *Result = 0;
+	if (sqlite3_step(ExprGetStatement) == SQLITE_ROW) {
+		int Length = sqlite3_column_bytes(ExprGetStatement, 0);
+		char *Chars = snew(Length);
+		memcpy(Chars, sqlite3_column_text(ExprGetStatement, 0), Length);
+		Result = ml_string(Chars, Length);
+	}
+	sqlite3_reset(ExprGetStatement);
+	return Result;
+}
+
+void cache_expr_set(const char *Id, ml_value_t *Value) {
+	sqlite3_bind_text(ExprSetStatement, 1, Id, -1, SQLITE_STATIC);
+	sqlite3_bind_text(ExprSetStatement, 2, ml_string_value(Value), ml_string_length(Value), SQLITE_STATIC);
+	sqlite3_step(ExprSetStatement);
+	sqlite3_reset(ExprSetStatement);
 }

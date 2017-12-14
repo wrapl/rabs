@@ -23,6 +23,7 @@ enum {
 
 typedef struct target_file_t target_file_t;
 typedef struct target_meta_t target_meta_t;
+typedef struct target_expr_t target_expr_t;
 typedef struct target_scan_t target_scan_t;
 typedef struct scan_results_t scan_results_t;
 typedef struct target_symb_t target_symb_t;
@@ -44,14 +45,11 @@ __thread stringmap_t *CurrentDetectedDepends = 0;
 
 static target_t *BuildQueue = 0;
 
-static ml_value_t *build_scan_target(void *Data, int Count, ml_value_t **Args);
-
 void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]);
 
 static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]);
+static void target_build(target_t *Target);
 static int target_missing(target_t *Target);
-
-static ml_function_t BuildScanTarget[1] = {{FunctionT, build_scan_target, 0}};
 
 int depends_hash_fn(const char *Id, target_t *Depend, int8_t Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
@@ -100,14 +98,7 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 		if ((Target->DependsLastUpdated > LastChecked) || target_missing(Target)) {
 			CurrentTarget = Target;
 			stringmap_t *DetectedDepends = CurrentDetectedDepends = new(stringmap_t);
-			ml_value_t *Result = ml_inline(Target->Build, 1, Target);
-			if (Result->Type == ErrorT) {
-				fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
-				const char *Source;
-				int Line;
-				for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
-				exit(1);
-			}
+			target_build(Target);
 			cache_depends_set(Target->Id, DetectedDepends);
 		}
 	}
@@ -218,7 +209,6 @@ void target_depends_auto(target_t *Depend) {
 }
 
 static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id) {
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	++NumTargets;
 	target_t *Target = (target_t *)GC_MALLOC(Size);
 	Target->Type = Type;
@@ -226,7 +216,6 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id) {
 	Target->Build = 0;
 	Target->LastUpdated = 0;
 	stringmap_insert(TargetCache, Id, Target);
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	return Target;
 }
 
@@ -300,6 +289,17 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_
 	return Stat->st_mtime;
 }
 
+static void target_default_build(target_t *Target) {
+	ml_value_t *Result = ml_inline(Target->Build, 1, Target);
+	if (Result->Type == ErrorT) {
+		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		exit(1);
+	}
+}
+
 static int target_file_missing(target_file_t *Target) {
 	const char *FileName;
 	if (Target->Absolute) {
@@ -316,7 +316,7 @@ target_t *target_file_check(const char *Path, int Absolute) {
 	const char *Id = concat("file:", Path, 0);
 	target_file_t *Target = (target_file_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
-		Target = (target_file_t *)target_new(target_file_t, FileTargetT, Id);
+		Target = target_new(target_file_t, FileTargetT, Id);
 		Target->Absolute = Absolute;
 		Target->Path = Path;
 		Target->BuildContext = CurrentContext;
@@ -449,18 +449,57 @@ static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, int8_
 	return 0;
 }
 
-/*static target_status_t target_meta_build(target_meta_t *Target, int Updated) {
-	return Updated ? STATUS_UPDATED : STATUS_UNCHANGED;
-}*/
-
 ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	if (Count < 0) return ml_error("ParamError", "missing parameter <name>");
 	const char *Name = ml_string_value(Args[0]);
 	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, 0);
 	target_meta_t *Target = (target_meta_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
-		Target = (target_meta_t *)target_new(target_meta_t, MetaTargetT, Id);
+		Target = target_new(target_meta_t, MetaTargetT, Id);
 		Target->Name = Name;
+	}
+	return (ml_value_t *)Target;
+}
+
+struct target_expr_t {
+	TARGET_FIELDS
+};
+
+static ml_type_t *ExprTargetT;
+
+static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
+	ml_value_t *StringMethod = ml_method("string");
+	target_expr_t *Target = (target_expr_t *)Args[0];
+	target_depends_auto((target_t *)Target);
+	ml_value_t *Value = cache_expr_get(Target->Id);
+	return ml_inline(StringMethod, 1, Value);
+}
+
+static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+	ml_value_t *Value = cache_expr_get(Target->Id);
+	target_value_hash(Value, Target->Hash);
+	return 0;
+}
+
+static void target_expr_build(target_expr_t *Target) {
+	ml_value_t *Result = ml_inline(Target->Build, 1, Target);
+	if (Result->Type == ErrorT) {
+		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		exit(1);
+	}
+	cache_expr_set(Target->Id, Result);
+}
+
+ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
+	if (Count < 0) return ml_error("ParamError", "missing parameter <name>");
+	const char *Name = ml_string_value(Args[0]);
+	const char *Id = concat("expr:", CurrentContext->Path, "::", Name, 0);
+	target_expr_t *Target = (target_expr_t *)stringmap_search(TargetCache, Id);
+	if (!Target) {
+		Target = target_new(target_expr_t, ExprTargetT, Id);
 	}
 	return (ml_value_t *)Target;
 }
@@ -484,9 +523,9 @@ ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-ml_value_t *target_build(void *Data, int Count, ml_value_t **Args) {
+ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
-	if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
+	//if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
 	Target->LastUpdated = 0;
@@ -510,11 +549,8 @@ struct scan_results_t {
 static ml_type_t *ScanResultsT;
 
 static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	stringmap_t *Scans = cache_scan_get(Target->Results->Id);
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	stringmap_foreach(Scans, Target->Results, (void *)depends_update_fn);
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	return 0;
 }
 
@@ -532,11 +568,8 @@ static int build_scan_target_list(target_t *Depend, stringmap_t *Scans) {
 	return 0;
 }
 
-static ml_value_t *build_scan_target(void *Data, int Count, ml_value_t **Args) {
-	target_scan_t *Target = (target_scan_t *)Args[0];
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
-	ml_value_t *Result = ml_inline(Target->Scan, 1, Target->Source);
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
+static void target_scan_build(target_scan_t *Target) {
+	ml_value_t *Result = ml_inline(Target->Build, 1, Target->Source);
 	if (Result->Type == ErrorT) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
@@ -544,14 +577,9 @@ static ml_value_t *build_scan_target(void *Data, int Count, ml_value_t **Args) {
 		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	stringmap_t Scans[1] = {STRINGMAP_INIT};
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
 	cache_scan_set(Target->Results->Id, Scans);
-	printf("\t\e[32m %s:%d %d bytes used\e[0m\n", __FILE__, __LINE__, GC_get_heap_size());
-	return Nil;
 }
 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
@@ -566,11 +594,9 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 		stringmap_insert(ScanTarget->Depends, ParentTarget->Id, ParentTarget);
 		ScanTarget->Name = Name;
 		ScanTarget->Source = ParentTarget;
-		ScanTarget->Build = (ml_value_t *)BuildScanTarget;
+		ScanTarget->Build = Args[2];
 		ScanTarget->BuildContext = CurrentContext;
-		ScanTarget->Scan = Args[2];
 		ScanTarget->Results = Target;
-		target_value_hash(ScanTarget->Build, ScanTarget->Hash);
 		stringmap_insert(Target->Depends, ScanTarget->Id, ScanTarget);
 	}
 	return (ml_value_t *)Target;
@@ -693,7 +719,19 @@ static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t Previous
 	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == ScanResultsT) return scan_results_hash((scan_results_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == SymbTargetT) return target_symb_hash((target_symb_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == ExprTargetT) return target_expr_hash((target_expr_t *)Target, PreviousTime, PreviousHash);
 	return 0;
+}
+
+static void target_build(target_t *Target) {
+	if (Target->Type == FileTargetT) return target_default_build(Target);
+	if (Target->Type == MetaTargetT) return target_default_build(Target);
+	if (Target->Type == ScanTargetT) return target_scan_build((target_scan_t *)Target);
+	if (Target->Type == ExprTargetT) return target_expr_build((target_expr_t *)Target);
+	//if (Target->Type == ScanResultsT) return scan_results_build((scan_results_t *)Target);
+	//if (Target->Type == SymbTargetT) return target_symb_build((target_symb_t *)Target);
+	printf("\e[31mError: not expecting to build %s\e[0m\n", Target->Type->Name);
+	exit(1);
 }
 
 static int target_missing(target_t *Target) {
@@ -782,6 +820,7 @@ void target_init() {
 	TargetT = ml_class(AnyT, "target");
 	FileTargetT = ml_class(TargetT, "file-target");
 	MetaTargetT = ml_class(TargetT, "meta-target");
+	ExprTargetT = ml_class(TargetT, "expr-target");
 	ScanTargetT = ml_class(TargetT, "scan-target");
 	ScanResultsT = ml_class(TargetT, "scan-results");
 	SymbTargetT = ml_class(TargetT, "symb-target");
@@ -792,7 +831,8 @@ void target_init() {
 	ml_method_by_name("append", 0, target_file_stringify, StringBufferT, FileTargetT, 0);
 	ml_method_by_name("[]", 0, target_depend, TargetT, AnyT, 0);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, 0);
-	ml_method_by_name("=>", 0, target_build, TargetT, AnyT, 0);
+	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, 0);
+	ml_method_by_name("=>", 0, target_set_build, TargetT, AnyT, 0);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, StringT, 0);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, StringT, 0);
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, 0);
