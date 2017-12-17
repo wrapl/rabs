@@ -339,9 +339,11 @@ int main(int Argc, const char **Argv) {
 				} else {
 					NumThreads = atoi(Argv[++I]);
 				}
+				break;
 			}
 			case 't': {
 				GC_disable();
+				break;
 			}
 			};
 		} else {

@@ -71,10 +71,10 @@ c_program := fun(Executable, Objects, Libraries) do
 		var SourceC := Object % "c"
 		var SourceAsm := Object % "asm"
 		if SourceC:exists then
-			var ScanC := SourceC:scan("INCLUDES", c_includes)
+			var ScanC := SourceC:scan("INCLUDES") => c_includes
 			Object[SourceC, ScanC] => c_compile
 		elseif SourceAsm:exists then
-			var ScanAsm := SourceAsm:scan("INCLUDES", asm_includes)
+			var ScanAsm := SourceAsm:scan("INCLUDES") => asm_includes
 			Object[SourceAsm, ScanAsm] => asm_compile
 		end
 	end

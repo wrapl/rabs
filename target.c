@@ -150,7 +150,6 @@ void target_update(target_t *Target) {
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
 				cache_hash_set(BuildId, 0, BuildHash);
 				Target->DependsLastUpdated = CurrentVersion;
-				printf("\t\e[35m<build function updated>\e[0m\n");
 			} else if (PreviousDetectedDepends) {
 				stringmap_foreach(PreviousDetectedDepends, Target, (void *)depends_update_fn);
 			}
@@ -553,14 +552,37 @@ static ml_type_t *ScanTargetT;
 
 struct scan_results_t {
 	TARGET_FIELDS
+	target_scan_t *Scan;
 };
 
 static ml_type_t *ScanResultsT;
 
 static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
 	stringmap_t *Scans = cache_scan_get(Target->Results->Id);
-	stringmap_foreach(Scans, Target->Results, (void *)depends_update_fn);
+	if (Scans) stringmap_foreach(Scans, Target->Results, (void *)depends_update_fn);
 	return 0;
+}
+
+ml_value_t *scan_results_depend(void *Data, int Count, ml_value_t **Args) {
+	target_scan_t *Target = ((scan_results_t *)Args[0])->Scan;
+	for (int I = 1; I < Count; ++I) {
+		ml_value_t *Arg = Args[I];
+		if (Arg->Type == ListT) {
+			ml_list_foreach(Arg, Target, (void *)target_depends_list);
+		} else if (Arg != Nil) {
+			target_t *Depend = (target_t *)Arg;
+			stringmap_insert(Target->Depends, Depend->Id, Depend);
+		}
+	}
+	return Args[0];
+}
+
+ml_value_t *scan_results_set_build(void *Data, int Count, ml_value_t **Args) {
+	target_scan_t *Target = ((scan_results_t *)Args[0])->Scan;
+	Target->Build = Args[1];
+	Target->BuildContext = CurrentContext;
+	Target->LastUpdated = 0;
+	return Args[0];
 }
 
 static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
@@ -568,7 +590,7 @@ static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, int
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	//printf("#%s\n", Target->Id);
 	//stringmap_foreach(Scans, 0, (void *)depends_print_fn);
-	stringmap_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
+	if (Scans) stringmap_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
 	return 0;
 }
 
@@ -599,12 +621,10 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	if (!Target) {
 		Target = target_new(scan_results_t, ScanResultsT, Id);
 		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, 0);
-		target_scan_t *ScanTarget = target_new(target_scan_t, ScanTargetT, ScanId);
+		target_scan_t *ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId);
 		stringmap_insert(ScanTarget->Depends, ParentTarget->Id, ParentTarget);
 		ScanTarget->Name = Name;
 		ScanTarget->Source = ParentTarget;
-		ScanTarget->Build = Args[2];
-		ScanTarget->BuildContext = CurrentContext;
 		ScanTarget->Results = Target;
 		stringmap_insert(Target->Depends, ScanTarget->Id, ScanTarget);
 	}
@@ -840,9 +860,11 @@ void target_init() {
 	ml_method_by_name("append", 0, target_file_stringify, StringBufferT, FileTargetT, 0);
 	ml_method_by_name("append", 0, target_expr_stringify, StringBufferT, ExprTargetT, 0);
 	ml_method_by_name("[]", 0, target_depend, TargetT, AnyT, 0);
+	ml_method_by_name("[]", 0, scan_results_depend, ScanResultsT, AnyT, 0);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, 0);
 	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, 0);
 	ml_method_by_name("=>", 0, target_set_build, TargetT, AnyT, 0);
+	ml_method_by_name("=>", 0, scan_results_set_build, ScanResultsT, AnyT, 0);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, StringT, 0);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, StringT, 0);
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, 0);

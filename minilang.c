@@ -1165,9 +1165,10 @@ struct ml_stringbuffer_node_t {
 	char Chars[ML_STRINGBUFFER_NODE_SIZE];
 };
 
-static __thread ml_stringbuffer_node_t *Cache = 0;
+static ml_stringbuffer_node_t *Cache = 0;
 static int NumStringBuffers = 0;
 static GC_descr StringBufferDesc = 0;
+static pthread_mutex_t CacheMutex[1] = {PTHREAD_MUTEX_DEFAULT};
 
 ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_t Length) {
 	size_t Remaining = Length;
@@ -1182,6 +1183,7 @@ ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_
 		String += Buffer->Space;
 		Remaining -= Buffer->Space;
 		ml_stringbuffer_node_t *Next;
+		pthread_mutex_lock(CacheMutex);
 		if (Cache) {
 			Next = Cache;
 			Cache = Cache->Next;
@@ -1190,6 +1192,7 @@ ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_
 			Next = (ml_stringbuffer_node_t *)GC_malloc_explicitly_typed(sizeof(ml_stringbuffer_node_t), StringBufferDesc);
 			printf("Allocating stringbuffer: %d in total\n", ++NumStringBuffers);
 		}
+		pthread_mutex_unlock(CacheMutex);
 		Node = Slot[0] = Next;
 		Slot = &Node->Next;
 		Buffer->Space = ML_STRINGBUFFER_NODE_SIZE;
@@ -1224,9 +1227,11 @@ char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer) {
 		memcpy(P, Node->Chars, ML_STRINGBUFFER_NODE_SIZE - Buffer->Space);
 		P += ML_STRINGBUFFER_NODE_SIZE - Buffer->Space;
 		*P++ = 0;
+		pthread_mutex_lock(CacheMutex);
 		ml_stringbuffer_node_t **Slot = &Cache;
 		while (Slot[0]) Slot = &Slot[0]->Next;
 		Slot[0] = Buffer->Nodes;
+		pthread_mutex_unlock(CacheMutex);
 		Buffer->Nodes = 0;
 		Buffer->Length = Buffer->Space = 0;
 	}
