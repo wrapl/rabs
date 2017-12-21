@@ -61,13 +61,12 @@ static char *unsolve0(const vmount_t *Mount, const char *Path) {
 
 char *vfs_unsolve(const vmount_t *Mount, const char *Path) {
 	while (Mount) {
-		printf("\tMount %s -> %s\n", Mount->Target, Mount->Path);
 		const char *Suffix = match_prefix(Path, Mount->Target);
 		if (Suffix) Path = concat(Mount->Path, Suffix, 0);
 		Mount = Mount->Previous;
 	}
 	if (Path == Path) Path = concat(Path, 0);
-	return Path;
+	return (char *)Path;
 }
 
 void vfs_init() {

@@ -334,8 +334,10 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target;
 	if (Path[0] != '/') {
 		Path = concat(CurrentContext->Path, "/", Path, 0) + 1;
+		Path = vfs_unsolve(CurrentContext->Mounts, Path);
 		Target = target_file_check(Path, 0);
 	} else {
+		Path = vfs_unsolve(CurrentContext->Mounts, Path);
 		const char *Relative = match_prefix(Path, RootPath);
 		if (Relative) {
 			Target = target_file_check(Relative + 1, 0);
@@ -821,12 +823,12 @@ int RunningThreads = 1, LastThread = 0;
 
 static void *target_thread_fn(void *Arg) {
 	int Index = (int)Arg;
-	printf("[%d]: Starting build thread\n", Index);
+	printf("Starting build thread #%d\n", Index);
 	pthread_mutex_lock(GlobalLock);
 	++RunningThreads;
 	for (;;) {
 		while (!BuildQueue) {
-			printf("[%d]: No target in build queue, %d threads running\n", Index, RunningThreads);
+			//printf("[%d]: No target in build queue, %d threads running\n", Index, RunningThreads);
 			if (--RunningThreads == 0) {
 				pthread_cond_signal(TargetAvailable);
 				pthread_mutex_unlock(GlobalLock);
