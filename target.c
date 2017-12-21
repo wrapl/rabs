@@ -30,13 +30,15 @@ typedef struct target_symb_t target_symb_t;
 
 extern const char *RootPath;
 static stringmap_t TargetCache[1] = {STRINGMAP_INIT};
-static int BuiltTargets = 0, NumTargets = 0;
+static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 
 pthread_mutex_t GlobalLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
 
 static ml_value_t *SHA256Method;
 static ml_value_t *MissingMethod;
+static ml_value_t *StringMethod;
+static ml_value_t *AppendMethod;
 
 static ml_type_t *TargetT;
 
@@ -44,6 +46,9 @@ __thread target_t *CurrentTarget = 0;
 __thread stringmap_t *CurrentDetectedDepends = 0;
 
 static target_t *BuildQueue = 0;
+static int SpareThreads = 0;
+
+static void target_wait(target_t *Target);
 
 void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]);
 
@@ -89,6 +94,7 @@ int depends_updated_fn(const char *Key, target_t *Target, target_t *Depend) {
 }
 
 static void target_do_build(int ThreadIndex, target_t *Target) {
+	//printf("\e[32m[%d] Building %s (%d targets, %d bytes)\e[0m\n", ThreadIndex, Target->Id, NumTargets, GC_get_heap_size());
 	int8_t Previous[SHA256_BLOCK_SIZE];
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
@@ -111,7 +117,8 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 		cache_last_check_set(Target->Id);
 	}
 	//GC_gcollect();
-	printf("\e[32m[%d] Built %s @ %d (%d targets, %d bytes)\e[0m\n", ThreadIndex, Target->Id, LastUpdated, NumTargets, GC_get_heap_size());
+	++BuiltTargets;
+	printf("\e[35m%d / %d\e[0m #%d Built \e[32m%s\e[0m at version %d\n", BuiltTargets, QueuedTargets, ThreadIndex, Target->Id, Target->LastUpdated);
 	stringmap_foreach(Target->Targets, Target, (void *)depends_updated_fn);
 	memset(Target->Depends, 0, sizeof(Target->Depends));
 	memset(Target->Targets, 0, sizeof(Target->Targets));
@@ -125,8 +132,8 @@ void target_update(target_t *Target) {
 	}
 	if (Target->LastUpdated == STATE_UNCHECKED) {
 		Target->LastUpdated = STATE_CHECKING;
-		++BuiltTargets;
-		//printf("\e[32m[%d/%d] \e[33mtarget_update(%s)\e[0m\n", BuiltTargets, TargetCache->items, Target->Id);
+		++QueuedTargets;
+		//printf("Added new target to queue: %s\n", Target->Id);
 		stringmap_foreach(Target->Depends, Target, (void *)depends_update_fn);
 		int8_t Previous[SHA256_BLOCK_SIZE];
 		int LastUpdated, LastChecked;
@@ -155,6 +162,7 @@ void target_update(target_t *Target) {
 			}
 		}
 		Target->LastUpdated = STATE_CHECKED;
+		//printf("\e[32m[%d/%d] \e[33mtarget_update(%s) -> waiting on %d\e[0m\n", BuiltTargets, TargetCache->Size, Target->Id, Target->WaitCount);
 		if (Target->WaitCount == 0) target_queue_build(Target);
 	}
 }
@@ -231,7 +239,6 @@ static ml_type_t *FileTargetT;
 static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_file_t *Target = (target_file_t *)Args[1];
-	//target_depends_auto((target_t *)Target);
 	if (Target->Absolute) {
 		ml_stringbuffer_add(Buffer, Target->Path, strlen(Target->Path));
 	} else {
@@ -243,7 +250,6 @@ static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Arg
 
 static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
-	//target_depends_auto((target_t *)Target);
 	if (Target->Absolute) {
 		return ml_string(Target->Path, -1);
 	} else {
@@ -467,17 +473,17 @@ struct target_expr_t {
 static ml_type_t *ExprTargetT;
 
 static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Args) {
-	ml_value_t *AppendMethod = ml_method("append");
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_expr_t *Target = (target_expr_t *)Args[1];
+	target_wait((target_t *)Target);
 	target_depends_auto((target_t *)Target);
 	ml_value_t *Value = cache_expr_get(Target->Id);
 	return ml_inline(AppendMethod, 2, Buffer, Value);
 }
 
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
-	ml_value_t *StringMethod = ml_method("string");
 	target_expr_t *Target = (target_expr_t *)Args[0];
+	target_wait((target_t *)Target);
 	target_depends_auto((target_t *)Target);
 	ml_value_t *Value = cache_expr_get(Target->Id);
 	return ml_inline(StringMethod, 1, Value);
@@ -803,13 +809,21 @@ void target_list() {
 	stringmap_foreach(TargetCache, 0, (void *)target_print_fn);
 }
 
-static pthread_t *Threads;
-int RunningThreads;
+typedef struct build_thread_t build_thread_t;
+
+struct build_thread_t {
+	build_thread_t *Next;
+	pthread_t Handle;
+};
+
+static build_thread_t *BuildThreads = 0;
+int RunningThreads = 1, LastThread = 0;
 
 static void *target_thread_fn(void *Arg) {
 	int Index = (int)Arg;
 	printf("[%d]: Starting build thread\n", Index);
 	pthread_mutex_lock(GlobalLock);
+	++RunningThreads;
 	for (;;) {
 		while (!BuildQueue) {
 			printf("[%d]: No target in build queue, %d threads running\n", Index, RunningThreads);
@@ -825,6 +839,13 @@ static void *target_thread_fn(void *Arg) {
 		BuildQueue = Target->Next;
 		Target->Next = 0;
 		target_do_build(Index, Target);
+		if (SpareThreads) {
+			--RunningThreads;
+			--SpareThreads;
+			pthread_cond_signal(TargetAvailable);
+			pthread_mutex_unlock(GlobalLock);
+			return 0;
+		}
 	}
 	return 0;
 }
@@ -833,16 +854,40 @@ void target_threads_start(int NumThreads) {
 	pthread_mutex_init(GlobalLock, 0);
 	pthread_mutex_lock(GlobalLock);
 	pthread_cond_init(TargetAvailable, 0);
-	RunningThreads = NumThreads + 1;
-	Threads = anew(pthread_t, NumThreads);
-	for (int I = 0; I < NumThreads; ++I) GC_pthread_create(Threads + I, 0, target_thread_fn, (void *)I);
+	for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
+		build_thread_t *BuildThread = new(build_thread_t);
+		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, (void *)LastThread);
+		BuildThread->Next = BuildThreads;
+		BuildThreads = BuildThread;
+	}
+}
+
+static void target_wait(target_t *Target) {
+	if (Target == CurrentTarget) return;
+	if (!Target->Build) return;
+	if (Target->LastUpdated == STATE_UNCHECKED) target_update((target_t *)Target);
+	if (Target->LastUpdated == STATE_CHECKED) {
+		//printf("target_wait(%s)\n", Target->Id);
+		build_thread_t *BuildThread = new(build_thread_t);
+		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, (void *)(LastThread++));
+		build_thread_t **Slot = &BuildThreads;
+		while (Slot[0]) Slot = &Slot[0]->Next;
+		Slot[0] = BuildThread;
+		pthread_cond_broadcast(TargetAvailable);
+		while (Target->LastUpdated == STATE_CHECKED) pthread_cond_wait(TargetAvailable, GlobalLock);
+		++SpareThreads;
+		//printf("target_waited(%s)\n", Target->Id);
+	}
 }
 
 void target_threads_wait(int NumThreads) {
 	--RunningThreads;
 	pthread_cond_broadcast(TargetAvailable);
 	pthread_mutex_unlock(GlobalLock);
-	for (int I = 0; I < NumThreads; ++I) GC_pthread_join(Threads[I], 0);
+	while (BuildThreads) {
+		GC_pthread_join(BuildThreads->Handle, 0);
+		BuildThreads = BuildThreads->Next;
+	}
 }
 
 void target_init() {
@@ -857,6 +902,8 @@ void target_init() {
 	SymbTargetT->assign = symb_target_assign;
 	SHA256Method = ml_method("sha256");
 	MissingMethod = ml_method("missing");
+	StringMethod = ml_method("string");
+	AppendMethod = ml_method("append");
 	ml_method_by_name("append", 0, target_file_stringify, StringBufferT, FileTargetT, 0);
 	ml_method_by_name("append", 0, target_expr_stringify, StringBufferT, ExprTargetT, 0);
 	ml_method_by_name("[]", 0, target_depend, TargetT, AnyT, 0);

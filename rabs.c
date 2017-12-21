@@ -18,6 +18,7 @@
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
+static int EchoCommands = 0;
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
 
@@ -146,7 +147,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
 	const char *Command = ml_stringbuffer_get(Buffer);
-	printf("\e[34m%s: %s\e[0m\n", CurrentContext->FullPath, Command);
+	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentContext->FullPath, Command);
 	clock_t Start = clock();
 	chdir(CurrentContext->FullPath);
 	FILE *File = popen(Command, "r");
@@ -160,7 +161,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	int Result = pclose(File);
 	clock_t End = clock();
 	pthread_mutex_lock(GlobalLock);
-	printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
+	if (EchoCommands) printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Result)) {
 		if (WEXITSTATUS(Result) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
@@ -176,7 +177,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
 	const char *Command = ml_stringbuffer_get(Buffer);
-	printf("\e[34m%s\e[0m\n", Command);
+	if (EchoCommands) printf("\e[34m%s\e[0m\n", Command);
 	clock_t Start = clock();
 	chdir(CurrentContext->FullPath);
 	FILE *File = popen(Command, "r");
@@ -192,7 +193,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	int Result = pclose(File);
 	clock_t End = clock();
 	pthread_mutex_lock(GlobalLock);
-	printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
+	if (EchoCommands) printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Result)) {
 		if (WEXITSTATUS(Result) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
@@ -325,6 +326,10 @@ int main(int Argc, const char **Argv) {
 				}
 				break;
 			};
+			case 'c': {
+				EchoCommands = 1;
+				break;
+			}
 			case 'q': {
 				QueryOnly = 1;
 				break;

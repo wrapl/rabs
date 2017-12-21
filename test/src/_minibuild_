@@ -12,10 +12,4 @@ var TestCflags := expr("TestCflags")[Config] => fun() shell(Config)[1, -1]
 
 CFLAGS := old + [TestCflags]
 
-file("test.o")[TestCflags]
-file("test2.o")[TestCflags]
-
-file("test.c"):scan("INCLUDES")[TestCflags]
-file("test2.c"):scan("INCLUDES")[TestCflags]
-
 c_program(file("test"), [file("test.o"), file("test2.o")])

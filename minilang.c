@@ -1190,7 +1190,7 @@ ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_
 			Next->Next = 0;
 		} else {
 			Next = (ml_stringbuffer_node_t *)GC_malloc_explicitly_typed(sizeof(ml_stringbuffer_node_t), StringBufferDesc);
-			printf("Allocating stringbuffer: %d in total\n", ++NumStringBuffers);
+			//printf("Allocating stringbuffer: %d in total\n", ++NumStringBuffers);
 		}
 		pthread_mutex_unlock(CacheMutex);
 		Node = Slot[0] = Next;

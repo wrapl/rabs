@@ -22,7 +22,7 @@ static sqlite3_stmt *ScanDeleteStatement;
 static sqlite3_stmt *ScanInsertStatement;
 static sqlite3_stmt *ExprGetStatement;
 static sqlite3_stmt *ExprSetStatement;
-int CurrentVersion = 1;
+int CurrentVersion = 0;
 
 static int version_callback(void *Data, int NumCols, char **Values, char **Names) {
 	CurrentVersion = atoi(Values[0] ?: "0");
