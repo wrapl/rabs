@@ -16,7 +16,7 @@ context_t *context_find(const char *Path) {
 }
 
 context_t *context_push(const char *Path) {
-	context_t *Context = (context_t *)GC_malloc(sizeof(context_t));
+	context_t *Context = new(context_t);
 	Context->Parent = CurrentContext;
 	Context->Path = Path;
 	Context->Name = Path;
@@ -30,14 +30,14 @@ context_t *context_push(const char *Path) {
 	Context->Locals[0] = STRINGMAP_INIT;
 	target_t *Default = Context->Default = (target_t *)target_meta_new(0, 1, &DefaultString);
 	stringmap_insert(Context->Locals, "DEFAULT", Default);
-	target_t *BuildDir = target_file_check(vfs_resolve(Context->Mounts, Path), 0);
+	target_t *BuildDir = target_file_check(Path, 0);
 	stringmap_insert(Context->Locals, "BUILDDIR", BuildDir);
 	stringmap_insert(ContextCache, Context->Name, Context);
 	return Context;
 }
 
 context_t *context_scope(const char *Name) {
-	context_t *Context = (context_t *)GC_malloc(sizeof(context_t));
+	context_t *Context = new(context_t);
 	Context->Parent = CurrentContext;
 	Context->Path = CurrentContext->Path;
 	Context->Name = concat(CurrentContext->Name, ":", Name, 0);

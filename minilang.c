@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include "minilang.h"
 #include "sha256.h"
 #include <stdio.h>
@@ -7,6 +5,7 @@
 #include <stdarg.h>
 #include <string.h>
 #include <gc.h>
+#include <gc/gc_typed.h>
 #include <setjmp.h>
 #include <ctype.h>
 #include <regex.h>
@@ -14,10 +13,6 @@
 #include "stringmap.h"
 
 #define MAX_TRACE 16
-#define new(T) ((T *)GC_MALLOC(sizeof(T)))
-#define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
-#define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
-#define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
 
 typedef struct ml_reference_t ml_reference_t;
 typedef struct ml_integer_t ml_integer_t;
@@ -157,10 +152,11 @@ ml_type_t FunctionT[1] = {{
 }};
 
 ml_value_t *ml_function(void *Data, ml_callback_t Callback) {
-	ml_function_t *Function = new(ml_function_t);
+	ml_function_t *Function = fnew(ml_function_t);
 	Function->Type = FunctionT;
 	Function->Data = Data;
 	Function->Callback = Callback;
+	GC_end_stubborn_change(Function);
 	return (ml_value_t *)Function;
 }
 
@@ -196,9 +192,10 @@ ml_type_t IntegerT[1] = {{
 }};
 
 ml_value_t *ml_integer(long Value) {
-	ml_integer_t *Integer = new(ml_integer_t);
+	ml_integer_t *Integer = fnew(ml_integer_t);
 	Integer->Type = IntegerT;
 	Integer->Value = Value;
+	GC_end_stubborn_change(Integer);
 	return (ml_value_t *)Integer;
 }
 
@@ -226,9 +223,10 @@ ml_type_t RealT[1] = {{
 }};
 
 ml_value_t *ml_real(double Value) {
-	ml_real_t *Real = new(ml_real_t);
+	ml_real_t *Real = fnew(ml_real_t);
 	Real->Type = RealT;
 	Real->Value = Value;
+	GC_end_stubborn_change(Real);
 	return (ml_value_t *)Real;
 }
 
@@ -369,10 +367,11 @@ ml_type_t StringT[1] = {{
 }};
 
 ml_value_t *ml_string(const char *Value, int Length) {
-	ml_string_t *String = new(ml_string_t);
+	ml_string_t *String = fnew(ml_string_t);
 	String->Type = StringT;
 	String->Value = Value;
 	String->Length = Length >= 0 ? Length : strlen(Value);
+	GC_end_stubborn_change(String);
 	return (ml_value_t *)String;
 }
 
@@ -383,10 +382,11 @@ int ml_is_string(ml_value_t *Value) {
 static ml_value_t *ml_string_new(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) ml_inline(AppendMethod, 2, (ml_value_t *)Buffer, Args[I]);
-	ml_string_t *String = new(ml_string_t);
+	ml_string_t *String = fnew(ml_string_t);
 	String->Type = StringT;
 	String->Length = Buffer->Length;
 	String->Value = ml_stringbuffer_get(Buffer);
+	GC_end_stubborn_change(String);
 	return (ml_value_t *)String;
 }
 
@@ -1160,14 +1160,15 @@ int ml_error_trace(ml_value_t *Value, int Level, const char **Source, int *Line)
 	return 1;
 }
 
-#define ML_STRINGBUFFER_NODE_SIZE 120
-
 struct ml_stringbuffer_node_t {
 	ml_stringbuffer_node_t *Next;
 	char Chars[ML_STRINGBUFFER_NODE_SIZE];
 };
 
 static ml_stringbuffer_node_t *Cache = 0;
+static int NumStringBuffers = 0;
+static GC_descr StringBufferDesc = 0;
+static pthread_mutex_t CacheMutex[1] = {PTHREAD_MUTEX_DEFAULT};
 
 ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_t Length) {
 	size_t Remaining = Length;
@@ -1182,13 +1183,16 @@ ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_
 		String += Buffer->Space;
 		Remaining -= Buffer->Space;
 		ml_stringbuffer_node_t *Next;
+		pthread_mutex_lock(CacheMutex);
 		if (Cache) {
 			Next = Cache;
 			Cache = Cache->Next;
 			Next->Next = 0;
 		} else {
-			Next = new(ml_stringbuffer_node_t);
+			Next = (ml_stringbuffer_node_t *)GC_malloc_explicitly_typed(sizeof(ml_stringbuffer_node_t), StringBufferDesc);
+			//printf("Allocating stringbuffer: %d in total\n", ++NumStringBuffers);
 		}
+		pthread_mutex_unlock(CacheMutex);
 		Node = Slot[0] = Next;
 		Slot = &Node->Next;
 		Buffer->Space = ML_STRINGBUFFER_NODE_SIZE;
@@ -1209,7 +1213,7 @@ ssize_t ml_stringbuffer_addf(ml_stringbuffer_t *Buffer, const char *Format, ...)
 }
 
 char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer) {
-	char *String = GC_malloc_atomic(Buffer->Length + 1);
+	char *String = snew(Buffer->Length + 1);
 	if (Buffer->Length == 0) {
 		String[0] = 0;
 	} else {
@@ -1223,9 +1227,11 @@ char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer) {
 		memcpy(P, Node->Chars, ML_STRINGBUFFER_NODE_SIZE - Buffer->Space);
 		P += ML_STRINGBUFFER_NODE_SIZE - Buffer->Space;
 		*P++ = 0;
+		pthread_mutex_lock(CacheMutex);
 		ml_stringbuffer_node_t **Slot = &Cache;
 		while (Slot[0]) Slot = &Slot[0]->Next;
 		Slot[0] = Buffer->Nodes;
+		pthread_mutex_unlock(CacheMutex);
 		Buffer->Nodes = 0;
 		Buffer->Length = Buffer->Space = 0;
 	}
@@ -1837,6 +1843,9 @@ void ml_init() {
 	ml_method_by_value(AppendMethod, 0, stringify_method, StringBufferT, MethodT, 0);
 	ml_method_by_value(AppendMethod, 0, stringify_list, StringBufferT, ListT, 0);
 	ml_method_by_value(AppendMethod, 0, stringify_tree, StringBufferT, TreeT, 0);
+
+	GC_word StringBufferLayout[] = {1};
+	StringBufferDesc = GC_make_descriptor(StringBufferLayout, 1);
 }
 
 ml_inst_t *mli_push_run(ml_inst_t *Inst, ml_frame_t *Frame) {
@@ -2119,7 +2128,7 @@ static inline mlc_compiled_t ml_compile(mlc_function_t *Function, mlc_expr_t *Ex
 		return Compiled;
 	} else {
 		ML_COMPILE_HASH
-		ml_inst_t *NilInst = ml_inst_new(1, (ml_source_t){"<internal>", 0}, mli_push_run);
+		ml_inst_t *NilInst = ml_inst_new(2, (ml_source_t){"<internal>", 0}, mli_push_run);
 		NilInst->Params[1].Value = Nil;
 		++Function->Top;
 		return (mlc_compiled_t){NilInst, NilInst};
@@ -2281,7 +2290,7 @@ static mlc_compiled_t ml_loop_expr_compile(mlc_function_t *Function, mlc_parent_
 
 static mlc_compiled_t ml_next_expr_compile(mlc_function_t *Function, mlc_expr_t *Expr, SHA256_CTX *HashContext) {
 	ML_COMPILE_HASH
-	ml_inst_t *NilInst = ml_inst_new(1, (ml_source_t){"<internal>", 0}, mli_push_run);
+	ml_inst_t *NilInst = ml_inst_new(2, (ml_source_t){"<internal>", 0}, mli_push_run);
 	NilInst->Params[1].Value = Nil;
 	if (Function->Top > Function->Loop->NextTop) {
 		ML_COMPILE_HASH
@@ -2585,7 +2594,7 @@ static mlc_compiled_t ml_const_call_expr_compile(mlc_function_t *Function, mlc_c
 	long ValueHash = ml_hash(Expr->Value);
 	sha256_update(HashContext, (void *)&ValueHash, sizeof(ValueHash));
 	ML_COMPILE_HASH
-	ml_inst_t *CallInst = ml_inst_new(2, Expr->Source, mli_const_call_run);
+	ml_inst_t *CallInst = ml_inst_new(3, Expr->Source, mli_const_call_run);
 	CallInst->Params[2].Value = Expr->Value;
 	if (Expr->Child) {
 		int NumArgs = 1;
@@ -3499,7 +3508,9 @@ static mlc_expr_t *ml_accept_command(mlc_scanner_t *Scanner, stringmap_t *Vars) 
 	BlockExpr->compile = ml_block_expr_compile;
 	BlockExpr->Source = Scanner->Source;
 	mlc_expr_t **ExprSlot = &BlockExpr->Child;
-	if (ml_parse(Scanner, MLT_VAR)) {
+	if (ml_parse(Scanner, MLT_EOI)) {
+		return (mlc_expr_t *)-1;
+	} else if (ml_parse(Scanner, MLT_VAR)) {
 		do {
 			ml_accept(Scanner, MLT_IDENT);
 			const char *Ident = Scanner->Ident;
@@ -3523,6 +3534,7 @@ static mlc_expr_t *ml_accept_command(mlc_scanner_t *Scanner, stringmap_t *Vars) 
 		mlc_expr_t *Expr = ExprSlot[0] = ml_accept_expression(Scanner, EXPR_DEFAULT);
 		ExprSlot = &Expr->Next;
 	}
+	ml_parse(Scanner, MLT_SEMICOLON);
 	return (mlc_expr_t *)BlockExpr;
 }
 
@@ -3542,7 +3554,7 @@ ml_type_t *ml_class(ml_type_t *Parent, const char *Name) {
 static const char *ml_file_read(void *Data) {
 	FILE *File = (FILE *)Data;
 	char *Line = 0;
-	size_t Length;
+	size_t Length = 0;
 	if (getline(&Line, &Length, File) < 0) return 0;
 	return Line;
 }
@@ -3554,6 +3566,7 @@ ml_value_t *ml_load(ml_getter_t GlobalGet, void *Globals, const char *FileName) 
 	if (setjmp(Scanner->OnError)) return Scanner->Error;
 	mlc_expr_t *Expr = ml_accept_block(Scanner);
 	ml_accept(Scanner, MLT_EOI);
+	fclose(File);
 	mlc_function_t Function[1] = {{GlobalGet, Globals, 0,}};
 	SHA256_CTX HashContext[1];
 	sha256_init(HashContext);
@@ -3605,9 +3618,12 @@ void ml_console(ml_getter_t GlobalGet, void *Globals) {
 		const char *Source;
 		int Line;
 		for (int I = 0; ml_error_trace(Scanner->Error, I, &Source, &Line); ++I) printf("\t%s:%d\n", Source, Line);
+		Scanner->Token = MLT_NONE;
+		Scanner->Next = "";
 	}
-	while (!ml_parse(Scanner, MLT_EOI)) {
+	for (;;) {
 		mlc_expr_t *Expr = ml_accept_command(Scanner, Console->Globals);
+		if (Expr == (mlc_expr_t *)-1) return;
 		mlc_compiled_t Compiled = ml_compile(Function, Expr, HashContext);
 		ml_connect(Compiled.Exits, 0);
 		ml_closure_t *Closure = new(ml_closure_t);

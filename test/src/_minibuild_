@@ -1,1 +1,15 @@
-c_program(file("test"), [file("test.o")])
+print("Here!\n")
+
+Config := file("config") => fun(Target) do
+	var File := open('{Target}', "w")
+	File:write("#!/bin/sh\n")
+	File:write("echo \"-g -O1\"\n")
+	File:close()
+	execute("chmod +x", Target)
+end
+
+var TestCflags := expr("TestCflags")[Config] => fun() shell(Config)[1, -1]
+
+CFLAGS := old + [TestCflags]
+
+c_program(file("test"), [file("test.o"), file("test2.o")])

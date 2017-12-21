@@ -98,6 +98,8 @@ struct ml_function_t {
 	void *Data;
 };
 
+#define ML_STRINGBUFFER_NODE_SIZE 248
+
 typedef struct ml_stringbuffer_t ml_stringbuffer_t;
 typedef struct ml_stringbuffer_node_t ml_stringbuffer_node_t;
 
@@ -115,5 +117,11 @@ ssize_t ml_stringbuffer_add(ml_stringbuffer_t *Buffer, const char *String, size_
 ssize_t ml_stringbuffer_addf(ml_stringbuffer_t *Buffer, const char *Format, ...);
 char *ml_stringbuffer_get(ml_stringbuffer_t *Buffer);
 int ml_stringbuffer_foreach(ml_stringbuffer_t *Buffer, void *Data, int (*callback)(const char *, size_t, void *));
+
+#define new(T) ((T *)GC_MALLOC(sizeof(T)))
+#define anew(T, N) ((T *)GC_MALLOC((N) * sizeof(T)))
+#define snew(N) ((char *)GC_MALLOC_ATOMIC(N))
+#define xnew(T, N, U) ((T *)GC_MALLOC(sizeof(T) + (N) * sizeof(U)))
+#define fnew(T) ((T *)GC_MALLOC_STUBBORN(sizeof(T)))
 
 #endif

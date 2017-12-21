@@ -12,15 +12,13 @@ typedef struct target_t target_t;
 
 #define TARGET_FIELDS \
 	const ml_type_t *Type; \
-	pthread_mutex_t Lock[1]; \
 	target_t *Next; \
 	ml_value_t *Build; \
-	int WaitCount, DependsLastUpdated; \
-	int LastUpdated; \
 	struct context_t *BuildContext; \
 	const char *Id; \
 	stringmap_t Depends[1]; \
 	stringmap_t Targets[1]; \
+	int WaitCount, DependsLastUpdated, LastUpdated; \
 	int8_t Hash[SHA256_BLOCK_SIZE];
 
 struct target_t {
@@ -32,6 +30,7 @@ void target_init();
 ml_value_t *target_dir_new(void *Data, int Count, ml_value_t **Args);
 ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args);
 ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args);
+ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args);
 
 target_t *target_symb_new(const char *Name);
 
