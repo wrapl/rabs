@@ -1,0 +1,3 @@
+[submodule "minilang"]
+	path = minilang
+	url = git@github.com:wrapl/minilang.git
