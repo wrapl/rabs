@@ -3,7 +3,6 @@
 #include "util.h"
 #include "context.h"
 #include "cache.h"
-#include "stringbuffer.h"
 #include <string.h>
 #include <stdlib.h>
 #include <sys/types.h>
