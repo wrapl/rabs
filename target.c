@@ -821,8 +821,8 @@ static build_thread_t *BuildThreads = 0;
 int RunningThreads = 1, LastThread = 0;
 
 static void *target_thread_fn(void *Arg) {
-	int Index = (int)Arg;
-	printf("Starting build thread #%d\n", Index);
+	int Index = (int)(ptrdiff_t)Arg;
+	printf("Starting build thread #%d\n", (int)Index);
 	pthread_mutex_lock(GlobalLock);
 	++RunningThreads;
 	for (;;) {
@@ -857,7 +857,7 @@ void target_threads_start(int NumThreads) {
 	pthread_cond_init(TargetAvailable, 0);
 	for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
 		build_thread_t *BuildThread = new(build_thread_t);
-		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, (void *)LastThread);
+		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, (void *)(ptrdiff_t)LastThread);
 		BuildThread->Next = BuildThreads;
 		BuildThreads = BuildThread;
 	}
@@ -870,7 +870,7 @@ static void target_wait(target_t *Target) {
 	if (Target->LastUpdated == STATE_CHECKED) {
 		//printf("target_wait(%s)\n", Target->Id);
 		build_thread_t *BuildThread = new(build_thread_t);
-		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, (void *)(LastThread++));
+		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, (void *)(ptrdiff_t)(LastThread++));
 		build_thread_t **Slot = &BuildThreads;
 		while (Slot[0]) Slot = &Slot[0]->Next;
 		Slot[0] = BuildThread;
