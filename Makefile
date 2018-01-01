@@ -15,7 +15,7 @@ sources = \
 	util.c \
 	vfs.c
 
-CFLAGS += -std=gnu99 -I. -Igc/include -g -pthread -DGC_THREADS -D_GNU_SOURCE -DGC_DEBUG
+CFLAGS += -std=gnu99 -I. -Iminilang -g -pthread -DGC_THREADS -D_GNU_SOURCE
 LDFLAGS += -lm -ldl -lsqlite3 -g -lgc
 
 minibuild: Makefile $(sources) *.h
