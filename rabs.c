@@ -21,6 +21,7 @@ ml_value_t *AppendMethod;
 static int EchoCommands = 0;
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
+static stringmap_t Defines[1] = {STRINGMAP_INIT};
 
 static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Name);
@@ -30,7 +31,7 @@ static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 		target_update(Target);
 		return Value;
 	} else {
-		return stringmap_search(Globals, Name) ?: Nil;
+		return stringmap_search(Globals, Name) ?: ml_error("NameError", "%s undefined", Name);
 	}
 }
 
@@ -275,6 +276,11 @@ static ml_value_t *ml_setenv(void *Data, int Count, ml_value_t **Args) {
 	return Nil;
 }
 
+static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
+	const char *Key = ml_string_value(Args[0]);
+	return stringmap_search(Defines, Key) ?: Nil;
+}
+
 static void rabs_dump_func(void *Ptr, int Data) {
 	void *Base = GC_base(Ptr);
 	printf("%d @ %s:%d\n", GC_size(Ptr), ((const char **)Base)[0], ((int *)Base)[1]);
@@ -307,6 +313,30 @@ int main(int Argc, const char **Argv) {
 	stringmap_insert(Globals, "open", ml_function(0, ml_file_open));
 	stringmap_insert(Globals, "getenv", ml_function(0, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(0, ml_setenv));
+	stringmap_insert(Globals, "defined", ml_function(0, defined));
+
+	vfs_init();
+	target_init();
+	context_init();
+	ml_file_init();
+
+#ifdef LINUX
+	const char *Path = get_current_dir_name();
+#else
+	char *Path = snew(1024);
+	getcwd(Path, 1024);
+#endif
+	RootPath = find_root(Path);
+	if (!RootPath) {
+		puts("\e[31mError: could not find project root\e[0m");
+		exit(1);
+	}
+
+	context_push("");
+	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
+
+	printf("RootPath = %s, Path = %s\n", RootPath, Path);
+	cache_open(RootPath);
 
 	const char *TargetName = 0;
 	int QueryOnly = 0;
@@ -320,9 +350,9 @@ int main(int Argc, const char **Argv) {
 				char *Equals = strchr(Define, '=');
 				if (Equals) {
 					*Equals = 0;
-					stringmap_insert(Globals, Define, ml_string(Equals + 1, -1));
+					stringmap_insert(Defines, Define, ml_string(Equals + 1, -1));
 				} else {
-					stringmap_insert(Globals, Define, ml_integer(1));
+					stringmap_insert(Defines, Define, ml_integer(1));
 				}
 				break;
 			};
@@ -357,48 +387,29 @@ int main(int Argc, const char **Argv) {
 	};
 	target_threads_start(NumThreads);
 
-	vfs_init();
-	target_init();
-	context_init();
-	ml_file_init();
-#ifdef LINUX
-	const char *Path = get_current_dir_name();
-#else
-	char *Path = snew(1024);
-	getcwd(Path, 1024);
-#endif
-	RootPath = find_root(Path);
-	if (!RootPath) {
-		puts("\e[31mError: could not find project root\e[0m");
+	load_file(concat(RootPath, SystemName, 0));
+	target_t *Target;
+	if (TargetName) {
+		Target = target_get(TargetName);
+		if (!Target) {
+			printf("\e[31mError: invalid target %s\e[0m", TargetName);
+			exit(1);
+		}
 	} else {
-		printf("RootPath = %s, Path = %s\n", RootPath, Path);
-		cache_open(RootPath);
-		context_push("");
-		context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
-		load_file(concat(RootPath, SystemName, 0));
-		target_t *Target;
-		if (TargetName) {
-			Target = target_get(TargetName);
-			if (!Target) {
-				printf("\e[31mError: invalid target %s\e[0m", TargetName);
-				exit(1);
-			}
-		} else {
-			context_t *Context = context_find(match_prefix(Path, RootPath));
-			if (!Context) {
-				printf("\e[31mError: current directory is not in project\e[0m");
-				exit(1);
-			}
-			Target = Context->Default;
+		context_t *Context = context_find(match_prefix(Path, RootPath));
+		if (!Context) {
+			printf("\e[31mError: current directory is not in project\e[0m");
+			exit(1);
 		}
-		if (ListTargets) {
-			target_list();
-		} else if (QueryOnly) {
-			target_query(Target);
-		} else {
-			target_update(Target);
-			target_threads_wait(NumThreads);
-		}
+		Target = Context->Default;
+	}
+	if (ListTargets) {
+		target_list();
+	} else if (QueryOnly) {
+		target_query(Target);
+	} else {
+		target_update(Target);
+		target_threads_wait(NumThreads);
 	}
 	return 0;
 }

@@ -660,7 +660,7 @@ static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 
 static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
 	context_t *Context = context_find(Target->Context);
-	ml_value_t *Value = context_symb_get(Context, Target->Name);
+	ml_value_t *Value = context_symb_get(Context, Target->Name) ?: Nil;
 	target_value_hash(Value, Target->Hash);
 	return 0;
 }
@@ -694,7 +694,7 @@ static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx)
 
 void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
 	if (Value->Type == NilT) {
-		memset(Hash, 0, SHA256_BLOCK_SIZE);
+		memset(Hash, -1, SHA256_BLOCK_SIZE);
 	} else if (Value->Type == IntegerT) {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
 		*(long *)Hash = ml_integer_value(Value);
