@@ -44,6 +44,26 @@ char *vfs_resolve(const vmount_t *Mount, const char *Path) {
 	return resolve0(Mount, Path) ?: concat(Path, 0);
 }
 
+static int vfs_resolve_foreach0(const vmount_t *Mount, const char *Path, void *Data, int (*callback)(void *Data, const char *Path)) {
+	while (Mount) {
+		const char *Suffix = match_prefix(Path, Mount->Path);
+		if (Suffix) {
+			char *Resolved = concat(Mount->Target, Suffix, 0);
+			struct stat Stat[1];
+			if (stat(Resolved, Stat) == 0) if (callback(Data, Resolved)) return 1;
+			if (vfs_resolve_foreach0(Mount->Previous, Resolved, Data, callback)) return 1;
+		}
+		Mount = Mount->Previous;
+	}
+	return 0;
+}
+
+int vfs_resolve_foreach(const vmount_t *Mount, const char *Path, void *Data, int (*callback)(void *Data, const char *Path)) {
+	struct stat Stat[1];
+	if (stat(Path, Stat) == 0) if (callback(Data, concat(Path, 0))) return 1;
+	return vfs_resolve_foreach0(Mount, Path, Data, callback);
+}
+
 static char *unsolve0(const vmount_t *Mount, const char *Path) {
 	while (Mount) {
 		const char *Suffix = match_prefix(Path, Mount->Target);

@@ -52,21 +52,38 @@ end
 
 ### Built-in Functions
 
-* `vmount(TargetDir, SourceDir)`
-* `subdir(TargetDir)`
-* `file(FileName)`
-* `meta(Name)`
-* `expr(Name)`
-* `include()`
-* `context()`
-* `execute(Command ...)`
-* `shell(Command ...)`
-* `mkdir(File)`
-* `scope(Name, Callback)`
-* `print(Values ...)`
-* `open(File)`
-* `getenv(Key)`
-* `setenv(Key, Value)`
+* [`vmount(TargetDir, SourceDir)`](#vmount)
+* [`subdir(TargetDir)`](#subdir)
+* [`file(FileName)`](#file)
+* [`meta(Name)`](#meta)
+* [`expr(Name)`](#expr)
+* [`include()`](#include)
+* [`context()`](#context)
+* [`execute(Command ...)`](#execute)
+* [`shell(Command ...)`](#shell)
+* [`mkdir(File)`](#mkdir)
+* [`scope(Name, Callback)`](#scope)
+* [`print(Values ...)`](#print)
+* [`open(File)`](#open)
+* [`getenv(Key)`](#getenv)
+* [`setenv(Key, Value)`](#setenv)
+* [`defined(Key)`](#defined)
+
+#### `vmount(TargetDir, SourceDir)`
+
+Virtually mounts / overlays `SourceDir` over `TargetDir` during the build. This means that when a [`File` object](#file) whose path contains `TargetDir` is referenced, the build system will look an existing file in two locations and return whichever exists, or return the unchanged path if neither exists.
+
+More specifically, in order to convert a file object with path _`TargetDir`/path/filename_ to a full file path, the build system will
+
+1.	return _`TargetDir`/path/filename_ if a file exists at this path
+2.	return _`SourceDir`/path/filename_ if a file exists at this path
+3.	return _`TargetDir`/path/filename_
+
+Multiple virtual mounts can be nested, and the build system will try each possible location for an existing file and return that path, returning the unchanged path if the file does not exist in any location.
+
+The typical use for this function is to overlay a source directory over the corresponding build output directory, so that build commands can be run in the output directory but reference source files as if they were in the same directory.
+
+#### `subdir(TargetDir)`
 
 ### Project Layout
 

@@ -13,3 +13,7 @@ var TestCflags := expr("TestCflags")[Config] => fun() shell(Config)[1, -1]
 CFLAGS := old + [TestCflags]
 
 c_program(file("test"), [file("test.o"), file("test2.o")])
+
+for File := file(""):ls do
+	print('Found {File}\n')
+end
