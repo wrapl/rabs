@@ -14,6 +14,6 @@ CFLAGS := old + [TestCflags]
 
 c_program(file("test"), [file("test.o"), file("test2.o")])
 
-for File := file(""):ls do
+for File := file(""):ls(".*\\.c") do
 	print('Found {File}\n')
 end
