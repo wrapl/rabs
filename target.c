@@ -13,6 +13,8 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <regex.h>
+#include <dirent.h>
 
 enum {
 	STATE_UNCHECKED = 0,
@@ -331,7 +333,10 @@ target_t *target_file_check(const char *Path, int Absolute) {
 ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Path = ml_string_value(Args[0]);
 	target_t *Target;
-	if (Path[0] != '/') {
+	if (!Path[0]) {
+		Path = vfs_unsolve(CurrentContext->Mounts, CurrentContext->Path + 1);
+		Target = target_file_check(Path, 0);
+	} else if (Path[0] != '/') {
 		Path = concat(CurrentContext->Path, "/", Path, 0) + 1;
 		Path = vfs_unsolve(CurrentContext->Mounts, Path);
 		Target = target_file_check(Path, 0);
@@ -351,7 +356,7 @@ ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	char *Path;
 	int Absolute;
-	if (Count > 1 && Args[1] != Nil) {
+	if (Count > 1 && Args[1] != Nil && !FileTarget->Absolute) {
 		Path = vfs_resolve(FileTarget->BuildContext->Mounts, concat(RootPath, "/", FileTarget->Path, 0));
 		Absolute = 1;
 	} else {
@@ -363,6 +368,116 @@ ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
 	*Last = 0;
 	target_t *Target = target_file_check(Path, Absolute);
 	return (ml_value_t *)Target;
+}
+
+typedef struct target_file_ls_iter_node_t target_file_ls_iter_node_t;
+
+struct target_file_ls_iter_node_t {
+	target_file_ls_iter_node_t *Next;
+	const char *Path;
+};
+
+typedef struct target_file_ls_iter_t {
+	const ml_type_t *Type;
+	regex_t *Regex;
+	DIR *Dir;
+	target_file_ls_iter_node_t *Node;
+	const char *Path;
+	ml_value_t *File;
+} target_file_ls_iter_t;
+
+static ml_value_t *target_file_ls_iter_deref(ml_value_t *Ref) {
+	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
+	return Iter->File;
+}
+
+static ml_value_t *target_file_ls_iter_next(ml_value_t *Ref) {
+	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
+	while (Iter->Dir) {
+		struct dirent *Entry = readdir(Iter->Dir);
+		while (Entry) {
+			if (!Iter->Regex || !regexec(Iter->Regex, Entry->d_name, 0, 0, 0)) {
+				Iter->File = target_file_check(concat(Iter->Path, "/", Entry->d_name, 0), Iter->Path[0] == '/');
+				return Ref;
+			}
+			Entry = readdir(Iter->Dir);
+		}
+		closedir(Iter->Dir);
+		Iter->Dir = 0;
+		target_file_ls_iter_node_t *Node = Iter->Node;
+		if (Node) {
+			Iter->Node = Node->Next;
+			Iter->Path = Node->Path;
+			Iter->Dir = opendir(Node->Path);
+			if (!Iter->Dir) return ml_error("DirError", "failed to open directory %s", Node->Path);
+		}
+	}
+	return Nil;
+}
+
+static ml_value_t *target_file_ls_iter_key(ml_value_t *Ref) {
+	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
+	return Nil;
+}
+
+static void target_file_ls_iter_finalize(target_file_ls_iter_t *Iter, void *Data) {
+	if (Iter->Dir) {
+		closedir(Iter->Dir);
+		Iter->Dir;
+	}
+}
+
+ml_type_t TargetFileLsIter[1] = {{
+	AnyT, "file-ls-iterator",
+	ml_default_hash,
+	ml_default_call,
+	target_file_ls_iter_deref,
+	ml_default_assign,
+	target_file_ls_iter_next,
+	target_file_ls_iter_key
+}};
+
+static int target_file_ls_resolve_fn(target_file_ls_iter_t *Iter, const char *Path) {
+	target_file_ls_iter_node_t *Node = new(target_file_ls_iter_node_t);
+	Node->Next = Iter->Node;
+	Node->Path = Path;
+	Iter->Node = Node;
+	return 0;
+}
+
+ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
+	target_file_ls_iter_t *Iter = new(target_file_ls_iter_t);
+	Iter->Type = TargetFileLsIter;
+	target_file_t *Target = (target_file_t *)Args[0];
+	if (Target->Absolute) {
+		target_file_ls_iter_node_t *Node = Iter->Node = new(target_file_ls_iter_node_t);
+		Node->Path = Target->Path;
+	} else {
+		vfs_resolve_foreach(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0), Iter, target_file_ls_resolve_fn);
+	}
+	if (Count > 1) {
+		const char *Pattern = ml_string_value(Args[1]);
+		Iter->Regex = new(regex_t);
+		int Error = regcomp(Iter->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
+		if (Error) {
+			size_t Length = regerror(Error, Iter->Regex, 0, 0);
+			char *Message = snew(Length + 1);
+			regerror(Error, Iter->Regex, Message, Length);
+			regfree(Iter->Regex);
+			return ml_error("RegexError", "%s", Message);
+		}
+	}
+	target_file_ls_iter_node_t *Node = Iter->Node;
+	if (Node) {
+		Iter->Node = Node->Next;
+		Iter->Path = Node->Path;
+		Iter->Dir = opendir(Node->Path);
+		if (!Iter->Dir) return ml_error("DirError", "failed to open directory %s", Node->Path);
+		GC_register_finalizer(Iter, target_file_ls_iter_finalize, 0, 0, 0);
+		return target_file_ls_iter_next(Iter);
+	} else {
+		return Nil;
+	}
 }
 
 ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
@@ -918,6 +1033,7 @@ void target_init() {
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, 0);
 	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, 0);
 	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, 0);
+	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, 0);
 	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, 0);
 	ml_method_by_name("scan", 0, target_scan_new, TargetT, 0);
 }

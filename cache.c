@@ -244,8 +244,9 @@ ml_value_t *cache_expr_get(const char *Id) {
 	ml_value_t *Result = 0;
 	if (sqlite3_step(ExprGetStatement) == SQLITE_ROW) {
 		int Length = sqlite3_column_bytes(ExprGetStatement, 0);
-		char *Chars = snew(Length);
+		char *Chars = snew(Length + 1);
 		memcpy(Chars, sqlite3_column_text(ExprGetStatement, 0), Length);
+		Chars[Length] = 0;
 		Result = ml_string(Chars, Length);
 	}
 	sqlite3_reset(ExprGetStatement);
