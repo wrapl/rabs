@@ -820,7 +820,7 @@ void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
 		Hash[SHA256_BLOCK_SIZE - 1] = 1;
 	} else if (Value->Type == StringT) {
 		const char *String = ml_string_value(Value);
-		size_t Len = strlen(String);
+		size_t Len = ml_string_length(Value);
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
 		sha256_update(Ctx, String, Len);
