@@ -62,25 +62,23 @@ c_includes := fun(Source) do
 	return Files
 end
 
-asm_compile := fun(Object) do
-end
-
-asm_includes := fun(Source) do
-	return []
-end
+SourceTypes := {
+	"c" is [c_includes, c_compile]
+}
 
 c_program := fun(Executable, Objects, Libraries) do
 	Objects := Objects or []
 	Libraries := Libraries or []
+	var Sources := []
 	for Object in Objects do
-		var SourceC := Object % "c"
-		var SourceAsm := Object % "asm"
-		if SourceC:exists then
-			var ScanC := SourceC:scan("INCLUDES") => c_includes
-			Object[SourceC, ScanC] => c_compile
-		elseif SourceAsm:exists then
-			var ScanAsm := SourceAsm:scan("INCLUDES") => asm_includes
-			Object[SourceAsm, ScanAsm] => asm_compile
+		for Functions, Extension in SourceTypes do
+			var Source := Object % Extension
+			if Source:exists then
+				Sources:put(Source)
+				var Scan := Source:scan("INCLUDES") => Functions[1]
+				Object[Source, Scan] => Functions[2]
+				exit
+			end
 		end
 	end
 	Executable[Objects, Libraries] => fun(Executable) do

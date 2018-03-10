@@ -15,6 +15,7 @@
 #include <stdio.h>
 #include <regex.h>
 #include <dirent.h>
+#include <ml_file.h>
 
 enum {
 	STATE_UNCHECKED = 0,
@@ -141,7 +142,7 @@ void target_update(target_t *Target) {
 		time_t FileTime = 0;
 		if (Target->Build) {
 			int8_t BuildHash[SHA256_BLOCK_SIZE];
-			if (Target->Build->Type == ClosureT) {
+			if (Target->Build->Type == MLClosureT) {
 				ml_closure_hash(Target->Build, BuildHash);
 				//printf("CurrentHash =");
 				//for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf("%02hhx", BuildHash[I]);
@@ -246,7 +247,7 @@ static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Arg
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 		ml_stringbuffer_add(Buffer, Path, strlen(Path));
 	}
-	return Some;
+	return MLSome;
 }
 
 static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Args) {
@@ -297,7 +298,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_
 
 static void target_default_build(target_t *Target) {
 	ml_value_t *Result = ml_inline(Target->Build, 1, Target);
-	if (Result->Type == ErrorT) {
+	if (Result->Type == MLErrorT) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
@@ -331,6 +332,8 @@ target_t *target_file_check(const char *Path, int Absolute) {
 }
 
 ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
 	target_t *Target;
 	if (!Path[0]) {
@@ -356,7 +359,7 @@ ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	char *Path;
 	int Absolute;
-	if (Count > 1 && Args[1] != Nil && !FileTarget->Absolute) {
+	if (Count > 1 && Args[1] != MLNil && !FileTarget->Absolute) {
 		Path = vfs_resolve(FileTarget->BuildContext->Mounts, concat(RootPath, "/", FileTarget->Path, 0));
 		Absolute = 1;
 	} else {
@@ -383,12 +386,12 @@ typedef struct target_file_ls_iter_t {
 	DIR *Dir;
 	target_file_ls_iter_node_t *Node;
 	const char *Path;
-	ml_value_t *File;
+	target_t *File;
 } target_file_ls_iter_t;
 
 static ml_value_t *target_file_ls_iter_deref(ml_value_t *Ref) {
 	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
-	return Iter->File;
+	return (ml_value_t *)Iter->File;
 }
 
 static ml_value_t *target_file_ls_iter_next(ml_value_t *Ref) {
@@ -412,12 +415,12 @@ static ml_value_t *target_file_ls_iter_next(ml_value_t *Ref) {
 			if (!Iter->Dir) return ml_error("DirError", "failed to open directory %s", Node->Path);
 		}
 	}
-	return Nil;
+	return MLNil;
 }
 
 static ml_value_t *target_file_ls_iter_key(ml_value_t *Ref) {
 	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
-	return Nil;
+	return MLNil;
 }
 
 static void target_file_ls_iter_finalize(target_file_ls_iter_t *Iter, void *Data) {
@@ -428,7 +431,7 @@ static void target_file_ls_iter_finalize(target_file_ls_iter_t *Iter, void *Data
 }
 
 ml_type_t TargetFileLsIter[1] = {{
-	AnyT, "file-ls-iterator",
+	MLAnyT, "file-ls-iterator",
 	ml_default_hash,
 	ml_default_call,
 	target_file_ls_iter_deref,
@@ -453,7 +456,7 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 		target_file_ls_iter_node_t *Node = Iter->Node = new(target_file_ls_iter_node_t);
 		Node->Path = Target->Path;
 	} else {
-		vfs_resolve_foreach(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0), Iter, target_file_ls_resolve_fn);
+		vfs_resolve_foreach(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0), Iter, (void *)target_file_ls_resolve_fn);
 	}
 	if (Count > 1) {
 		const char *Pattern = ml_string_value(Args[1]);
@@ -473,10 +476,10 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 		Iter->Path = Node->Path;
 		Iter->Dir = opendir(Node->Path);
 		if (!Iter->Dir) return ml_error("DirError", "failed to open directory %s", Node->Path);
-		GC_register_finalizer(Iter, target_file_ls_iter_finalize, 0, 0, 0);
-		return target_file_ls_iter_next(Iter);
+		GC_register_finalizer(Iter, (void *)target_file_ls_iter_finalize, 0, 0, 0);
+		return target_file_ls_iter_next((ml_value_t *)Iter);
 	} else {
-		return Nil;
+		return MLNil;
 	}
 }
 
@@ -500,7 +503,7 @@ ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
 	if (!stat(FileName, Stat)) {
 		return (ml_value_t *)Target;
 	} else {
-		return Nil;
+		return MLNil;
 	}
 }
 
@@ -531,7 +534,7 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 	close(SourceFile);
 	close(DestFile);
 	if (Length < 0) return ml_error("FileError", "file copy failed");
-	return Nil;
+	return MLNil;
 }
 
 ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
@@ -557,6 +560,18 @@ ml_value_t *target_file_mod(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
+ml_value_t *target_file_open(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
+	const char *FileName;
+	if (Target->Absolute) {
+		FileName = Target->Path;
+	} else {
+		FileName = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+	}
+	ml_value_t *Args2[] = {ml_string(FileName, -1), Args[1]};
+	return ml_file_open(0, 2, Args2);
+}
+
 struct target_meta_t {
 	TARGET_FIELDS
 	const char *Name;
@@ -571,7 +586,8 @@ static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, int8_
 }
 
 ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
-	if (Count < 0) return ml_error("ParamError", "missing parameter <name>");
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, 0);
 	target_meta_t *Target = (target_meta_t *)stringmap_search(TargetCache, Id);
@@ -613,7 +629,7 @@ static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, int8_
 
 static void target_expr_build(target_expr_t *Target) {
 	ml_value_t *Result = ml_inline(Target->Build, 1, Target);
-	if (Result->Type == ErrorT) {
+	if (Result->Type == MLErrorT) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
@@ -624,7 +640,8 @@ static void target_expr_build(target_expr_t *Target) {
 }
 
 ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
-	if (Count < 0) return ml_error("ParamError", "missing parameter <name>");
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	const char *Id = concat("expr:", CurrentContext->Path, "::", Name, 0);
 	target_expr_t *Target = (target_expr_t *)stringmap_search(TargetCache, Id);
@@ -643,9 +660,9 @@ ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	for (int I = 1; I < Count; ++I) {
 		ml_value_t *Arg = Args[I];
-		if (Arg->Type == ListT) {
+		if (Arg->Type == MLListT) {
 			ml_list_foreach(Arg, Target, (void *)target_depends_list);
-		} else if (Arg != Nil) {
+		} else if (Arg != MLNil) {
 			target_t *Depend = (target_t *)Arg;
 			stringmap_insert(Target->Depends, Depend->Id, Depend);
 		}
@@ -689,9 +706,9 @@ ml_value_t *scan_results_depend(void *Data, int Count, ml_value_t **Args) {
 	target_scan_t *Target = ((scan_results_t *)Args[0])->Scan;
 	for (int I = 1; I < Count; ++I) {
 		ml_value_t *Arg = Args[I];
-		if (Arg->Type == ListT) {
+		if (Arg->Type == MLListT) {
 			ml_list_foreach(Arg, Target, (void *)target_depends_list);
-		} else if (Arg != Nil) {
+		} else if (Arg != MLNil) {
 			target_t *Depend = (target_t *)Arg;
 			stringmap_insert(Target->Depends, Depend->Id, Depend);
 		}
@@ -723,7 +740,7 @@ static int build_scan_target_list(target_t *Depend, stringmap_t *Scans) {
 
 static void target_scan_build(target_scan_t *Target) {
 	ml_value_t *Result = ml_inline(Target->Build, 1, Target->Source);
-	if (Result->Type == ErrorT) {
+	if (Result->Type == MLErrorT) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
@@ -775,7 +792,7 @@ static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 
 static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
 	context_t *Context = context_find(Target->Context);
-	ml_value_t *Value = context_symb_get(Context, Target->Name) ?: Nil;
+	ml_value_t *Value = context_symb_get(Context, Target->Name) ?: MLNil;
 	target_value_hash(Value, Target->Hash);
 	return 0;
 }
@@ -808,34 +825,34 @@ static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx)
 }
 
 void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
-	if (Value->Type == NilT) {
+	if (Value->Type == MLNilT) {
 		memset(Hash, -1, SHA256_BLOCK_SIZE);
-	} else if (Value->Type == IntegerT) {
+	} else if (Value->Type == MLIntegerT) {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
 		*(long *)Hash = ml_integer_value(Value);
 		Hash[SHA256_BLOCK_SIZE - 1] = 1;
-	} else if (Value->Type == RealT) {
+	} else if (Value->Type == MLRealT) {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
 		*(double *)Hash = ml_real_value(Value);
 		Hash[SHA256_BLOCK_SIZE - 1] = 1;
-	} else if (Value->Type == StringT) {
+	} else if (Value->Type == MLStringT) {
 		const char *String = ml_string_value(Value);
 		size_t Len = ml_string_length(Value);
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
 		sha256_update(Ctx, String, Len);
 		sha256_final(Ctx, Hash);
-	} else if (Value->Type == ListT) {
+	} else if (Value->Type == MLListT) {
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
 		ml_list_foreach(Value, Ctx, (void *)list_update_hash);
 		sha256_final(Ctx, Hash);
-	} else if (Value->Type == TreeT) {
+	} else if (Value->Type == MLTreeT) {
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
 		ml_tree_foreach(Value, Ctx, (void *)tree_update_hash);
 		sha256_final(Ctx, Hash);
-	} else if (Value->Type == ClosureT) {
+	} else if (Value->Type == MLClosureT) {
 		ml_closure_hash(Value, Hash);
 	} else if (Value->Type == FileTargetT) {
 		target_t *Target = (target_t *)Value;
@@ -1007,7 +1024,7 @@ void target_threads_wait(int NumThreads) {
 }
 
 void target_init() {
-	TargetT = ml_class(AnyT, "target");
+	TargetT = ml_class(MLAnyT, "target");
 	FileTargetT = ml_class(TargetT, "file-target");
 	MetaTargetT = ml_class(TargetT, "meta-target");
 	ExprTargetT = ml_class(TargetT, "expr-target");
@@ -1020,20 +1037,21 @@ void target_init() {
 	MissingMethod = ml_method("missing");
 	StringMethod = ml_method("string");
 	AppendMethod = ml_method("append");
-	ml_method_by_name("append", 0, target_file_stringify, StringBufferT, FileTargetT, 0);
-	ml_method_by_name("append", 0, target_expr_stringify, StringBufferT, ExprTargetT, 0);
-	ml_method_by_name("[]", 0, target_depend, TargetT, AnyT, 0);
-	ml_method_by_name("[]", 0, scan_results_depend, ScanResultsT, AnyT, 0);
+	ml_method_by_name("append", 0, target_file_stringify, MLStringBufferT, FileTargetT, 0);
+	ml_method_by_name("append", 0, target_expr_stringify, MLStringBufferT, ExprTargetT, 0);
+	ml_method_by_name("[]", 0, target_depend, TargetT, MLAnyT, 0);
+	ml_method_by_name("[]", 0, scan_results_depend, ScanResultsT, MLAnyT, 0);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, 0);
 	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, 0);
-	ml_method_by_name("=>", 0, target_set_build, TargetT, AnyT, 0);
-	ml_method_by_name("=>", 0, scan_results_set_build, ScanResultsT, AnyT, 0);
-	ml_method_by_name("/", 0, target_file_div, FileTargetT, StringT, 0);
-	ml_method_by_name("%", 0, target_file_mod, FileTargetT, StringT, 0);
+	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, 0);
+	ml_method_by_name("=>", 0, scan_results_set_build, ScanResultsT, MLAnyT, 0);
+	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, 0);
+	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, 0);
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, 0);
 	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, 0);
 	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, 0);
 	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, 0);
 	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, 0);
+	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, 0);
 	ml_method_by_name("scan", 0, target_scan_new, TargetT, 0);
 }
