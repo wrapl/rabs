@@ -399,7 +399,11 @@ static ml_value_t *target_file_ls_iter_next(ml_value_t *Ref) {
 	while (Iter->Dir) {
 		struct dirent *Entry = readdir(Iter->Dir);
 		while (Entry) {
-			if (!Iter->Regex || !regexec(Iter->Regex, Entry->d_name, 0, 0, 0)) {
+			if (
+				strcmp(Entry->d_name, ".") &&
+				strcmp(Entry->d_name, "..") &&
+				!(Iter->Regex && regexec(Iter->Regex, Entry->d_name, 0, 0, 0))
+			) {
 				Iter->File = target_file_check(concat(Iter->Path, "/", Entry->d_name, 0), Iter->Path[0] == '/');
 				return Ref;
 			}
@@ -606,9 +610,27 @@ ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
-static int rmdir_p(char *Path, int Length) {
-	if (!Path[0]) return -1;
-	// TODO: recursive remove the directory Path and its children
+static int rmdir_p(char *Buffer, char *End) {
+	if (!Buffer[0]) return -1;
+	struct stat Stat[1];
+	if (stat(Buffer, Stat)) return 1;
+	if (S_ISDIR(Stat->st_mode)) {
+		DIR *Dir = opendir(Buffer);
+		if (!Dir) return 1;
+		End[0] = '/';
+		struct dirent *Entry = readdir(Dir);
+		while (Entry) {
+			if (strcmp(Entry->d_name, ".") && strcmp(Entry->d_name, "..")) {
+				char *End2 = stpcpy(End + 1, Entry->d_name);
+				if (rmdir_p(Buffer, End2)) return 1;
+			}
+			Entry = readdir(Dir);
+		}
+		End[0] = 0;
+		if (rmdir(Buffer)) return 1;
+	} else {
+		if (unlink(Buffer)) return 1;
+	}
 	return 0;
 }
 
@@ -620,9 +642,10 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 	} else {
 		Path = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 	}
-	const char *Buffer = snew(PATH_MAX);
-	if (rmdir_p(concat(Path, 0)) < 0) {
-		return ml_error("FileError", "error removing directory %s", Path);
+	char *Buffer = snew(PATH_MAX);
+	char *End = stpcpy(Buffer, Path);
+	if (rmdir_p(Buffer, End) < 0) {
+		return ml_error("FileError", "error removing file / directory %s", Buffer);
 	}
 	return MLNil;
 }
@@ -1109,5 +1132,6 @@ void target_init() {
 	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, 0);
 	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, 0);
 	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, 0);
+	ml_method_by_name("rmdir", 0, target_file_rmdir, FileTargetT, 0);
 	ml_method_by_name("scan", 0, target_scan_new, TargetT, 0);
 }

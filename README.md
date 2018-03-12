@@ -120,7 +120,8 @@ Enters _`TargetDir`_ and loads the file `_minibuild_` within a new context.
 
 #### `vmount(TargetDir, SourceDir)`
 
-Virtually mounts / overlays `SourceDir` over `TargetDir` during the build. This means that when a [`File` object](#file) whose path contains `TargetDir` is referenced, the build system will look an existing file in two locations and return whichever exists, or return the unchanged path if neither exists.
+Virtually mounts / overlays `SourceDir` over `TargetDir` during the build.
+This means that when a [file](#file-and-directory-targets) whose path contains `TargetDir` is referenced, the build system will look an existing file in two locations and return whichever exists, or return the unchanged path if neither exists.
 
 More specifically, in order to convert a file object with path _`TargetDir`/path/filename_ to a full file path, the build system will
 
@@ -134,11 +135,15 @@ The typical use for this function is to overlay a source directory over the corr
 
 #### `file(FileName)`
 
-Creates a [File Target](#files-and-directories).
+Creates a [file target](#file-and-directory-targets).
 
 #### `meta(Name)`
 
+Creates a [meta target](#meta-targets).
+
 #### `expr(Name)`
+
+Creates an [expression target](#expression-targets).
 
 #### `include(File)`
 
@@ -150,20 +155,67 @@ Creates a [File Target](#files-and-directories).
 
 #### ~`open(File | String, String)`~
 
-### Target Types
+### The Build Process
 
-#### Files and Directories
+Everything in the Rabs build tree is considered a _target_.
+Every target has a unique id, and every unique id corresponds to a unique target.
+This means that when constructing a target anywhere in the build tree, if the construction results in the same id, then it will return the same target.
+
+Every target has a (possibly empty) set of dependencies, i.e. targets that must be built before this target is built.
+Cyclic dependencies are not allowed, and will trigger an error.
+
+Each run of Rabs is considered an iteration, and increments an internal iteration counter in the build database.
+In order to reduce unneccesary building for large project, at each iteration Rabs decides both whether a target needs to be built and whether, after building, it has actually changed.
+
+If a target is missing (e.g. for the first build, when a new target is added to the build or for a file that is missing from the file system), then it needs to be built.
+Once built, the build database records two iteration values for each target:
+
+1. The last built iteration: when the target was last built.
+2. The last changed iteration: when the target was last changed.
+
+Since a target can't change without being built, the last built iteration of a target is always greater or equal to the last changed iteration.
+The last built iteration of a target should be greater or equal to the last changed iteration of its dependencies.
+
+While building, if a target has a last built iteration less than the last changed iteration of any of its dependencies, then it is rebuilt, and its last built iteration updated to the current iteration.
+Then it is checked for changes (using hashing, depending on the target type), and the last changed iteration updated if it has indeed changed.
+This will trigger other target to be rebuilt as required. 
+
+#### Targets
+
+##### Methods
+
+* `Target[Dependencies...]`: adds dependcies to `Target`. `Dependencies` can be individual dependencies or lists of dependencies which are expanded recursively. Returns `Target`.
+* `Target => BuildFunction`: sets the build function for `Target`.
+* `Target:scan(Name)`: creates a [scan target](#scan-targets) for `Target`.
+
+#### File and Directory Targets
 
 ##### Methods
 
 * `File:exists`: returns `:true` if `File` exists, otherwise `nil`.
-* `File:open(Mode)`: opens `File` in read, write or append mode depending on `Mode` (`r`, `w` or `a`).
+* `File:open(Mode)`: opens `File` in read, write or append mode depending on `Mode` (`r`, `w` or `a`) and returns a [file handle](#file-handles).
 * `File:dir`: returns the directory containing `File`.
 * `File:basename`: returns the name of `File` without its path or extension.
 * `File % Extension`: returns a new file target by replacing the extension of `File` with `Extension`.
 * `File:copy(Dest)`: copies the contents of `File` to the file target at `Dest`.
-* `File:scan(Name)`: creates a [Scan Target](#scan_target) for `File`.
 * `Dir:mkdir`: creates a directory (and all missing parent directories).
 * `Dir:ls([Filter])`: returns an iterator of files in `Dir`, filtered by an optional regular expression.
 * `Dir / FileName`: returns a new file target for the file called `FileName` in `Dir`.
 
+#### Scan Targets
+
+#### Meta Targets
+
+#### Expression Targets
+
+#### Symbol Targets
+
+### Other Builtin Features
+
+#### File Handles
+
+##### Methods
+
+* `Handle:read(...)`
+* `Handle:write(...)`
+* `Handle:close`

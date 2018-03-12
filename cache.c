@@ -244,13 +244,14 @@ ml_value_t *cache_expr_get(const char *Id) {
 	ml_value_t *Result = 0;
 	if (sqlite3_step(ExprGetStatement) == SQLITE_ROW) {
 		switch (sqlite3_column_type(ExprGetStatement, 0)) {
-		case SQLITE_TEXT:
+		case SQLITE_TEXT: {
 			int Length = sqlite3_column_bytes(ExprGetStatement, 0);
 			char *Chars = snew(Length + 1);
 			memcpy(Chars, sqlite3_column_text(ExprGetStatement, 0), Length);
 			Chars[Length] = 0;
 			Result = ml_string(Chars, Length);
 			break;
+		}
 		case SQLITE_INTEGER:
 			Result = ml_integer(sqlite3_column_int64(ExprGetStatement, 0));
 			break;
