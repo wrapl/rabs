@@ -572,6 +572,61 @@ ml_value_t *target_file_open(void *Data, int Count, ml_value_t **Args) {
 	return ml_file_open(0, 2, Args2);
 }
 
+static int mkdir_p(char *Path) {
+	if (!Path[0]) return -1;
+	struct stat Stat[1];
+	for (char *P = Path + 1; P[0]; ++P) {
+		if (P[0] == '/') {
+			P[0] = 0;
+			if (lstat(Path, Stat) < 0) {
+				int Result = mkdir(Path, 0777);
+				if (Result < 0) return Result;
+			}
+			P[0] = '/';
+		}
+	}
+	if (lstat(Path, Stat) < 0) {
+		int Result = mkdir(Path, 0777);
+		if (Result < 0) return Result;
+	}
+	return 0;
+}
+
+ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
+	const char *Path;
+	if (Target->Absolute) {
+		Path = Target->Path;
+	} else {
+		Path = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+	}
+	if (mkdir_p(concat(Path, 0)) < 0) {
+		return ml_error("FileError", "error creating directory %s", Path);
+	}
+	return MLNil;
+}
+
+static int rmdir_p(char *Path, int Length) {
+	if (!Path[0]) return -1;
+	// TODO: recursive remove the directory Path and its children
+	return 0;
+}
+
+ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
+	const char *Path;
+	if (Target->Absolute) {
+		Path = Target->Path;
+	} else {
+		Path = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+	}
+	const char *Buffer = snew(PATH_MAX);
+	if (rmdir_p(concat(Path, 0)) < 0) {
+		return ml_error("FileError", "error removing directory %s", Path);
+	}
+	return MLNil;
+}
+
 struct target_meta_t {
 	TARGET_FIELDS
 	const char *Name;
@@ -1053,5 +1108,6 @@ void target_init() {
 	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, 0);
 	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, 0);
 	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, 0);
+	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, 0);
 	ml_method_by_name("scan", 0, target_scan_new, TargetT, 0);
 }

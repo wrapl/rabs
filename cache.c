@@ -243,19 +243,40 @@ ml_value_t *cache_expr_get(const char *Id) {
 	sqlite3_bind_text(ExprGetStatement, 1, Id, -1, SQLITE_STATIC);
 	ml_value_t *Result = 0;
 	if (sqlite3_step(ExprGetStatement) == SQLITE_ROW) {
-		int Length = sqlite3_column_bytes(ExprGetStatement, 0);
-		char *Chars = snew(Length + 1);
-		memcpy(Chars, sqlite3_column_text(ExprGetStatement, 0), Length);
-		Chars[Length] = 0;
-		Result = ml_string(Chars, Length);
+		switch (sqlite3_column_type(ExprGetStatement, 0)) {
+		case SQLITE_TEXT:
+			int Length = sqlite3_column_bytes(ExprGetStatement, 0);
+			char *Chars = snew(Length + 1);
+			memcpy(Chars, sqlite3_column_text(ExprGetStatement, 0), Length);
+			Chars[Length] = 0;
+			Result = ml_string(Chars, Length);
+			break;
+		case SQLITE_INTEGER:
+			Result = ml_integer(sqlite3_column_int64(ExprGetStatement, 0));
+			break;
+		case SQLITE_FLOAT:
+			Result = ml_real(sqlite3_column_double(ExprGetStatement, 0));
+			break;
+		case SQLITE_NULL:
+			Result = MLNil;
+			break;
+		}
 	}
 	sqlite3_reset(ExprGetStatement);
 	return Result;
 }
 
 void cache_expr_set(const char *Id, ml_value_t *Value) {
-	sqlite3_bind_text(ExprSetStatement, 1, Id, -1, SQLITE_STATIC);
-	sqlite3_bind_text(ExprSetStatement, 2, ml_string_value(Value), ml_string_length(Value), SQLITE_STATIC);
+	if (Value->Type == MLStringT) {
+		sqlite3_bind_text(ExprSetStatement, 1, Id, -1, SQLITE_STATIC);
+		sqlite3_bind_text(ExprSetStatement, 2, ml_string_value(Value), ml_string_length(Value), SQLITE_STATIC);
+	} else if (Value->Type == MLIntegerT) {
+		sqlite3_bind_int64(ExprSetStatement, 2, ml_integer_value(Value));
+	} else if (Value->Type == MLRealT) {
+		sqlite3_bind_double(ExprSetStatement, 2, ml_real_value(Value));
+	} else if (Value == MLNil) {
+		sqlite3_bind_null(ExprSetStatement, 2);
+	}
 	sqlite3_step(ExprSetStatement);
 	sqlite3_reset(ExprSetStatement);
 }

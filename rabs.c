@@ -244,6 +244,16 @@ ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
+ml_value_t *rabs_open(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(2);
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[0]);
+	if (Result->Type == MLErrorT) return Result;
+	char *FileName = ml_stringbuffer_get(Buffer);
+	ml_value_t *Args2[] = {ml_string(FileName, -1), Args[1]};
+	return ml_file_open(0, 2, Args2);
+}
+
 static const char *find_root(const char *Path) {
 	char *FileName = snew(strlen(Path) + strlen(SystemName) + 1);
 	char *End = stpcpy(FileName, Path);
@@ -331,7 +341,7 @@ int main(int Argc, const char **Argv) {
 	stringmap_insert(Globals, "mkdir", ml_function(0, rabs_mkdir));
 	stringmap_insert(Globals, "scope", ml_function(0, scope));
 	stringmap_insert(Globals, "print", ml_function(0, print));
-	stringmap_insert(Globals, "open", ml_function(0, ml_file_open));
+	stringmap_insert(Globals, "open", ml_function(0, rabs_open));
 	stringmap_insert(Globals, "getenv", ml_function(0, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(0, ml_setenv));
 	stringmap_insert(Globals, "defined", ml_function(0, defined));
