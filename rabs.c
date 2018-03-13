@@ -52,7 +52,7 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 
 static void load_file(const char *FileName) {
 	ml_value_t *Closure = ml_load(rabs_ml_global, 0, FileName);
-	if (Closure->Type == ErrorT) {
+	if (Closure->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
 		const char *Source;
 		int Line;
@@ -60,7 +60,7 @@ static void load_file(const char *FileName) {
 		exit(1);
 	}
 	ml_value_t *Result = ml_call(Closure, 0, 0);
-	if (Result->Type == ErrorT) {
+	if (Result->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
 		const char *Source;
 		int Line;
@@ -90,6 +90,8 @@ static int mkdir_p(char *Path) {
 }
 
 ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
 	Path = concat(CurrentContext->Path, "/", Path, 0);
 	//printf("Path = %s\n", Path);
@@ -102,14 +104,16 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	target_depends_add(ParentDefault, CurrentContext->Default);
 	load_file(FileName);
 	context_pop();
-	return Nil;
+	return MLNil;
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	context_scope(Name);
 	ml_value_t *Result = ml_call(Args[1], 0, 0);
-	if (Result->Type == ErrorT) {
+	if (Result->Type == MLErrorT) {
 		printf("Error: %s\n", ml_error_message(Result));
 		const char *Source;
 		int Line;
@@ -117,27 +121,36 @@ ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 		exit(1);
 	}
 	context_pop();
-	return Nil;
+	return MLNil;
 }
 
 ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
-	const char *FileName = ml_string_value(Args[0]);
-	if (FileName[0] != '/') {
+	ML_CHECK_ARG_COUNT(1);
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		if (Result->Type == MLErrorT) return Result;
+	}
+	char *FileName = ml_stringbuffer_get(Buffer);
+	/*if (FileName[0] != '/') {
 		FileName = concat(RootPath, CurrentContext->Path, "/", FileName, 0);
 		FileName = vfs_resolve(CurrentContext->Mounts, FileName);
-	}
+	}*/
 	load_file(FileName);
-	return Nil;
+	return MLNil;
 }
 
 ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(2);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	ML_CHECK_ARG_TYPE(1, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
 	const char *Target = ml_string_value(Args[1]);
 	CurrentContext->Mounts = vfs_mount(CurrentContext->Mounts,
 		concat(CurrentContext->Path, "/", Path, 0),
 		concat(CurrentContext->Path, "/", Target, 0)
 	);
-	return Nil;
+	return MLNil;
 }
 
 ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
@@ -145,8 +158,13 @@ ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
 }
 
 ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		if (Result->Type == MLErrorT) return Result;
+		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
+	}
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentContext->FullPath, Command);
 	clock_t Start = clock();
@@ -167,7 +185,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 		if (WEXITSTATUS(Result) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
 		} else {
-			return Nil;
+			return MLNil;
 		}
 	} else {
 		return ml_error("ExecuteError", "process exited abnormally");
@@ -175,8 +193,13 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 }
 
 ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	for (int I = 0; I < Count; ++I) if (ml_inline(AppendMethod, 2, Buffer, Args[I]) != Nil) ml_stringbuffer_add(Buffer, " ", 1);
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		if (Result->Type == MLErrorT) return Result;
+		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
+	}
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s\e[0m\n", Command);
 	clock_t Start = clock();
@@ -208,13 +231,27 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 }
 
 ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	for (int I = 0; I < Count; ++I) ml_inline(AppendMethod, 2, Buffer, Args[I]);
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		if (Result->Type == MLErrorT) return Result;
+	}
 	char *Path = ml_stringbuffer_get(Buffer);
 	if (mkdir_p(Path) < 0) {
 		return ml_error("FileError", "error creating directory %s", Path);
 	}
-	return Nil;
+	return MLNil;
+}
+
+ml_value_t *rabs_open(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(2);
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[0]);
+	if (Result->Type == MLErrorT) return Result;
+	char *FileName = ml_stringbuffer_get(Buffer);
+	ml_value_t *Args2[] = {ml_string(FileName, -1), Args[1]};
+	return ml_file_open(0, 2, Args2);
 }
 
 static const char *find_root(const char *Path) {
@@ -248,54 +285,48 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 	ml_value_t *StringMethod = ml_method("string");
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = Args[I];
-		if (Result->Type != StringT) {
+		if (Result->Type != MLStringT) {
 			Result = ml_call(StringMethod, 1, &Result);
-			if (Result->Type == ErrorT) return Result;
-			if (Result->Type != StringT) return ml_error("ResultError", "string method did not return string");
+			if (Result->Type == MLErrorT) return Result;
+			if (Result->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 		}
 		fputs(ml_string_value(Result), stdout);
 	}
 	fflush(stdout);
-	return Nil;
+	return MLNil;
 }
 
 static ml_value_t *ml_getenv(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Key = ml_string_value(Args[0]);
 	const char *Value = getenv(Key);
 	if (Value) {
 		return ml_string(Value, -1);
 	} else {
-		return Nil;
+		return MLNil;
 	}
 }
 
 static ml_value_t *ml_setenv(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(2);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	ML_CHECK_ARG_TYPE(1, MLStringT);
 	const char *Key = ml_string_value(Args[0]);
 	const char *Value = ml_string_value(Args[1]);
 	setenv(Key, Value, 1);
-	return Nil;
+	return MLNil;
 }
 
 static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Key = ml_string_value(Args[0]);
-	return stringmap_search(Defines, Key) ?: Nil;
-}
-
-static void rabs_dump_func(void *Ptr, int Data) {
-	void *Base = GC_base(Ptr);
-	printf("%d @ %s:%d\n", GC_size(Ptr), ((const char **)Base)[0], ((int *)Base)[1]);
-}
-
-static void *rabs_oom_func(size_t Size) {
-	GC_dump();
-	//GC_apply_to_all_blocks(rabs_dump_func, 0);
-	return 0;
+	return stringmap_search(Defines, Key) ?: MLNil;
 }
 
 int main(int Argc, const char **Argv) {
 	GC_INIT();
-	GC_set_oom_fn(rabs_oom_func);
-	GC_set_max_heap_size(67108864);
 	ml_init();
 	AppendMethod = ml_method("append");
 	stringmap_insert(Globals, "vmount", ml_function(0, vmount));
@@ -310,7 +341,7 @@ int main(int Argc, const char **Argv) {
 	stringmap_insert(Globals, "mkdir", ml_function(0, rabs_mkdir));
 	stringmap_insert(Globals, "scope", ml_function(0, scope));
 	stringmap_insert(Globals, "print", ml_function(0, print));
-	stringmap_insert(Globals, "open", ml_function(0, ml_file_open));
+	stringmap_insert(Globals, "open", ml_function(0, rabs_open));
 	stringmap_insert(Globals, "getenv", ml_function(0, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(0, ml_setenv));
 	stringmap_insert(Globals, "defined", ml_function(0, defined));
