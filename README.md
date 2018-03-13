@@ -192,7 +192,7 @@ This will trigger other target to be rebuilt as required.
 
 ##### Methods
 
-* `File:exists`: returns `:true` if `File` exists, otherwise `nil`.
+* `File:exists`: returns `File` if `File` exists, otherwise `nil`.
 * `File:open(Mode)`: opens `File` in read, write or append mode depending on `Mode` (`r`, `w` or `a`) and returns a [file handle](#file-handles).
 * `File:dir`: returns the directory containing `File`.
 * `File:basename`: returns the name of `File` without its path or extension.
