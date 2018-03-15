@@ -9,7 +9,7 @@ but implemented in C instead of OCaml and supporting an imperative paradigm (wit
 
 ## Language
 
-The language in Rabs is called *minilang* since it is not meant to be very sophisticated.
+The language in Rabs is called _Minilang_ since it is not meant to be very sophisticated.
 It is case sensitive with lower case keywords, ignores spaces and tabs but will treat an end-of-line
 marker as the end of a statement unless additional code is expected (e.g. after an infix operator or
 in a function call).
@@ -50,6 +50,31 @@ end
 
 ## Usage
 
+### The Build Process
+
+Everything in the Rabs build tree is considered a _target_.
+Every target has a unique id, and every unique id corresponds to a unique target.
+This means that when constructing a target anywhere in the build tree, if the construction results in the same id, then it will return the same target.
+
+Every target has a (possibly empty) set of dependencies, i.e. targets that must be built before this target is built.
+Cyclic dependencies are not allowed, and will trigger an error.
+
+Each run of Rabs is considered an iteration, and increments an internal iteration counter in the build database.
+In order to reduce unneccesary building for large project, at each iteration Rabs decides both whether a target needs to be built and whether, after building, it has actually changed.
+
+If a target is missing (e.g. for the first build, when a new target is added to the build or for a file that is missing from the file system), then it needs to be built.
+Once built, the build database records two iteration values for each target:
+
+1. The last built iteration: when the target was last built.
+2. The last changed iteration: when the target was last changed.
+
+Since a target can't change without being built, the last built iteration of a target is always greater or equal to the last changed iteration.
+The last built iteration of a target should be greater or equal to the last changed iteration of its dependencies.
+
+While building, if a target has a last built iteration less than the last changed iteration of any of its dependencies, then it is rebuilt, and its last built iteration updated to the current iteration.
+Then it is checked for changes (using hashing, depending on the target type), and the last changed iteration updated if it has indeed changed.
+This will trigger other target to be rebuilt as required. 
+
 ### Contexts
 
 Rabs executes minilang code within _contexts_. Each context maintains its own set of variables, and is associated with a directory in the file system.
@@ -62,6 +87,63 @@ This means the variables defined in a context are automatically available to chi
 There is exactly one **root** context, associated with the root directory of the project / build.
 
 New contexts are made when entering a child directory using [`subdir()`](#subdir) or by calling [`scope()`](#scope).
+
+### Symbols
+
+Although variables can be used in Minilang to store values during the build process, these variables are not visible to child contexts, and they do not play any part in dependency tracking.
+Instead, _symbols_ can be used for that purpose.
+These are created automatically whenever an identifier is referenced that has not been declared as a variable or builtin.
+
+For example, in the following code, `LOCAL_CFLAGS` will only accessible within the current Minilang scope, as per normal lexical scoping rules.
+However, `CFLAGS` will also be accessible from any child context of the current one, including child directories.
+
+```lua
+var LOCAL_CFLAGS := ["-O2"]
+CFLAGS := ["-O2"]
+```
+
+Ressigning a value to a symbol within a child context only affects that child context (and its children).
+For example, if `CFLAGS` is changed in a child context as follows:
+
+```lua
+CFLAGS := old + ["-march=native"]
+```
+
+Then `CFLAGS` will have the new value `["-O2", "-march=native"]` within the child context (and its children).
+Note before the assignment completes, the value of the parent context is used, allowing child contexts to extend the values of symbols from their parents.
+
+Symbols are targets.
+When used in a build function, an automatic dependency on that symbol is added to the target being built.
+Moreover, the value of the symbol in a build function is resolved within the context of the target being built. 
+
+For example, if we have the following `_minibuild_` script in one directory:
+
+```lua
+CFLAGS := ["-O2"]
+
+compile_c := fun(Target) do
+	var Source := Target % "c"
+	execute("gcc", CFLAGS, "-c", Source, "-o", Target)
+end
+
+var Main := file("main.o") => compile_c
+
+DEFAULT[Main]
+
+subdir("dir")
+```
+
+And if the following `_minibuild_` script is in the folder `dir`:
+
+```lua
+CFLAGS := old + ["-march=native"]
+
+var Test := file("test.o") => compile_c
+
+DEFAULT[Test]
+```
+
+Then `main.o` will be compiled with `-O2`, but `test.o` will be compiled with `-O2 -march=native`.
 
 ### Project Layout
 
@@ -114,9 +196,13 @@ Returns the name of the current context as a string.
 
 #### `scope(Name, Callback)`
 
+Creates a new child context (adding _"::Name"_ onto the end of the name of the current context).
+`Callback` is then executed within that context.
+This is useful for adjusting the build flags independantly for different targets within the same directory. 
+
 #### `subdir(TargetDir)`
 
-Enters _`TargetDir`_ and loads the file `_minibuild_` within a new context.
+Enters _`TargetDir`_ and loads the file `_minibuild_` within a new child context.
 
 #### `vmount(TargetDir, SourceDir)`
 
@@ -154,31 +240,6 @@ Creates an [expression target](#expression-targets).
 #### ~`mkdir(File | String)`~
 
 #### ~`open(File | String, String)`~
-
-### The Build Process
-
-Everything in the Rabs build tree is considered a _target_.
-Every target has a unique id, and every unique id corresponds to a unique target.
-This means that when constructing a target anywhere in the build tree, if the construction results in the same id, then it will return the same target.
-
-Every target has a (possibly empty) set of dependencies, i.e. targets that must be built before this target is built.
-Cyclic dependencies are not allowed, and will trigger an error.
-
-Each run of Rabs is considered an iteration, and increments an internal iteration counter in the build database.
-In order to reduce unneccesary building for large project, at each iteration Rabs decides both whether a target needs to be built and whether, after building, it has actually changed.
-
-If a target is missing (e.g. for the first build, when a new target is added to the build or for a file that is missing from the file system), then it needs to be built.
-Once built, the build database records two iteration values for each target:
-
-1. The last built iteration: when the target was last built.
-2. The last changed iteration: when the target was last changed.
-
-Since a target can't change without being built, the last built iteration of a target is always greater or equal to the last changed iteration.
-The last built iteration of a target should be greater or equal to the last changed iteration of its dependencies.
-
-While building, if a target has a last built iteration less than the last changed iteration of any of its dependencies, then it is rebuilt, and its last built iteration updated to the current iteration.
-Then it is checked for changes (using hashing, depending on the target type), and the last changed iteration updated if it has indeed changed.
-This will trigger other target to be rebuilt as required. 
 
 #### Targets
 
