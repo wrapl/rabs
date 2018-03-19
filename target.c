@@ -576,6 +576,35 @@ ml_value_t *target_file_open(void *Data, int Count, ml_value_t **Args) {
 	return ml_file_open(0, 2, Args2);
 }
 
+#define TARGET_FILE_IS(NAME, TEST) \
+ml_value_t *target_file_is_ ## NAME(void *Data, int Count, ml_value_t **Args) { \
+	target_file_t *Target = (target_file_t *)Args[0]; \
+	const char *FileName; \
+	if (Target->Absolute) { \
+		FileName = Target->Path; \
+	} else { \
+		FileName = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0)); \
+	} \
+	struct stat Stat[1]; \
+	if (!stat(FileName, Stat)) { \
+		if (TEST(Stat->st_mode)) { \
+			return ml_string(#NAME, -1); \
+		} else { \
+			return MLNil; \
+		} \
+	} else { \
+		return ml_error("StatError", "could not read file attributes"); \
+	} \
+}
+
+TARGET_FILE_IS(dir, S_ISDIR);
+TARGET_FILE_IS(chr, S_ISCHR);
+TARGET_FILE_IS(blk, S_ISBLK);
+TARGET_FILE_IS(reg, S_ISREG);
+TARGET_FILE_IS(fifo, S_ISFIFO);
+TARGET_FILE_IS(lnk, S_ISLNK);
+TARGET_FILE_IS(sock, S_ISSOCK);
+
 static int mkdir_p(char *Path) {
 	if (!Path[0]) return -1;
 	struct stat Stat[1];
@@ -1101,6 +1130,9 @@ void target_threads_wait(int NumThreads) {
 	}
 }
 
+#define target_file_methods_is(TYPE) \
+	ml_method_by_name("is_" #TYPE, 0, target_file_is_ ## TYPE, FileTargetT, 0);
+
 void target_init() {
 	TargetT = ml_class(MLAnyT, "target");
 	FileTargetT = ml_class(TargetT, "file-target");
@@ -1118,6 +1150,7 @@ void target_init() {
 	ml_method_by_name("append", 0, target_file_stringify, MLStringBufferT, FileTargetT, 0);
 	ml_method_by_name("append", 0, target_expr_stringify, MLStringBufferT, ExprTargetT, 0);
 	ml_method_by_name("[]", 0, target_depend, TargetT, MLAnyT, 0);
+	ml_method_by_name("scan", 0, target_scan_new, TargetT, 0);
 	ml_method_by_name("[]", 0, scan_results_depend, ScanResultsT, MLAnyT, 0);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, 0);
 	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, 0);
@@ -1133,5 +1166,11 @@ void target_init() {
 	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, 0);
 	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, 0);
 	ml_method_by_name("rmdir", 0, target_file_rmdir, FileTargetT, 0);
-	ml_method_by_name("scan", 0, target_scan_new, TargetT, 0);
+	target_file_methods_is(dir);
+	target_file_methods_is(chr);
+	target_file_methods_is(blk);
+	target_file_methods_is(reg);
+	target_file_methods_is(fifo);
+	target_file_methods_is(lnk);
+	target_file_methods_is(sock);
 }
