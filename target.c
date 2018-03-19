@@ -495,6 +495,22 @@ ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
 	return ml_string(concat(Last + 1, 0), -1);
 }
 
+ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *FileTarget = (target_file_t *)Args[0];
+	const char *Path = FileTarget->Path;
+	const char *LastDot = Path;
+	const char *LastSlash = Path;
+	for (const char *P = Path; *P; ++P) {
+		if (*P == '.') LastDot = P;
+		if (*P == '/') LastSlash = P;
+	}
+	if (LastDot > LastSlash) {
+		return ml_string(concat(LastDot + 1, 0), -1);
+	} else {
+		return ml_string("", 0);
+	}
+}
+
 ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *FileName;
@@ -1160,6 +1176,7 @@ void target_init() {
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, 0);
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, 0);
 	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, 0);
+	ml_method_by_name("extension", 0, target_file_extension, FileTargetT, 0);
 	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, 0);
 	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, 0);
 	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, 0);
