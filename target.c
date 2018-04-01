@@ -785,6 +785,9 @@ ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 		ml_value_t *Arg = Args[I];
 		if (Arg->Type == MLListT) {
 			ml_list_foreach(Arg, Target, (void *)target_depends_list);
+		} else if (Arg->Type == MLStringT) {
+			target_t *Depend = target_symb_new(ml_string_value(Arg));
+			stringmap_insert(Target->Depends, Depend->Id, Depend);
 		} else if (Arg != MLNil) {
 			target_t *Depend = (target_t *)Arg;
 			stringmap_insert(Target->Depends, Depend->Id, Depend);
