@@ -1,14 +1,20 @@
 print("Here!\n")
 
-Config := file("config") => fun(Target) do
+TEST := defined("TEST")
+
+if TEST then
+	setenv("TEST_CFLAGS", "-pipe")
+end
+
+var Config := file("config") => fun(Target) do
 	var File := Target:open("w")
 	File:write("#!/bin/sh\n")
-	File:write("echo \"-g -O1\"\n")
+	File:write("echo \"-g -O1 $TEST_CFLAGS\"\n")
 	File:close()
 	execute("chmod +x", Target)
 end
 
-var TestCflags := expr("TestCflags")[Config] => fun() shell(Config)[1, -1]
+var TestCflags := expr("TestCflags")[Config, "TEST"] => fun() shell(Config):trim
 
 CFLAGS := old + [TestCflags]
 
