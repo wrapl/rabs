@@ -652,7 +652,7 @@ ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 	if (mkdir_p(concat(Path, 0)) < 0) {
 		return ml_error("FileError", "error creating directory %s", Path);
 	}
-	return MLNil;
+	return Args[0];
 }
 
 static int rmdir_p(char *Buffer, char *End) {
@@ -692,7 +692,7 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 	if (rmdir_p(Buffer, End) < 0) {
 		return ml_error("FileError", "error removing file / directory %s", Buffer);
 	}
-	return MLNil;
+	return Args[0];
 }
 
 struct target_meta_t {
@@ -746,7 +746,7 @@ static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Arg
 
 static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
 	ml_value_t *Value = cache_expr_get(Target->Id);
-	target_value_hash(Value, Target->Hash);
+	if (Value) target_value_hash(Value, Target->Hash);
 	return 0;
 }
 

@@ -1,6 +1,7 @@
 print("Here!\n")
 
 TEST := defined("TEST")
+GENFLAGS := defined("GENFLAGS")
 
 if TEST then
 	setenv("TEST_CFLAGS", "-pipe")
@@ -23,3 +24,27 @@ c_program(file("test"), [file("test.o"), file("test2.o")])
 for File := file(""):ls(".*\\.c") do
 	print('Found {File}\n')
 end
+
+var Generated := file("generated")[GENFLAGS] => fun(Generated) do
+	var GenDir := file("gen")
+	GenDir:mkdir
+	for I := 1 .. 5 do
+		var GenFile := (GenDir / 'gen_{I}.c'):open("w")
+		GenFile:write('void gen_{I}() \{}\n')
+		GenFile:close
+	end
+	Generated:open("w"):close
+end
+
+var ScanTest := Generated:scan("ScanTest") => fun() do
+	var Objects := []
+	for Source := file("gen"):ls do
+		var Object := Source % "o"
+		var Scan := Source:scan("INCLUDES") => c_includes
+		Object[Source, Scan] => c_compile
+		Objects:put(Object)
+	end
+	return Objects
+end
+
+DEFAULT[ScanTest]
