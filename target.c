@@ -261,6 +261,7 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 }
 
 static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+	pthread_mutex_unlock(GlobalLock);
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -270,6 +271,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
 		//printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
+		pthread_mutex_lock(GlobalLock);
 		return 0;
 	}
 	if (!S_ISREG(Stat->st_mode)) {
@@ -293,6 +295,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_
 		close(File);
 		sha256_final(Ctx, Target->Hash);
 	}
+	pthread_mutex_lock(GlobalLock);
 	return Stat->st_mtime;
 }
 
@@ -1050,6 +1053,10 @@ target_t *target_find(const char *Id) {
 		Path[PathLength] = 0;
 		Target->Context = Path;
 		Target->Name = Name + 1;
+		return (target_t *)Target;
+	}
+	if (!memcmp(Id, "expr", 4)) {
+		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id);
 		return (target_t *)Target;
 	}
 	return 0;

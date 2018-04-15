@@ -1,4 +1,4 @@
-print("Here!\n")
+var pkgconfig := fun(Args) expr(Args) => fun() Args
 
 TEST := defined("TEST")
 GENFLAGS := defined("GENFLAGS")
@@ -17,7 +17,7 @@ end
 
 var TestCflags := expr("TestCflags")[Config, "TEST"] => fun() shell(Config):trim
 
-CFLAGS := old + [TestCflags]
+CFLAGS := old + [TestCflags, pkgconfig("-march=native")]
 
 c_program(file("test"), [file("test.o"), file("test2.o")])
 
