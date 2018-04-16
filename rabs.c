@@ -376,6 +376,17 @@ int main(int Argc, const char **Argv) {
 	for (int I = 1; I < Argc; ++I) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
+			case 'h': {
+				puts("Usage: minibuild { options } [ target ]");
+				puts("    -h              display this message");
+				puts("    -Dkey[=value]   add a define");
+				puts("    -c              print shell commands");
+				puts("    -q target       print dependencies for target");
+				puts("    -l              lists all targets");
+				puts("    -p n            run n threads");
+				exit(0);
+				break;
+			}
 			case 'D': {
 				char *Define = concat(Argv[I] + 2, 0);
 				char *Equals = strchr(Define, '=');
