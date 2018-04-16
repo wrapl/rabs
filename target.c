@@ -585,14 +585,21 @@ ml_value_t *target_file_mod(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_file_open(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
+	const char *Mode = ml_string_value(Args[1]);
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
-	} else {
+	} else if (Mode[0] == 'r') {
 		FileName = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+	} else {
+		FileName = concat(RootPath, "/", Target->Path, 0);
 	}
-	ml_value_t *Args2[] = {ml_string(FileName, -1), Args[1]};
-	return ml_file_open(0, 2, Args2);
+	FILE *Handle = fopen(FileName, Mode);
+	if (!Handle) {
+		return ml_error("FileError", "error opening %s", FileName);
+	} else {
+		return ml_file_new(Handle);
+	}
 }
 
 #define TARGET_FILE_IS(NAME, TEST) \
@@ -646,13 +653,13 @@ static int mkdir_p(char *Path) {
 
 ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
-	const char *Path;
+	char *Path;
 	if (Target->Absolute) {
-		Path = Target->Path;
+		Path = concat(Target->Path, 0);
 	} else {
-		Path = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+		Path = concat(RootPath, "/", Target->Path, 0);
 	}
-	if (mkdir_p(concat(Path, 0)) < 0) {
+	if (mkdir_p(Path) < 0) {
 		return ml_error("FileError", "error creating directory %s", Path);
 	}
 	return Args[0];
