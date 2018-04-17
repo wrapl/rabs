@@ -261,7 +261,7 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 }
 
 static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
-	pthread_mutex_unlock(GlobalLock);
+
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -271,9 +271,9 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
 		//printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
-		pthread_mutex_lock(GlobalLock);
 		return 0;
 	}
+	pthread_mutex_unlock(GlobalLock);
 	if (!S_ISREG(Stat->st_mode)) {
 		memset(Target->Hash, -1, SHA256_BLOCK_SIZE);
 	} else if (Stat->st_mtime == PreviousTime) {
@@ -693,9 +693,9 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Path;
 	if (Target->Absolute) {
-		Path = Target->Path;
+		Path = concat(Target->Path, 0);
 	} else {
-		Path = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+		Path = concat(RootPath, "/", Target->Path, 0);
 	}
 	char *Buffer = snew(PATH_MAX);
 	char *End = stpcpy(Buffer, Path);
