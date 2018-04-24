@@ -13,6 +13,8 @@
 static sqlite3 *Cache;
 static sqlite3_stmt *HashGetStatement;
 static sqlite3_stmt *HashSetStatement;
+static sqlite3_stmt *HashBuildGetStatement;
+static sqlite3_stmt *HashBuildSetStatement;
 static sqlite3_stmt *LastCheckSetStatement;
 static sqlite3_stmt *DependsGetStatement;
 static sqlite3_stmt *DependsDeleteStatement;
@@ -51,7 +53,19 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS hashes(id TEXT PRIMARY KEY, last_updated INTEGER, last_checked INTEGER, hash BLOB, file_time INTEGER);", 0, 0, 0) != SQLITE_OK) {
+	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS hashes(id TEXT PRIMARY KEY, last_updated INTEGER, last_checked INTEGER, hash BLOB, file_time INTEGER, build BLOB);", 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	if (sqlite3_exec(Cache, "CREATE INDEX IF NOT EXISTS hashes_idx ON hashes(id);", 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS builds(id TEXT PRIMARY KEY, build BLOB);", 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	if (sqlite3_exec(Cache, "CREATE INDEX IF NOT EXISTS builds_idx ON builds(id);", 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -80,6 +94,14 @@ void cache_open(const char *RootPath) {
 		exit(1);
 	}
 	if (sqlite3_prepare_v2(Cache, "REPLACE INTO hashes(id, hash, last_updated, last_checked, file_time) VALUES(?, ?, ?, ?, ?)", -1, &HashSetStatement, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	if (sqlite3_prepare_v2(Cache, "SELECT build FROM builds WHERE id = ?", -1, &HashBuildGetStatement, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	if (sqlite3_prepare_v2(Cache, "REPLACE INTO builds(id, build) VALUES(?, ?)", -1, &HashBuildSetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -147,16 +169,15 @@ void cache_close() {
 }
 
 
-void cache_hash_get(const char *Id, int *LastUpdated, int *LastChecked, time_t *FileTime, BYTE Digest[SHA256_BLOCK_SIZE]) {
+void cache_hash_get(const char *Id, int *LastUpdated, int *LastChecked, time_t *FileTime, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	sqlite3_bind_text(HashGetStatement, 1, Id, -1, SQLITE_STATIC);
-	int Version = 0;
 	if (sqlite3_step(HashGetStatement) == SQLITE_ROW) {
-		memcpy(Digest, sqlite3_column_blob(HashGetStatement, 0), SHA256_BLOCK_SIZE);
+		memcpy(Hash, sqlite3_column_blob(HashGetStatement, 0), SHA256_BLOCK_SIZE);
 		*LastUpdated = sqlite3_column_int(HashGetStatement, 1);
 		*LastChecked = sqlite3_column_int(HashGetStatement, 2);
 		*FileTime = sqlite3_column_int(HashGetStatement, 3);
 	} else {
-		memset(Digest, 0, SHA256_BLOCK_SIZE);
+		memset(Hash, 0, SHA256_BLOCK_SIZE);
 		*LastUpdated = 0;
 		*LastChecked = 0;
 		*FileTime = 0;
@@ -164,14 +185,31 @@ void cache_hash_get(const char *Id, int *LastUpdated, int *LastChecked, time_t *
 	sqlite3_reset(HashGetStatement);
 }
 
-void cache_hash_set(const char *Id, time_t FileTime, BYTE Digest[SHA256_BLOCK_SIZE]) {
+void cache_hash_set(const char *Id, time_t FileTime, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	sqlite3_bind_text(HashSetStatement, 1, Id, -1, SQLITE_STATIC);
-	sqlite3_bind_blob(HashSetStatement, 2, Digest, SHA256_BLOCK_SIZE, SQLITE_STATIC);
+	sqlite3_bind_blob(HashSetStatement, 2, Hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
 	sqlite3_bind_int(HashSetStatement, 3, CurrentVersion);
 	sqlite3_bind_int(HashSetStatement, 4, CurrentVersion);
 	sqlite3_bind_int(HashSetStatement, 5, FileTime);
 	sqlite3_step(HashSetStatement);
 	sqlite3_reset(HashSetStatement);
+}
+
+void cache_build_hash_get(const char *Id, BYTE Hash[SHA256_BLOCK_SIZE]) {
+	sqlite3_bind_text(HashBuildGetStatement, 1, Id, -1, SQLITE_STATIC);
+	if (sqlite3_step(HashBuildGetStatement) == SQLITE_ROW) {
+		memcpy(Hash, sqlite3_column_blob(HashBuildGetStatement, 0), SHA256_BLOCK_SIZE);
+	} else {
+		memset(Hash, 0, SHA256_BLOCK_SIZE);
+	}
+	sqlite3_reset(HashBuildGetStatement);
+}
+
+void cache_build_hash_set(const char *Id, BYTE Hash[SHA256_BLOCK_SIZE]) {
+	sqlite3_bind_text(HashBuildSetStatement, 1, Id, -1, SQLITE_STATIC);
+	sqlite3_bind_blob(HashBuildSetStatement, 2, Hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
+	sqlite3_step(HashBuildSetStatement);
+	sqlite3_reset(HashBuildSetStatement);
 }
 
 void cache_last_check_set(const char *Id) {
@@ -216,7 +254,8 @@ stringmap_t *cache_scan_get(const char *Id) {
 	while (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
 		if (Scans == 0) Scans = new(stringmap_t);
 		const char *ScanId = sqlite3_column_text(ScanGetStatement, 0);
-		stringmap_insert(Scans, ScanId, target_find(ScanId));
+		target_t *Target = target_find(ScanId);
+		stringmap_insert(Scans, ScanId, Target);
 	}
 	sqlite3_reset(ScanGetStatement);
 	return Scans;

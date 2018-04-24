@@ -11,6 +11,8 @@ void cache_close();
 
 void cache_hash_get(const char *Id, int *LastUpdated, int *LastChecked, time_t *FileTime, BYTE Digest[SHA256_BLOCK_SIZE]);
 void cache_hash_set(const char *Id, time_t FileTime, BYTE Digest[SHA256_BLOCK_SIZE]);
+void cache_build_hash_get(const char *Id, BYTE Hash[SHA256_BLOCK_SIZE]);
+void cache_build_hash_set(const char *Id, BYTE Hash[SHA256_BLOCK_SIZE]);
 void cache_last_check_set(const char *Id);
 
 stringmap_t *cache_depends_get(const char *Id);

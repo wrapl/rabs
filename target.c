@@ -79,7 +79,7 @@ int depends_update_fn(const char *Key, target_t *Depend, target_t *Target) {
 	return 0;
 }
 
-int depends_print_fn(const char *Key, target_t *Depend, int *DependsLastUpdated) {
+static int depends_print_fn(const char *Key, target_t *Depend, int *DependsLastUpdated) {
 	printf("\t\e[35m%s[%d]\e[0m\n", Depend->Id, Depend->LastUpdated);
 	return 0;
 }
@@ -89,9 +89,14 @@ static void target_queue_build(target_t *Target) {
 	BuildQueue = Target;
 }
 
-int depends_updated_fn(const char *Key, target_t *Target, target_t *Depend) {
+static int depends_updated_fn(const char *Key, target_t *Target, target_t *Depend) {
 	if (Depend->LastUpdated > Target->DependsLastUpdated) Target->DependsLastUpdated = Depend->LastUpdated;
 	if (--Target->WaitCount == 0) target_queue_build(Target);
+	return 0;
+}
+
+static int depends_copy_fn(const char *Key, target_t *Depend, stringmap_t *DetectedDepends) {
+	stringmap_insert(DetectedDepends, Key, Depend);
 	return 0;
 }
 
@@ -106,6 +111,7 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 		if ((Target->DependsLastUpdated > LastChecked) || target_missing(Target)) {
 			CurrentTarget = Target;
 			stringmap_t *DetectedDepends = CurrentDetectedDepends = new(stringmap_t);
+			stringmap_foreach(Target->Depends, DetectedDepends, (void *)depends_copy_fn);
 			target_build(Target);
 			cache_depends_set(Target->Id, DetectedDepends);
 		}
@@ -144,20 +150,13 @@ void target_update(target_t *Target) {
 			int8_t BuildHash[SHA256_BLOCK_SIZE];
 			if (Target->Build->Type == MLClosureT) {
 				ml_closure_hash(Target->Build, BuildHash);
-				//printf("CurrentHash =");
-				//for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf("%02hhx", BuildHash[I]);
-				//printf("\n");
 			} else {
-				memset(BuildHash, 0, SHA256_BLOCK_SIZE);
+				memset(BuildHash, -1, SHA256_BLOCK_SIZE);
 			}
 			stringmap_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
-			const char *BuildId = concat(Target->Id, "::build", 0);
-			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
-			//printf("PreviousHash =");
-			//for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf("%02hhx", Previous[I]);
-			//printf("\n");
+			cache_build_hash_get(Target->Id, Previous);
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
-				cache_hash_set(BuildId, 0, BuildHash);
+				cache_build_hash_set(Target->Id, BuildHash);
 				Target->DependsLastUpdated = CurrentVersion;
 			} else if (PreviousDetectedDepends) {
 				stringmap_foreach(PreviousDetectedDepends, Target, (void *)depends_update_fn);
@@ -261,7 +260,6 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 }
 
 static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
-
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -668,7 +666,7 @@ ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 static int rmdir_p(char *Buffer, char *End) {
 	if (!Buffer[0]) return -1;
 	struct stat Stat[1];
-	if (stat(Buffer, Stat)) return 1;
+	if (lstat(Buffer, Stat)) return 0;
 	if (S_ISDIR(Stat->st_mode)) {
 		DIR *Dir = opendir(Buffer);
 		if (!Dir) return 1;
@@ -820,7 +818,7 @@ struct target_scan_t {
 	const char *Name;
 	target_t *Source;
 	scan_results_t *Results;
-	ml_value_t *Scan;
+	ml_value_t *Scan, *Rebuild;
 };
 
 static ml_type_t *ScanTargetT;
@@ -833,8 +831,9 @@ struct scan_results_t {
 static ml_type_t *ScanResultsT;
 
 static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
-	stringmap_t *Scans = cache_scan_get(Target->Results->Id);
-	if (Scans) stringmap_foreach(Scans, Target->Results, (void *)depends_update_fn);
+	//stringmap_t *Scans = cache_scan_get(Target->Results->Id);
+	//if (Scans) stringmap_foreach(Scans, Target->Results, (void *)depends_update_fn);
+	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	return 0;
 }
 
@@ -863,8 +862,6 @@ ml_value_t *scan_results_set_build(void *Data, int Count, ml_value_t **Args) {
 static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
 	stringmap_t *Scans = cache_scan_get(Target->Id);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
-	//printf("#%s\n", Target->Id);
-	//stringmap_foreach(Scans, 0, (void *)depends_print_fn);
 	if (Scans) stringmap_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
 	return 0;
 }
@@ -885,7 +882,40 @@ static void target_scan_build(target_scan_t *Target) {
 	}
 	stringmap_t Scans[1] = {STRINGMAP_INIT};
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
+	cache_depends_set(Target->Results->Id, Scans);
 	cache_scan_set(Target->Results->Id, Scans);
+}
+
+static ml_value_t *scan_target_rebuild(target_scan_t *Target, int Count, ml_value_t **Args) {
+	if (Target->LastUpdated != CurrentVersion) {
+		ml_value_t *Result = ml_inline(Target->Build, 1, Target->Source);
+		if (Result->Type == MLErrorT) {
+			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
+			const char *Source;
+			int Line;
+			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+			exit(1);
+		}
+		stringmap_t Scans[1] = {STRINGMAP_INIT};
+		ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
+		cache_depends_set(Target->Results->Id, Scans);
+		cache_scan_set(Target->Results->Id, Scans);
+		Target->LastUpdated = CurrentVersion;
+	}
+	return MLNil;
+}
+
+static int scan_depends_update_fn(const char *Key, target_t *Depend, scan_results_t *Target) {
+	if (!Depend->Build) {
+		BYTE BuildHash[SHA256_BLOCK_SIZE];
+		cache_build_hash_get(Depend->Id, BuildHash);
+		for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) if (BuildHash[I]) {
+			Depend->Build = Target->Scan->Rebuild;
+			break;
+		}
+	}
+	//stringmap_insert(Target->Depends, Key, Depend);
+	return 0;
 }
 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
@@ -901,8 +931,11 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 		ScanTarget->Name = Name;
 		ScanTarget->Source = ParentTarget;
 		ScanTarget->Results = Target;
+		ScanTarget->Rebuild = ml_function(ScanTarget, (void *)scan_target_rebuild);
 		stringmap_insert(Target->Depends, ScanTarget->Id, ScanTarget);
 	}
+	stringmap_t *Scans = cache_scan_get(Target->Id);
+	if (Scans) stringmap_foreach(Scans, Target, (void *)scan_depends_update_fn);
 	return (ml_value_t *)Target;
 }
 
