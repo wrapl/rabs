@@ -939,6 +939,8 @@ static int scan_depends_update_fn(const char *DependId, target_t *Depend, scan_r
 			Depend->Build = Target->Scan->Rebuild;
 			break;
 		}
+		stringmap_t *Depends = cache_depends_get(Depend->Id);
+		if (Depends) stringmap_foreach(Depends, Target, (void *)scan_depends_update_fn);
 	}
 	return 0;
 }
