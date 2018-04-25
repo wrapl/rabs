@@ -30,7 +30,7 @@ context_t *context_push(const char *Path) {
 	Context->Locals[0] = STRINGMAP_INIT;
 	target_t *Default = Context->Default = (target_t *)target_meta_new(0, 1, &DefaultString);
 	stringmap_insert(Context->Locals, "DEFAULT", Default);
-	target_t *BuildDir = target_file_check(Path, 0);
+	target_t *BuildDir = target_file_check(Path[0] == '/' ? Path + 1 : Path, 0);
 	stringmap_insert(Context->Locals, "BUILDDIR", BuildDir);
 	stringmap_insert(ContextCache, Context->Name, Context);
 	return Context;

@@ -225,7 +225,8 @@ stringmap_t *cache_depends_get(const char *Id) {
 	while (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
 		if (Depends == 0) Depends = new(stringmap_t);
 		const char *DependId = sqlite3_column_text(DependsGetStatement, 0);
-		stringmap_insert(Depends, DependId, target_find(DependId));
+		target_t *Depend = target_find(DependId);
+		if (Depend) stringmap_insert(Depends, Depend->Id, Depend);
 	}
 	sqlite3_reset(DependsGetStatement);
 	return Depends;
@@ -255,7 +256,7 @@ stringmap_t *cache_scan_get(const char *Id) {
 		if (Scans == 0) Scans = new(stringmap_t);
 		const char *ScanId = sqlite3_column_text(ScanGetStatement, 0);
 		target_t *Target = target_find(ScanId);
-		stringmap_insert(Scans, ScanId, Target);
+		if (Target) stringmap_insert(Scans, Target->Id, Target);
 	}
 	sqlite3_reset(ScanGetStatement);
 	return Scans;
