@@ -38,7 +38,7 @@ end
 
 var ScanTest := Generated:scan("ScanTest") => fun() do
 	var Objects := []
-	for Source := file("gen"):ls do
+	for Source := file("gen"):ls(".*.c") do
 		var Object := Source % "o"
 		var Scan := Source:scan("INCLUDES") => c_includes
 		Object[Source, Scan] => c_compile
