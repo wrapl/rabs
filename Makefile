@@ -1,6 +1,6 @@
 .PHONY: clean all
 
-all: minibuild
+all: rabs
 
 sources = \
 	minilang/sha256.c \
@@ -18,8 +18,8 @@ sources = \
 CFLAGS += -std=gnu99 -I. -Iminilang -g -pthread -DGC_THREADS -D_GNU_SOURCE
 LDFLAGS += -lm -ldl -lsqlite3 -g -lgc
 
-minibuild: Makefile $(sources) *.h
+rabs: Makefile $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
 
 clean:
-	rm minibuild
+	rm rabs

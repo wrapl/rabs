@@ -17,9 +17,10 @@ typedef struct target_t target_t;
 	struct context_t *BuildContext; \
 	const char *Id; \
 	stringmap_t Depends[1]; \
-	stringmap_t Targets[1]; \
+	stringmap_t Affects[1]; \
 	int WaitCount, DependsLastUpdated, LastUpdated; \
-	int8_t Hash[SHA256_BLOCK_SIZE];
+	int8_t Hash[SHA256_BLOCK_SIZE]; \
+	int8_t BuildHash[SHA256_BLOCK_SIZE];
 
 struct target_t {
 	TARGET_FIELDS

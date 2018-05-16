@@ -351,24 +351,6 @@ int main(int Argc, const char **Argv) {
 	context_init();
 	ml_file_init();
 
-#ifdef LINUX
-	const char *Path = get_current_dir_name();
-#else
-	char *Path = snew(1024);
-	getcwd(Path, 1024);
-#endif
-	RootPath = find_root(Path);
-	if (!RootPath) {
-		puts("\e[31mError: could not find project root\e[0m");
-		exit(1);
-	}
-
-	context_push("");
-	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
-
-	printf("RootPath = %s, Path = %s\n", RootPath, Path);
-	cache_open(RootPath);
-
 	const char *TargetName = 0;
 	int QueryOnly = 0;
 	int ListTargets = 0;
@@ -377,7 +359,7 @@ int main(int Argc, const char **Argv) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
 			case 'h': {
-				puts("Usage: minibuild { options } [ target ]");
+				printf("Usage: %s { options } [ target ]", Argv[0]);
 				puts("    -h              display this message");
 				puts("    -Dkey[=value]   add a define");
 				puts("    -c              print shell commands");
@@ -427,6 +409,25 @@ int main(int Argc, const char **Argv) {
 			TargetName = Argv[I];
 		};
 	};
+
+#ifdef LINUX
+	const char *Path = get_current_dir_name();
+#else
+	char *Path = snew(1024);
+	getcwd(Path, 1024);
+#endif
+	RootPath = find_root(Path);
+	if (!RootPath) {
+		puts("\e[31mError: could not find project root\e[0m");
+		exit(1);
+	}
+
+	context_push("");
+	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
+
+	printf("RootPath = %s, Path = %s\n", RootPath, Path);
+	cache_open(RootPath);
+
 	target_threads_start(NumThreads);
 
 	load_file(concat(RootPath, SystemName, 0));
