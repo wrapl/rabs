@@ -712,7 +712,7 @@ static ml_type_t *MetaTargetT;
 
 static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
-	stringmap_foreach(Target->Depends, Target->Hash, (void *)depends_hash_fn);
+	memcpy(Target->Hash, &Target->DependsLastUpdated, sizeof(Target->DependsLastUpdated));
 	return 0;
 }
 
@@ -782,25 +782,22 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
-ml_value_t *target_depends_list(target_t *Depend, target_t *Target) {
-	stringmap_insert(Target->Depends, Depend->Id, Depend);
+static int target_depends_single(ml_value_t *Arg, target_t *Target) {
+	if (Arg->Type == MLListT) {
+		ml_list_foreach(Arg, Target, (void *)target_depends_single);
+	} else if (Arg->Type == MLStringT) {
+		target_t *Depend = target_symb_new(ml_string_value(Arg));
+		stringmap_insert(Target->Depends, Depend->Id, Depend);
+	} else if (Arg != MLNil) {
+		target_t *Depend = (target_t *)Arg;
+		stringmap_insert(Target->Depends, Depend->Id, Depend);
+	}
 	return 0;
 }
 
 ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
-	for (int I = 1; I < Count; ++I) {
-		ml_value_t *Arg = Args[I];
-		if (Arg->Type == MLListT) {
-			ml_list_foreach(Arg, Target, (void *)target_depends_list);
-		} else if (Arg->Type == MLStringT) {
-			target_t *Depend = target_symb_new(ml_string_value(Arg));
-			stringmap_insert(Target->Depends, Depend->Id, Depend);
-		} else if (Arg != MLNil) {
-			target_t *Depend = (target_t *)Arg;
-			stringmap_insert(Target->Depends, Depend->Id, Depend);
-		}
-	}
+	for (int I = 1; I < Count; ++I) target_depends_single(Args[I], Target);
 	return Args[0];
 }
 
@@ -847,16 +844,8 @@ static int target_scan_missing(target_scan_t *Target, int LastChecked) {
 }
 
 ml_value_t *scan_results_depend(void *Data, int Count, ml_value_t **Args) {
-	target_scan_t *Target = ((scan_results_t *)Args[0])->Scan;
-	for (int I = 1; I < Count; ++I) {
-		ml_value_t *Arg = Args[I];
-		if (Arg->Type == MLListT) {
-			ml_list_foreach(Arg, Target, (void *)target_depends_list);
-		} else if (Arg != MLNil) {
-			target_t *Depend = (target_t *)Arg;
-			stringmap_insert(Target->Depends, Depend->Id, Depend);
-		}
-	}
+	target_t *Target = (target_t *)((scan_results_t *)Args[0])->Scan;
+	for (int I = 1; I < Count; ++I) target_depends_single(Args[I], Target);
 	return Args[0];
 }
 
