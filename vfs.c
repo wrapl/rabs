@@ -80,12 +80,13 @@ static char *unsolve0(const vmount_t *Mount, const char *Path) {
 }
 
 char *vfs_unsolve(const vmount_t *Mount, const char *Path) {
+	const char *Orig = Path;
 	while (Mount) {
 		const char *Suffix = match_prefix(Path, Mount->Target);
 		if (Suffix) Path = concat(Mount->Path, Suffix, NULL);
 		Mount = Mount->Previous;
 	}
-	if (Path == Path) Path = concat(Path, NULL);
+	if (Path == Orig) Path = concat(Path, NULL);
 	return (char *)Path;
 }
 
