@@ -52,13 +52,13 @@ static int SpareThreads = 0;
 
 static void target_wait(target_t *Target);
 
-void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]);
+void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]);
 
-static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]);
+static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]);
 static void target_build(target_t *Target);
 static int target_missing(target_t *Target, int LastChecked);
 
-int depends_hash_fn(const char *Id, target_t *Depend, int8_t Hash[SHA256_BLOCK_SIZE]) {
+int depends_hash_fn(const char *Id, target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
 	//for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf(" %x", Depend->Hash[I]);
 	return 0;
@@ -86,7 +86,7 @@ static int depends_updated_fn(const char *AffectId, target_t *Affect, target_t *
 
 static void target_do_build(int ThreadIndex, target_t *Target) {
 	//printf("\e[32m[%d] Building %s (%d targets, %d bytes)\e[0m\n", ThreadIndex, Target->Id, NumTargets, GC_get_heap_size());
-	int8_t Previous[SHA256_BLOCK_SIZE];
+	BYTE Previous[SHA256_BLOCK_SIZE];
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);
@@ -142,7 +142,7 @@ void target_update(target_t *Target) {
 		stringmap_foreach(Target->Depends, Target, (void *)depends_update_fn);
 		if (Target->Build && Target->Build->Type == MLClosureT) {
 			ml_closure_hash(Target->Build, Target->BuildHash);
-			int8_t Previous[SHA256_BLOCK_SIZE];
+			BYTE Previous[SHA256_BLOCK_SIZE];
 			cache_build_hash_get(Target->Id, Previous);
 			if (memcmp(Previous, Target->BuildHash, SHA256_BLOCK_SIZE)) {
 				Target->DependsLastUpdated = CurrentVersion;
@@ -176,11 +176,11 @@ void target_query(target_t *Target) {
 		printf("Target: %s\n", Target->Id);
 		int DependsLastUpdated = 0;
 		stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_query_fn);
-		int8_t Previous[SHA256_BLOCK_SIZE];
+		BYTE Previous[SHA256_BLOCK_SIZE];
 		int LastUpdated, LastChecked;
 		time_t FileTime = 0;
 		if (Target->Build) {
-			int8_t BuildHash[SHA256_BLOCK_SIZE];
+			BYTE BuildHash[SHA256_BLOCK_SIZE];
 			ml_closure_hash(Target->Build, BuildHash);
 			stringmap_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
 			const char *BuildId = concat(Target->Id, "::build", NULL);
@@ -254,7 +254,7 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 	}
 }
 
-static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -711,7 +711,7 @@ struct target_meta_t {
 
 static ml_type_t *MetaTargetT;
 
-static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	memcpy(Target->Hash, &Target->DependsLastUpdated, sizeof(Target->DependsLastUpdated));
 	return 0;
@@ -753,7 +753,7 @@ static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Arg
 	return ml_inline(StringMethod, 1, Value);
 }
 
-static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	ml_value_t *Value = cache_expr_get(Target->Id);
 	if (Value) target_value_hash(Value, Target->Hash);
 	return 0;
@@ -828,7 +828,7 @@ struct scan_results_t {
 
 static ml_type_t *ScanResultsT;
 
-static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	stringmap_t *Scans = cache_scan_get(Target->Results->Id);
 	if (Scans) stringmap_foreach(Scans, Target->Results, (void *)depends_update_fn);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
@@ -837,7 +837,7 @@ static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, int8_
 
 static int target_scan_missing(target_scan_t *Target, int LastChecked) {
 	if (!LastChecked) return 1;
-	int8_t Hash[SHA256_BLOCK_SIZE];
+	BYTE Hash[SHA256_BLOCK_SIZE];
 	int LastUpdated, ResultsLastChecked;
 	time_t Time = 0;
 	cache_hash_get(Target->Results->Id, &LastUpdated, &ResultsLastChecked, &Time, Hash);
@@ -858,7 +858,7 @@ ml_value_t *scan_results_set_build(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	stringmap_t *Scans = cache_scan_get(Target->Id);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	if (Scans) stringmap_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
@@ -976,7 +976,7 @@ static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 	return Value;
 }
 
-static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	context_t *Context = context_find(Target->Context);
 	ml_value_t *Value = context_symb_get(Context, Target->Name) ?: MLNil;
 	target_value_hash(Value, Target->Hash);
@@ -995,14 +995,14 @@ target_t *target_symb_new(const char *Name) {
 }
 
 static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
-	int8_t ChildHash[SHA256_BLOCK_SIZE];
+	BYTE ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Value, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	return 0;
 }
 
 static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
-	int8_t ChildHash[SHA256_BLOCK_SIZE];
+	BYTE ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Key, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	target_value_hash(Value, ChildHash);
@@ -1010,7 +1010,7 @@ static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx)
 	return 0;
 }
 
-void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
+void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	if (Value->Type == MLNilT) {
 		memset(Hash, -1, SHA256_BLOCK_SIZE);
 	} else if (Value->Type == MLIntegerT) {
@@ -1067,7 +1067,7 @@ void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
 	}
 }
 
-static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	if (Target->Type == FileTargetT) return target_file_hash((target_file_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == MetaTargetT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
