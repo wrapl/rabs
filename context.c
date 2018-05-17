@@ -20,7 +20,7 @@ context_t *context_push(const char *Path) {
 	Context->Parent = CurrentContext;
 	Context->Path = Path;
 	Context->Name = Path;
-	Context->FullPath = concat(RootPath, Path, 0);
+	Context->FullPath = concat(RootPath, Path, NULL);
 	if (CurrentContext) {
 		Context->Mounts = CurrentContext->Mounts;
 	} else {
@@ -40,7 +40,7 @@ context_t *context_scope(const char *Name) {
 	context_t *Context = new(context_t);
 	Context->Parent = CurrentContext;
 	Context->Path = CurrentContext->Path;
-	Context->Name = concat(CurrentContext->Name, ":", Name, 0);
+	Context->Name = concat(CurrentContext->Name, ":", Name, NULL);
 	Context->FullPath = CurrentContext->FullPath;
 	if (CurrentContext) {
 		Context->Mounts = CurrentContext->Mounts;

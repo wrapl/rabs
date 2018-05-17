@@ -18,8 +18,8 @@ extern const char *RootPath;
 const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target) {
 	vmount_t *Mount = new(vmount_t);
 	Mount->Previous = Previous;
-	Mount->Path = concat(RootPath, Path, 0);
-	Mount->Target = concat(RootPath, Target, 0);
+	Mount->Path = concat(RootPath, Path, NULL);
+	Mount->Target = concat(RootPath, Target, NULL);
 	return Mount;
 }
 
@@ -27,7 +27,7 @@ static char *resolve0(const vmount_t *Mount, const char *Path) {
 	while (Mount) {
 		const char *Suffix = match_prefix(Path, Mount->Path);
 		if (Suffix) {
-			char *Resolved = concat(Mount->Target, Suffix, 0);
+			char *Resolved = concat(Mount->Target, Suffix, NULL);
 			struct stat Stat[1];
 			if (stat(Resolved, Stat) == 0) return Resolved;
 			Resolved = resolve0(Mount->Previous, Resolved);
@@ -40,15 +40,15 @@ static char *resolve0(const vmount_t *Mount, const char *Path) {
 
 char *vfs_resolve(const vmount_t *Mount, const char *Path) {
 	struct stat Stat[1];
-	if (stat(Path, Stat) == 0) return concat(Path, 0);
-	return resolve0(Mount, Path) ?: concat(Path, 0);
+	if (stat(Path, Stat) == 0) return concat(Path, NULL);
+	return resolve0(Mount, Path) ?: concat(Path, NULL);
 }
 
 static int vfs_resolve_foreach0(const vmount_t *Mount, const char *Path, void *Data, int (*callback)(void *Data, const char *Path)) {
 	while (Mount) {
 		const char *Suffix = match_prefix(Path, Mount->Path);
 		if (Suffix) {
-			char *Resolved = concat(Mount->Target, Suffix, 0);
+			char *Resolved = concat(Mount->Target, Suffix, NULL);
 			struct stat Stat[1];
 			if (stat(Resolved, Stat) == 0) if (callback(Data, Resolved)) return 1;
 			if (vfs_resolve_foreach0(Mount->Previous, Resolved, Data, callback)) return 1;
@@ -68,7 +68,7 @@ static char *unsolve0(const vmount_t *Mount, const char *Path) {
 	while (Mount) {
 		const char *Suffix = match_prefix(Path, Mount->Target);
 		if (Suffix) {
-			char *Resolved = concat(Mount->Path, Suffix, 0);
+			char *Resolved = concat(Mount->Path, Suffix, NULL);
 			struct stat Stat[1];
 			if (stat(Resolved, Stat) == 0) return Resolved;
 			Resolved = unsolve0(Mount->Previous, Resolved);
@@ -82,10 +82,10 @@ static char *unsolve0(const vmount_t *Mount, const char *Path) {
 char *vfs_unsolve(const vmount_t *Mount, const char *Path) {
 	while (Mount) {
 		const char *Suffix = match_prefix(Path, Mount->Target);
-		if (Suffix) Path = concat(Mount->Path, Suffix, 0);
+		if (Suffix) Path = concat(Mount->Path, Suffix, NULL);
 		Mount = Mount->Previous;
 	}
-	if (Path == Path) Path = concat(Path, 0);
+	if (Path == Path) Path = concat(Path, NULL);
 	return (char *)Path;
 }
 

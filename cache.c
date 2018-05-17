@@ -32,7 +32,7 @@ static int version_callback(void *Data, int NumCols, char **Values, char **Names
 }
 
 void cache_open(const char *RootPath) {
-	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", 0);
+	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", NULL);
 	if (sqlite3_open_v2(CacheFileName, &Cache, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
