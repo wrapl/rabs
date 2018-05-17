@@ -19,8 +19,8 @@ typedef struct target_t target_t;
 	stringmap_t Depends[1]; \
 	stringmap_t Affects[1]; \
 	int WaitCount, DependsLastUpdated, LastUpdated; \
-	int8_t Hash[SHA256_BLOCK_SIZE]; \
-	int8_t BuildHash[SHA256_BLOCK_SIZE];
+	BYTE Hash[SHA256_BLOCK_SIZE]; \
+	BYTE BuildHash[SHA256_BLOCK_SIZE];
 
 struct target_t {
 	TARGET_FIELDS
