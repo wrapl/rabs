@@ -147,16 +147,16 @@ void cache_open(const char *RootPath) {
 	}
 	++CurrentVersion;
 	printf("CurrentVersion = %d\n", CurrentVersion);
-	atexit(cache_close);
-}
-
-void cache_close() {
 	char Buffer[100];
 	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', %d)", CurrentVersion);
 	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
+	atexit(cache_close);
+}
+
+void cache_close() {
 	sqlite3_finalize(HashGetStatement);
 	sqlite3_finalize(HashSetStatement);
 	sqlite3_finalize(DependsGetStatement);

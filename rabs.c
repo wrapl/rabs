@@ -326,6 +326,11 @@ static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
 	return stringmap_search(Defines, Key) ?: MLNil;
 }
 
+static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
+	asm("int3");
+	return MLNil;
+}
+
 int main(int Argc, const char **Argv) {
 	GC_INIT();
 	ml_init();
@@ -346,6 +351,7 @@ int main(int Argc, const char **Argv) {
 	stringmap_insert(Globals, "getenv", ml_function(0, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(0, ml_setenv));
 	stringmap_insert(Globals, "defined", ml_function(0, defined));
+	stringmap_insert(Globals, "debug", ml_function(0, debug));
 
 	vfs_init();
 	target_init();
