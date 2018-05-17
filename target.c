@@ -432,7 +432,7 @@ static ml_value_t *target_file_ls_iter_key(ml_value_t *Ref) {
 static void target_file_ls_iter_finalize(target_file_ls_iter_t *Iter, void *Data) {
 	if (Iter->Dir) {
 		closedir(Iter->Dir);
-		Iter->Dir;
+		Iter->Dir = NULL;
 	}
 }
 
