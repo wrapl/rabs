@@ -16,6 +16,7 @@
 #include <regex.h>
 #include <dirent.h>
 #include <ml_file.h>
+#include <limits.h>
 
 enum {
 	STATE_UNCHECKED = 0,
@@ -51,13 +52,13 @@ static int SpareThreads = 0;
 
 static void target_wait(target_t *Target);
 
-void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]);
+void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]);
 
-static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]);
+static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]);
 static void target_build(target_t *Target);
 static int target_missing(target_t *Target, int LastChecked);
 
-int depends_hash_fn(const char *Id, target_t *Depend, int8_t Hash[SHA256_BLOCK_SIZE]) {
+int depends_hash_fn(const char *Id, target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
 	//for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf(" %x", Depend->Hash[I]);
 	return 0;
@@ -85,7 +86,7 @@ static int depends_updated_fn(const char *AffectId, target_t *Affect, target_t *
 
 static void target_do_build(int ThreadIndex, target_t *Target) {
 	//printf("\e[32m[%d] Building %s (%d targets, %d bytes)\e[0m\n", ThreadIndex, Target->Id, NumTargets, GC_get_heap_size());
-	int8_t Previous[SHA256_BLOCK_SIZE];
+	BYTE Previous[SHA256_BLOCK_SIZE];
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);
@@ -141,7 +142,7 @@ void target_update(target_t *Target) {
 		stringmap_foreach(Target->Depends, Target, (void *)depends_update_fn);
 		if (Target->Build && Target->Build->Type == MLClosureT) {
 			ml_closure_hash(Target->Build, Target->BuildHash);
-			int8_t Previous[SHA256_BLOCK_SIZE];
+			BYTE Previous[SHA256_BLOCK_SIZE];
 			cache_build_hash_get(Target->Id, Previous);
 			if (memcmp(Previous, Target->BuildHash, SHA256_BLOCK_SIZE)) {
 				Target->DependsLastUpdated = CurrentVersion;
@@ -175,14 +176,14 @@ void target_query(target_t *Target) {
 		printf("Target: %s\n", Target->Id);
 		int DependsLastUpdated = 0;
 		stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_query_fn);
-		int8_t Previous[SHA256_BLOCK_SIZE];
+		BYTE Previous[SHA256_BLOCK_SIZE];
 		int LastUpdated, LastChecked;
 		time_t FileTime = 0;
 		if (Target->Build) {
-			int8_t BuildHash[SHA256_BLOCK_SIZE];
+			BYTE BuildHash[SHA256_BLOCK_SIZE];
 			ml_closure_hash(Target->Build, BuildHash);
 			stringmap_t *PreviousDetectedDepends = cache_depends_get(Target->Id);
-			const char *BuildId = concat(Target->Id, "::build", 0);
+			const char *BuildId = concat(Target->Id, "::build", NULL);
 			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
 			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
 				DependsLastUpdated = CurrentVersion;
@@ -253,7 +254,7 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 	}
 }
 
-static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -314,8 +315,8 @@ static int target_file_missing(target_file_t *Target) {
 }
 
 target_t *target_file_check(const char *Path, int Absolute) {
-	Path = concat(Path, 0);
-	const char *Id = concat("file:", Path, 0);
+	Path = concat(Path, NULL);
+	const char *Id = concat("file:", Path, NULL);
 	target_file_t *Target = (target_file_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
 		Target = target_new(target_file_t, FileTargetT, Id);
@@ -358,7 +359,7 @@ ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
 		Path = vfs_resolve(FileTarget->BuildContext->Mounts, concat(RootPath, "/", FileTarget->Path, 0));
 		Absolute = 1;
 	} else {
-		Path = concat(FileTarget->Path, 0);
+		Path = concat(FileTarget->Path, NULL);
 		Absolute = FileTarget->Absolute;
 	}
 	char *Last = Path;
@@ -399,7 +400,7 @@ static ml_value_t *target_file_ls_iter_next(ml_value_t *Ref) {
 				strcmp(Entry->d_name, "..") &&
 				!(Iter->Regex && regexec(Iter->Regex, Entry->d_name, 0, 0, 0))
 			) {
-				const char *Path = concat(Iter->Path, "/", Entry->d_name, 0);
+				const char *Path = concat(Iter->Path, "/", Entry->d_name, NULL);
 				const char *Relative = match_prefix(Path, RootPath);
 				if (Relative) {
 					Iter->File = target_file_check(Relative + 1, 0);
@@ -431,7 +432,7 @@ static ml_value_t *target_file_ls_iter_key(ml_value_t *Ref) {
 static void target_file_ls_iter_finalize(target_file_ls_iter_t *Iter, void *Data) {
 	if (Iter->Dir) {
 		closedir(Iter->Dir);
-		Iter->Dir;
+		Iter->Dir = NULL;
 	}
 }
 
@@ -468,7 +469,7 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 		Iter->Regex = new(regex_t);
 		int Error = regcomp(Iter->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
 		if (Error) {
-			size_t Length = regerror(Error, Iter->Regex, 0, 0);
+			size_t Length = regerror(Error, Iter->Regex, NULL, 0);
 			char *Message = snew(Length + 1);
 			regerror(Error, Iter->Regex, Message, Length);
 			regfree(Iter->Regex);
@@ -560,7 +561,7 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
-	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), 0);
+	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), NULL);
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
 	return (ml_value_t *)Target;
 }
@@ -568,7 +569,7 @@ ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *target_file_mod(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Replacement = ml_string_value(Args[1]);
-	char *Path = concat(FileTarget->Path, ".", Replacement, 0);
+	char *Path = concat(FileTarget->Path, ".", Replacement, NULL);
 	for (char *End = Path + strlen(FileTarget->Path); --End >= Path;) {
 		if (*End == '.') {
 			strcpy(End + 1, Replacement);
@@ -590,7 +591,7 @@ ml_value_t *target_file_open(void *Data, int Count, ml_value_t **Args) {
 	} else if (Mode[0] == 'r') {
 		FileName = vfs_resolve(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 	} else {
-		FileName = concat(RootPath, "/", Target->Path, 0);
+		FileName = concat(RootPath, "/", Target->Path, NULL);
 	}
 	FILE *Handle = fopen(FileName, Mode);
 	if (!Handle) {
@@ -653,9 +654,9 @@ ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	char *Path;
 	if (Target->Absolute) {
-		Path = concat(Target->Path, 0);
+		Path = concat(Target->Path, NULL);
 	} else {
-		Path = concat(RootPath, "/", Target->Path, 0);
+		Path = concat(RootPath, "/", Target->Path, NULL);
 	}
 	if (mkdir_p(Path) < 0) {
 		return ml_error("FileError", "error creating directory %s", Path);
@@ -691,9 +692,9 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Path;
 	if (Target->Absolute) {
-		Path = concat(Target->Path, 0);
+		Path = concat(Target->Path, NULL);
 	} else {
-		Path = concat(RootPath, "/", Target->Path, 0);
+		Path = concat(RootPath, "/", Target->Path, NULL);
 	}
 	char *Buffer = snew(PATH_MAX);
 	char *End = stpcpy(Buffer, Path);
@@ -710,7 +711,7 @@ struct target_meta_t {
 
 static ml_type_t *MetaTargetT;
 
-static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	memcpy(Target->Hash, &Target->DependsLastUpdated, sizeof(Target->DependsLastUpdated));
 	return 0;
@@ -720,7 +721,7 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
-	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, 0);
+	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, NULL);
 	target_meta_t *Target = (target_meta_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
 		Target = target_new(target_meta_t, MetaTargetT, Id);
@@ -752,7 +753,7 @@ static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Arg
 	return ml_inline(StringMethod, 1, Value);
 }
 
-static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	ml_value_t *Value = cache_expr_get(Target->Id);
 	if (Value) target_value_hash(Value, Target->Hash);
 	return 0;
@@ -774,7 +775,7 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
-	const char *Id = concat("expr:", CurrentContext->Path, "::", Name, 0);
+	const char *Id = concat("expr:", CurrentContext->Path, "::", Name, NULL);
 	target_expr_t *Target = (target_expr_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
 		Target = target_new(target_expr_t, ExprTargetT, Id);
@@ -827,7 +828,7 @@ struct scan_results_t {
 
 static ml_type_t *ScanResultsT;
 
-static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	stringmap_t *Scans = cache_scan_get(Target->Results->Id);
 	if (Scans) stringmap_foreach(Scans, Target->Results, (void *)depends_update_fn);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
@@ -836,7 +837,7 @@ static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, int8_
 
 static int target_scan_missing(target_scan_t *Target, int LastChecked) {
 	if (!LastChecked) return 1;
-	int8_t Hash[SHA256_BLOCK_SIZE];
+	BYTE Hash[SHA256_BLOCK_SIZE];
 	int LastUpdated, ResultsLastChecked;
 	time_t Time = 0;
 	cache_hash_get(Target->Results->Id, &LastUpdated, &ResultsLastChecked, &Time, Hash);
@@ -857,7 +858,7 @@ ml_value_t *scan_results_set_build(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	stringmap_t *Scans = cache_scan_get(Target->Id);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	if (Scans) stringmap_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
@@ -937,11 +938,11 @@ static int scan_depends_update_fn(const char *DependId, target_t *Depend, scan_r
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	target_t *ParentTarget = (target_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
-	const char *Id = concat("results:", ParentTarget->Id, "::", Name, 0);
+	const char *Id = concat("results:", ParentTarget->Id, "::", Name, NULL);
 	scan_results_t *Target = (scan_results_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
 		Target = target_new(scan_results_t, ScanResultsT, Id);
-		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, 0);
+		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
 		target_scan_t *ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId);
 		stringmap_insert(ScanTarget->Depends, ParentTarget->Id, ParentTarget);
 		ScanTarget->Name = Name;
@@ -975,7 +976,7 @@ static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 	return Value;
 }
 
-static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	context_t *Context = context_find(Target->Context);
 	ml_value_t *Value = context_symb_get(Context, Target->Name) ?: MLNil;
 	target_value_hash(Value, Target->Hash);
@@ -983,7 +984,7 @@ static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, int8_
 }
 
 target_t *target_symb_new(const char *Name) {
-	const char *Id = concat("symb:", CurrentContext->Name, "/", Name, 0);
+	const char *Id = concat("symb:", CurrentContext->Name, "/", Name, NULL);
 	target_symb_t *Target = (target_symb_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
 		Target = target_new(target_symb_t, SymbTargetT, Id);
@@ -994,14 +995,14 @@ target_t *target_symb_new(const char *Name) {
 }
 
 static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
-	int8_t ChildHash[SHA256_BLOCK_SIZE];
+	BYTE ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Value, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	return 0;
 }
 
 static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
-	int8_t ChildHash[SHA256_BLOCK_SIZE];
+	BYTE ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Key, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	target_value_hash(Value, ChildHash);
@@ -1009,7 +1010,7 @@ static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx)
 	return 0;
 }
 
-void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
+void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	if (Value->Type == MLNilT) {
 		memset(Hash, -1, SHA256_BLOCK_SIZE);
 	} else if (Value->Type == MLIntegerT) {
@@ -1066,7 +1067,7 @@ void target_value_hash(ml_value_t *Value, int8_t Hash[SHA256_BLOCK_SIZE]) {
 	}
 }
 
-static time_t target_hash(target_t *Target, time_t PreviousTime, int8_t PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	if (Target->Type == FileTargetT) return target_file_hash((target_file_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == MetaTargetT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
@@ -1098,7 +1099,7 @@ target_t *target_find(const char *Id) {
 	if (Target) return Target;
 	if (!memcmp(Id, "file", 4)) return target_file_check(Id + 5, Id[5] == '/');
 	if (!memcmp(Id, "symb", 4)) {
-		Id = concat(Id, 0);
+		Id = concat(Id, NULL);
 		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id);
 		const char *Name;
 		for (Name = Id + strlen(Id); --Name > Id + 5;) {
@@ -1174,9 +1175,9 @@ static void *target_thread_fn(void *Arg) {
 }
 
 void target_threads_start(int NumThreads) {
-	pthread_mutex_init(GlobalLock, 0);
+	pthread_mutex_init(GlobalLock, NULL);
 	pthread_mutex_lock(GlobalLock);
-	pthread_cond_init(TargetAvailable, 0);
+	pthread_cond_init(TargetAvailable, NULL);
 	for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
 		build_thread_t *BuildThread = new(build_thread_t);
 		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, (void *)(ptrdiff_t)LastThread);
@@ -1214,7 +1215,7 @@ void target_threads_wait(int NumThreads) {
 }
 
 #define target_file_methods_is(TYPE) \
-	ml_method_by_name("is_" #TYPE, 0, target_file_is_ ## TYPE, FileTargetT, 0);
+	ml_method_by_name("is_" #TYPE, 0, target_file_is_ ## TYPE, FileTargetT, NULL);
 
 void target_init() {
 	TargetT = ml_class(MLAnyT, "target");
@@ -1230,26 +1231,26 @@ void target_init() {
 	MissingMethod = ml_method("missing");
 	StringMethod = ml_method("string");
 	AppendMethod = ml_method("append");
-	ml_method_by_name("append", 0, target_file_stringify, MLStringBufferT, FileTargetT, 0);
-	ml_method_by_name("append", 0, target_expr_stringify, MLStringBufferT, ExprTargetT, 0);
-	ml_method_by_name("[]", 0, target_depend, TargetT, MLAnyT, 0);
-	ml_method_by_name("scan", 0, target_scan_new, TargetT, 0);
-	ml_method_by_name("[]", 0, scan_results_depend, ScanResultsT, MLAnyT, 0);
-	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, 0);
-	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, 0);
-	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, 0);
-	ml_method_by_name("=>", 0, scan_results_set_build, ScanResultsT, MLAnyT, 0);
-	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, 0);
-	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, 0);
-	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, 0);
-	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, 0);
-	ml_method_by_name("extension", 0, target_file_extension, FileTargetT, 0);
-	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, 0);
-	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, 0);
-	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, 0);
-	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, 0);
-	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, 0);
-	ml_method_by_name("rmdir", 0, target_file_rmdir, FileTargetT, 0);
+	ml_method_by_name("append", 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
+	ml_method_by_name("append", 0, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
+	ml_method_by_name("[]", 0, target_depend, TargetT, MLAnyT, NULL);
+	ml_method_by_name("scan", 0, target_scan_new, TargetT, NULL);
+	ml_method_by_name("[]", 0, scan_results_depend, ScanResultsT, MLAnyT, NULL);
+	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);
+	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, NULL);
+	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, NULL);
+	ml_method_by_name("=>", 0, scan_results_set_build, ScanResultsT, MLAnyT, NULL);
+	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
+	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
+	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, NULL);
+	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, NULL);
+	ml_method_by_name("extension", 0, target_file_extension, FileTargetT, NULL);
+	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, NULL);
+	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, NULL);
+	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, NULL);
+	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, NULL);
+	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, NULL);
+	ml_method_by_name("rmdir", 0, target_file_rmdir, FileTargetT, NULL);
 	target_file_methods_is(dir);
 	target_file_methods_is(chr);
 	target_file_methods_is(blk);

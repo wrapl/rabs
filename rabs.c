@@ -44,14 +44,14 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
 	ml_value_t *Value = stringmap_search(Cache, Name);
 	if (!Value) {
-		Value = ml_property(Data, Name, rabs_ml_get, rabs_ml_set, 0, 0);
+		Value = ml_property(Data, Name, rabs_ml_get, rabs_ml_set, NULL, NULL);
 		stringmap_insert(Cache, Name, Value);
 	}
 	return Value;
 }
 
 static void load_file(const char *FileName) {
-	ml_value_t *Closure = ml_load(rabs_ml_global, 0, FileName);
+	ml_value_t *Closure = ml_load(rabs_ml_global, NULL, FileName);
 	if (Closure->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
 		const char *Source;
@@ -59,7 +59,7 @@ static void load_file(const char *FileName) {
 		for (int I = 0; ml_error_trace(Closure, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
-	ml_value_t *Result = ml_call(Closure, 0, 0);
+	ml_value_t *Result = ml_call(Closure, 0, NULL);
 	if (Result->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
 		const char *Source;
@@ -93,10 +93,10 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
-	Path = concat(CurrentContext->Path, "/", Path, 0);
+	Path = concat(CurrentContext->Path, "/", Path, NULL);
 	//printf("Path = %s\n", Path);
-	mkdir_p(concat(RootPath, Path, 0));
-	const char *FileName = concat(RootPath, Path, SystemName, 0);
+	mkdir_p(concat(RootPath, Path, NULL));
+	const char *FileName = concat(RootPath, Path, SystemName, NULL);
 	//printf("FileName = %s\n", FileName);
 	FileName = vfs_resolve(CurrentContext->Mounts, FileName);
 	target_t *ParentDefault = CurrentContext->Default;
@@ -112,7 +112,7 @@ ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	context_scope(Name);
-	ml_value_t *Result = ml_call(Args[1], 0, 0);
+	ml_value_t *Result = ml_call(Args[1], 0, NULL);
 	if (Result->Type == MLErrorT) {
 		printf("Error: %s\n", ml_error_message(Result));
 		const char *Source;
@@ -133,7 +133,7 @@ ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 	}
 	char *FileName = ml_stringbuffer_get(Buffer);
 	/*if (FileName[0] != '/') {
-		FileName = concat(RootPath, CurrentContext->Path, "/", FileName, 0);
+		FileName = concat(RootPath, CurrentContext->Path, "/", FileName, NULL);
 		FileName = vfs_resolve(CurrentContext->Mounts, FileName);
 	}*/
 	load_file(FileName);
@@ -147,8 +147,8 @@ ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
 	const char *Path = ml_string_value(Args[0]);
 	const char *Target = ml_string_value(Args[1]);
 	CurrentContext->Mounts = vfs_mount(CurrentContext->Mounts,
-		concat(CurrentContext->Path, "/", Path, 0),
-		concat(CurrentContext->Path, "/", Target, 0)
+		concat(CurrentContext->Path, "/", Path, NULL),
+		concat(CurrentContext->Path, "/", Target, NULL)
 	);
 	return MLNil;
 }
@@ -222,7 +222,8 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 		if (WEXITSTATUS(Result) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
 		} else {
-			ml_value_t *Result = ml_string(ml_stringbuffer_get(Buffer), Buffer->Length);
+			size_t Length = Buffer->Length;
+			ml_value_t *Result = ml_string(ml_stringbuffer_get(Buffer), Length);
 			return Result;
 		}
 	} else {
@@ -325,6 +326,11 @@ static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
 	return stringmap_search(Defines, Key) ?: MLNil;
 }
 
+static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
+	asm("int3");
+	return MLNil;
+}
+
 int main(int Argc, const char **Argv) {
 	GC_INIT();
 	ml_init();
@@ -345,6 +351,7 @@ int main(int Argc, const char **Argv) {
 	stringmap_insert(Globals, "getenv", ml_function(0, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(0, ml_setenv));
 	stringmap_insert(Globals, "defined", ml_function(0, defined));
+	stringmap_insert(Globals, "debug", ml_function(0, debug));
 
 	vfs_init();
 	target_init();
@@ -370,7 +377,7 @@ int main(int Argc, const char **Argv) {
 				break;
 			}
 			case 'D': {
-				char *Define = concat(Argv[I] + 2, 0);
+				char *Define = concat(Argv[I] + 2, NULL);
 				char *Equals = strchr(Define, '=');
 				if (Equals) {
 					*Equals = 0;
@@ -430,7 +437,7 @@ int main(int Argc, const char **Argv) {
 
 	target_threads_start(NumThreads);
 
-	load_file(concat(RootPath, SystemName, 0));
+	load_file(concat(RootPath, SystemName, NULL));
 	target_t *Target;
 	if (TargetName) {
 		Target = target_get(TargetName);
