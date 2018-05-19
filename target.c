@@ -515,6 +515,7 @@ ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
+	if (Target->Build && Target->Build->Type == MLClosureT) return (ml_value_t *)Target;
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
