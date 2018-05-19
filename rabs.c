@@ -291,7 +291,7 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 			if (Result->Type == MLErrorT) return Result;
 			if (Result->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 		}
-		fputs(ml_string_value(Result), stdout);
+		fwrite(ml_string_value(Result), 1, ml_string_length(Result), stdout);
 	}
 	fflush(stdout);
 	return MLNil;
@@ -411,11 +411,11 @@ int main(int Argc, const char **Argv) {
 				GC_disable();
 				break;
 			}
-			};
+			}
 		} else {
 			TargetName = Argv[I];
-		};
-	};
+		}
+	}
 
 #ifdef LINUX
 	const char *Path = get_current_dir_name();
