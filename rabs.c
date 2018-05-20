@@ -429,17 +429,22 @@ int main(int Argc, const char **Argv) {
 		exit(1);
 	}
 
-	context_push("");
-	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
-
 	printf("RootPath = %s, Path = %s\n", RootPath, Path);
 	cache_open(RootPath);
+
+	context_push("");
+	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
 
 	target_threads_start(NumThreads);
 
 	load_file(concat(RootPath, SystemName, NULL));
 	target_t *Target;
 	if (TargetName) {
+		int HasPrefix = !strncmp(TargetName, "meta:", strlen("meta:"));
+		HasPrefix |= !strncmp(TargetName, "meta:", strlen("file:"));
+		if (!HasPrefix) {
+			TargetName = concat("meta:", match_prefix(Path, RootPath), "::", TargetName, NULL);
+		}
 		Target = target_get(TargetName);
 		if (!Target) {
 			printf("\e[31mError: invalid target %s\e[0m", TargetName);

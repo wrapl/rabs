@@ -79,3 +79,6 @@ end
 vmount("obj", "src")
 subdir("obj")
 
+meta("TEST") => fun() do
+	print('Version = {VERSION}\n')
+end
