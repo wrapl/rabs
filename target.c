@@ -786,20 +786,27 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 
 static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 	if (Arg->Type == MLListT) {
-		ml_list_foreach(Arg, Target, (void *)target_depends_single);
+		return ml_list_foreach(Arg, Target, (void *)target_depends_single);
 	} else if (Arg->Type == MLStringT) {
 		target_t *Depend = target_symb_new(ml_string_value(Arg));
 		stringmap_insert(Target->Depends, Depend->Id, Depend);
-	} else if (Arg != MLNil) {
+	} else if (ml_is(Arg, TargetT)) {
 		target_t *Depend = (target_t *)Arg;
 		stringmap_insert(Target->Depends, Depend->Id, Depend);
+	} else if (Arg == MLNil) {
+		return 0;
+	} else {
+		return 1;
 	}
 	return 0;
 }
 
 ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
-	for (int I = 1; I < Count; ++I) target_depends_single(Args[I], Target);
+	for (int I = 1; I < Count; ++I) {
+		int Error = target_depends_single(Args[I], Target);
+		if (Error) return ml_error("TypeError", "Invalid value in dependency list");
+	}
 	return Args[0];
 }
 
@@ -847,7 +854,10 @@ static int target_scan_missing(target_scan_t *Target, int LastChecked) {
 
 ml_value_t *scan_results_depend(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)((scan_results_t *)Args[0])->Scan;
-	for (int I = 1; I < Count; ++I) target_depends_single(Args[I], Target);
+	for (int I = 1; I < Count; ++I) {
+		int Error = target_depends_single(Args[I], Target);
+		if (Error) return ml_error("TypeError", "Invalid value in dependency list");
+	}
 	return Args[0];
 }
 

@@ -25,7 +25,7 @@ for File := file(""):ls(".*\\.c") do
 	print('Found {File}\n')
 end
 
-var Generated := file("generated")[GENFLAGS] => fun(Generated) do
+var Generated := file("generated")["GENFLAGS"] => fun(Generated) do
 	var GenDir := file("gen")
 	GenDir:mkdir
 	for I := 1 .. 5 do
