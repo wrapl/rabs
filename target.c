@@ -793,6 +793,8 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 	} else if (ml_is(Arg, TargetT)) {
 		target_t *Depend = (target_t *)Arg;
 		stringmap_insert(Target->Depends, Depend->Id, Depend);
+	} else if (Arg == MLNil) {
+		return 0;
 	} else {
 		return 1;
 	}
