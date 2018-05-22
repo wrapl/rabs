@@ -59,7 +59,7 @@ c_program := fun(Executable, Objects, Libraries) do
 	Libraries := Libraries or []
 	var Sources := []
 	for Object in Objects do
-		for Functions, Extension in SourceTypes do
+		for Extension, Functions in SourceTypes do
 			var Source := Object % Extension
 			if Source:exists then
 				Sources:put(Source)
