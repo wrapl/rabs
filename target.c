@@ -946,9 +946,7 @@ static int scan_depends_update_fn(const char *DependId, target_t *Depend, scan_r
 	return 0;
 }
 
-ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
-	target_t *ParentTarget = (target_t *)Args[0];
-	const char *Name = ml_string_value(Args[1]);
+static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name) {
 	const char *Id = concat("results:", ParentTarget->Id, "::", Name, NULL);
 	scan_results_t *Target = (scan_results_t *)stringmap_search(TargetCache, Id);
 	if (!Target) {
@@ -964,7 +962,11 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	}
 	stringmap_t *Scans = cache_scan_get(Target->Id);
 	if (Scans) stringmap_foreach(Scans, Target, (void *)scan_depends_update_fn);
-	return (ml_value_t *)Target;
+	return Target;
+}
+
+ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
+	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]));
 }
 
 struct target_symb_t {
@@ -1127,6 +1129,19 @@ target_t *target_find(const char *Id) {
 	if (!memcmp(Id, "expr", 4)) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id);
 		return (target_t *)Target;
+	}
+	if (!memcmp(Id, "results", 7)) {
+		const char *Name;
+		for (Name = Id + strlen(Id) - 1; --Name > Id + 8;) {
+			if (Name[0] == ':' && Name[1] == ':') break;
+		}
+		size_t ParentIdLength = Name - Id - 8;
+		char *ParentId = snew(ParentIdLength + 1);
+		memcpy(ParentId, Id + 8, ParentIdLength);
+		ParentId[ParentIdLength] = 0;
+		target_t *ParentTarget = target_find(ParentId);
+		Name += 2;
+		return (target_t *)scan_results_new(ParentTarget, Name);
 	}
 	return 0;
 }
