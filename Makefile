@@ -15,6 +15,8 @@ sources = \
 	util.c \
 	vfs.c
 
+VERSION = test
+
 CFLAGS += -std=gnu99 -I. -Iminilang -g -pthread -DGC_THREADS -D_GNU_SOURCE
 LDFLAGS += -lm -ldl -lsqlite3 -g -lgc
 

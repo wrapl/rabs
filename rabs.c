@@ -15,6 +15,8 @@
 #include "ml_file.h"
 #include "rabs.h"
 
+#define VERSION_STRING "1.0.2"
+
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
@@ -366,13 +368,18 @@ int main(int Argc, const char **Argv) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
 			case 'h': {
-				printf("Usage: %s { options } [ target ]", Argv[0]);
+				printf("Usage: %s { options } [ target ]\n", Argv[0]);
 				puts("    -h              display this message");
 				puts("    -Dkey[=value]   add a define");
 				puts("    -c              print shell commands");
 				puts("    -q target       print dependencies for target");
 				puts("    -l              lists all targets");
 				puts("    -p n            run n threads");
+				exit(0);
+				break;
+			}
+			case 'v': {
+				printf("rabs version %s\n", VERSION_STRING);
 				exit(0);
 				break;
 			}
