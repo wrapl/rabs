@@ -17,8 +17,8 @@ sources = \
 
 VERSION = test
 
-CFLAGS += -std=gnu99 -I. -Iminilang -g -pthread -DGC_THREADS -D_GNU_SOURCE
-LDFLAGS += -lm -ldl -lsqlite3 -g -lgc
+CFLAGS += -std=gnu99 -I. -Iminilang -pthread -DGC_THREADS -D_GNU_SOURCE -O3
+LDFLAGS += -lm -ldl -lsqlite3 -lgc
 
 rabs: Makefile $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
