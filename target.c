@@ -492,7 +492,7 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Path = FileTarget->Path;
-	const char *Last = Path;
+	const char *Last = Path - 1;
 	for (const char *P = Path; *P; ++P) if (*P == '/') Last = P;
 	return ml_string(concat(Last + 1, 0), -1);
 }
