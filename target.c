@@ -933,13 +933,14 @@ static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_
 }
 
 static int scan_depends_update_fn(const char *DependId, target_t *Depend, scan_results_t *Target) {
-	if (!Depend->Build) {
+	if (!Depend->Build && !Depend->BuildChecked) {
 		BYTE BuildHash[SHA256_BLOCK_SIZE];
 		cache_build_hash_get(Depend->Id, BuildHash);
 		for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) if (BuildHash[I]) {
 			Depend->Build = Target->Scan->Rebuild;
 			break;
 		}
+		Depend->BuildChecked = 1;
 		stringmap_t *Depends = cache_depends_get(Depend->Id);
 		if (Depends) stringmap_foreach(Depends, Target, (void *)scan_depends_update_fn);
 	}
