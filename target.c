@@ -65,7 +65,7 @@ int depends_hash_fn(const char *Id, target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZ
 }
 
 void target_depends_add(target_t *Target, target_t *Depend) {
-	if (Target != Depend) stringmap_insert(Target->Depends, Depend->Id, Depend);
+	if (Target != Depend) stringmap_hash_insert(Target->Depends, Depend->IdHash, Depend->Id, Depend);
 }
 
 static int depends_print_fn(const char *DependId, target_t *Depend, int *DependsLastUpdated) {
@@ -123,7 +123,7 @@ int depends_update_fn(const char *DependId, target_t *Depend, target_t *Target) 
 	}
 	if (Depend->LastUpdated == STATE_UNCHECKED) target_update(Depend);
 	if (Depend->LastUpdated == STATE_QUEUED) {
-		if (!stringmap_insert(Depend->Affects, Target->Id, Target)) ++Target->WaitCount;
+		if (!stringmap_hash_insert(Depend->Affects, Target->IdHash, Target->Id, Target)) ++Target->WaitCount;
 	} else {
 		if (Depend->LastUpdated > Target->DependsLastUpdated) Target->DependsLastUpdated = Depend->LastUpdated;
 	}
@@ -207,7 +207,7 @@ void target_query(target_t *Target) {
 
 void target_depends_auto(target_t *Depend) {
 	if (CurrentTarget && CurrentTarget != Depend && !stringmap_search(CurrentTarget->Depends, Depend->Id)) {
-		stringmap_insert(CurrentTarget->Depends, Depend->Id, Depend);
+		stringmap_hash_insert(CurrentTarget->Depends, Depend->IdHash, Depend->Id, Depend);
 	}
 }
 
@@ -216,9 +216,10 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id) {
 	target_t *Target = (target_t *)GC_MALLOC(Size);
 	Target->Type = Type;
 	Target->Id = Id;
+	Target->IdHash = stringmap_hash(Id);
 	Target->Build = 0;
 	Target->LastUpdated = STATE_UNCHECKED;
-	stringmap_insert(TargetCache, Id, Target);
+	stringmap_hash_insert(TargetCache, Target->IdHash, Id, Target);
 	return Target;
 }
 
@@ -789,10 +790,10 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 		return ml_list_foreach(Arg, Target, (void *)target_depends_single);
 	} else if (Arg->Type == MLStringT) {
 		target_t *Depend = target_symb_new(ml_string_value(Arg));
-		stringmap_insert(Target->Depends, Depend->Id, Depend);
+		stringmap_hash_insert(Target->Depends, Depend->IdHash, Depend->Id, Depend);
 	} else if (ml_is(Arg, TargetT)) {
 		target_t *Depend = (target_t *)Arg;
-		stringmap_insert(Target->Depends, Depend->Id, Depend);
+		stringmap_hash_insert(Target->Depends, Depend->IdHash, Depend->Id, Depend);
 	} else if (Arg == MLNil) {
 		return 0;
 	} else {
@@ -877,7 +878,7 @@ static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, BYT
 }
 
 static int build_scan_target_list(target_t *Depend, stringmap_t *Scans) {
-	stringmap_insert(Scans, Depend->Id, Depend);
+	stringmap_hash_insert(Scans, Depend->IdHash, Depend->Id, Depend);
 	return 0;
 }
 
@@ -954,12 +955,12 @@ static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name
 		Target = target_new(scan_results_t, ScanResultsT, Id);
 		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
 		target_scan_t *ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId);
-		stringmap_insert(ScanTarget->Depends, ParentTarget->Id, ParentTarget);
+		stringmap_hash_insert(ScanTarget->Depends, ParentTarget->IdHash, ParentTarget->Id, ParentTarget);
 		ScanTarget->Name = Name;
 		ScanTarget->Source = ParentTarget;
 		ScanTarget->Results = Target;
 		ScanTarget->Rebuild = ml_function(ScanTarget, (void *)scan_target_rebuild);
-		stringmap_insert(Target->Depends, ScanTarget->Id, ScanTarget);
+		stringmap_hash_insert(Target->Depends, ScanTarget->IdHash, ScanTarget->Id, ScanTarget);
 	}
 	stringmap_t *Scans = cache_scan_get(Target->Id);
 	if (Scans) stringmap_foreach(Scans, Target, (void *)scan_depends_update_fn);

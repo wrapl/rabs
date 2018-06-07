@@ -32,8 +32,9 @@ static int version_callback(void *Data, int NumCols, char **Values, char **Names
 }
 
 void cache_open(const char *RootPath) {
+	sqlite3_config(SQLITE_CONFIG_SINGLETHREAD);
 	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", NULL);
-	if (sqlite3_open_v2(CacheFileName, &Cache, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, 0) != SQLITE_OK) {
+	if (sqlite3_open_v2(CacheFileName, &Cache, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -226,7 +227,7 @@ stringmap_t *cache_depends_get(const char *Id) {
 		if (Depends == 0) Depends = new(stringmap_t);
 		const char *DependId = sqlite3_column_text(DependsGetStatement, 0);
 		target_t *Depend = target_find(DependId);
-		if (Depend) stringmap_insert(Depends, Depend->Id, Depend);
+		if (Depend) stringmap_hash_insert(Depends, Depend->IdHash, Depend->Id, Depend);
 	}
 	sqlite3_reset(DependsGetStatement);
 	return Depends;
@@ -256,7 +257,7 @@ stringmap_t *cache_scan_get(const char *Id) {
 		if (Scans == 0) Scans = new(stringmap_t);
 		const char *ScanId = sqlite3_column_text(ScanGetStatement, 0);
 		target_t *Target = target_find(ScanId);
-		if (Target) stringmap_insert(Scans, Target->Id, Target);
+		if (Target) stringmap_hash_insert(Scans, Target->IdHash, Target->Id, Target);
 	}
 	sqlite3_reset(ScanGetStatement);
 	return Scans;
