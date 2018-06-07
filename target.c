@@ -74,6 +74,7 @@ static int depends_print_fn(const char *DependId, target_t *Depend, int *Depends
 }
 
 static void target_queue_build(target_t *Target) {
+	//printf("Adding %s to queue\n", Target->Id);
 	Target->Next = BuildQueue;
 	BuildQueue = Target;
 }
@@ -81,6 +82,7 @@ static void target_queue_build(target_t *Target) {
 static int depends_updated_fn(const char *AffectId, target_t *Affect, target_t *Target) {
 	if (Target->LastUpdated > Affect->DependsLastUpdated) Affect->DependsLastUpdated = Target->LastUpdated;
 	if (--Affect->WaitCount == 0) target_queue_build(Affect);
+	//printf("\e[35mDecreasing wait count for %s to %d\e[0m\n", Affect->Id, Affect->WaitCount);
 	return 0;
 }
 
@@ -816,7 +818,6 @@ ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	//if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
-	Target->LastUpdated = STATE_UNCHECKED;
 	return Args[0];
 }
 
@@ -899,20 +900,22 @@ static void target_scan_build(target_scan_t *Target) {
 
 static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_value_t **Args) {
 	if (ScanTarget->LastUpdated != CurrentVersion) {
+		target_t *Target = (target_t *)Args[0];
+		printf("\n\n\nscan_target_rebuild(%s, %s)\n", ScanTarget->Id, Target->Id);
+
 		ml_value_t *Result = ml_inline(ScanTarget->Build, 1, ScanTarget->Source);
 		if (Result->Type == MLErrorT) {
-			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", ScanTarget->Id, ml_error_message(Result));
+			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 			const char *Source;
 			int Line;
 			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 			exit(1);
 		}
-		stringmap_t Scans[1] = {STRINGMAP_INIT};
+		/*stringmap_t Scans[1] = {STRINGMAP_INIT};
 		ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 		cache_depends_set(ScanTarget->Results->Id, Scans);
-		cache_scan_set(ScanTarget->Results->Id, Scans);
+		cache_scan_set(ScanTarget->Results->Id, Scans);*/
 		ScanTarget->LastUpdated = CurrentVersion;
-		target_t *Target = (target_t *)Args[0];
 		if (Target->Build != ScanTarget->Rebuild) {
 			ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 			if (Result->Type == MLErrorT) {
@@ -928,6 +931,8 @@ static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_
 				memset(Target->BuildHash, -1, SHA256_BLOCK_SIZE);
 			}
 			cache_build_hash_set(Target->Id, Target->BuildHash);
+		} else {
+			Target->Build = 0;
 		}
 	}
 	return MLNil;
@@ -1232,6 +1237,19 @@ static void target_wait(target_t *Target) {
 	}
 }
 
+static int print_because_target(const char *Id, target_t *Target, void *Data) {
+	printf("\t%s\n", Id);
+	return 0;
+}
+
+static int print_unbuilt_target(const char *Id, target_t *Target, void *Data) {
+	if (Target->LastUpdated == STATE_QUEUED) {
+		printf("Not checked: %s: waiting on %d\n", Id, Target->WaitCount);
+		stringmap_foreach(Target->Depends, 0, (void *)print_because_target);
+	}
+	return 0;
+}
+
 void target_threads_wait(int NumThreads) {
 	--RunningThreads;
 	pthread_cond_broadcast(TargetAvailable);
@@ -1240,6 +1258,7 @@ void target_threads_wait(int NumThreads) {
 		GC_pthread_join(BuildThreads->Handle, 0);
 		BuildThreads = BuildThreads->Next;
 	}
+	stringmap_foreach(TargetCache, 0, (void *)print_unbuilt_target);
 }
 
 #define target_file_methods_is(TYPE) \
