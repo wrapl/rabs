@@ -80,7 +80,9 @@ static void target_queue_build(target_t *Target) {
 }
 
 static int depends_updated_fn(const char *AffectId, target_t *Affect, target_t *Target) {
-	if (Target->LastUpdated > Affect->DependsLastUpdated) Affect->DependsLastUpdated = Target->LastUpdated;
+	if (Target->LastUpdated > Affect->DependsLastUpdated) {
+		Affect->DependsLastUpdated = Target->LastUpdated;
+	}
 	if (--Affect->WaitCount == 0) target_queue_build(Affect);
 	//printf("\e[35mDecreasing wait count for %s to %d\e[0m\n", Affect->Id, Affect->WaitCount);
 	return 0;
@@ -127,7 +129,9 @@ int depends_update_fn(const char *DependId, target_t *Depend, target_t *Target) 
 	if (Depend->LastUpdated == STATE_QUEUED) {
 		if (!stringmap_hash_insert(Depend->Affects, Target->IdHash, Target->Id, Target)) ++Target->WaitCount;
 	} else {
-		if (Depend->LastUpdated > Target->DependsLastUpdated) Target->DependsLastUpdated = Depend->LastUpdated;
+		if (Depend->LastUpdated > Target->DependsLastUpdated) {
+			Target->DependsLastUpdated = Depend->LastUpdated;
+		}
 	}
 	return 0;
 }
@@ -1076,6 +1080,12 @@ void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
 		sha256_update(Ctx, Target->Id, strlen(Target->Id));
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == SymbTargetT) {
+		target_t *Target = (target_t *)Value;
+		SHA256_CTX Ctx[1];
+		sha256_init(Ctx);
+		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_final(Ctx, Hash);
+	} else if (Value->Type == ExprTargetT) {
 		target_t *Target = (target_t *)Value;
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
