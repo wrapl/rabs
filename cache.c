@@ -69,7 +69,7 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS scans(id TEXT, scan TEXT);", 0, 0, 0) != SQLITE_OK) {
+	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS scans(id TEXT, scan BLOB);", 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -77,7 +77,7 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS depends(id TEXT, depend TEXT);", 0, 0, 0) != SQLITE_OK) {
+	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS depends(id TEXT, depend BLOB);", 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -219,14 +219,28 @@ void cache_last_check_set(target_t *Target, time_t FileTime) {
 	sqlite3_reset(LastCheckSetStatement);
 }
 
+int cache_target_set_size(const char *Id, target_t *Target, int *Size) {
+	*Size += Target->IdLength + 1;
+	return 0;
+}
+
+int cache_target_set_append(const char *Id, target_t *Target, char **Buffer) {
+	*Buffer = stpcpy(*Buffer, Id) + 1;
+	return 0;
+}
+
 stringmap_t *cache_depends_get(target_t *Target) {
 	sqlite3_bind_text(DependsGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	stringmap_t *Depends = 0;
-	while (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
-		if (Depends == 0) Depends = new(stringmap_t);
-		const char *DependId = sqlite3_column_text(DependsGetStatement, 0);
-		target_t *Depend = target_find(DependId);
-		if (Depend) stringmap_hash_insert(Depends, Depend->IdHash, Depend->Id, Depend);
+	if (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
+		Depends = new(stringmap_t);
+		const char *DependId = sqlite3_column_blob(DependsGetStatement, 0);
+		while (*DependId) {
+			target_t *Depend = target_find(DependId);
+			if (Depend) stringmap_hash_insert(Depends, Depend->IdHash, Depend->Id, Depend);
+			do ++DependId; while (*DependId);
+			++DependId;
+		}
 	}
 	sqlite3_reset(DependsGetStatement);
 	return Depends;
@@ -241,22 +255,31 @@ int cache_depends_set_fn(const char *Id, target_t *Target, void *Arg) {
 
 void cache_depends_set(target_t *Target, stringmap_t *Depends) {
 	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
-	sqlite3_bind_text(DependsDeleteStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_step(DependsDeleteStatement);
-	sqlite3_reset(DependsDeleteStatement);
+	int Size = 1;
+	stringmap_foreach(Depends, &Size, (void *)cache_target_set_size);
+	char *Buffer = snew(Size);
+	char *Next = Buffer;
+	stringmap_foreach(Depends, &Next, (void *)cache_target_set_append);
+	*Next = 0;
 	sqlite3_bind_text(DependsInsertStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	stringmap_foreach(Depends, 0, (void *)cache_depends_set_fn);
+	sqlite3_bind_blob(DependsInsertStatement, 2, Buffer, Size, SQLITE_STATIC);
+	sqlite3_step(DependsInsertStatement);
+	sqlite3_reset(DependsInsertStatement);
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
 }
 
 stringmap_t *cache_scan_get(target_t *Target) {
 	sqlite3_bind_text(ScanGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	stringmap_t *Scans = 0;
-	while (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
-		if (Scans == 0) Scans = new(stringmap_t);
-		const char *ScanId = sqlite3_column_text(ScanGetStatement, 0);
-		target_t *Target = target_find(ScanId);
-		if (Target) stringmap_hash_insert(Scans, Target->IdHash, Target->Id, Target);
+	if (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
+		Scans = new(stringmap_t);
+		const char *ScanId = sqlite3_column_blob(ScanGetStatement, 0);
+		while (*ScanId) {
+			target_t *Scan = target_find(ScanId);
+			if (Scan) stringmap_hash_insert(Scans, Scan->IdHash, Scan->Id, Scan);
+			do ++ScanId; while (*ScanId);
+			++ScanId;
+		}
 	}
 	sqlite3_reset(ScanGetStatement);
 	return Scans;
@@ -271,11 +294,16 @@ int cache_scan_set_fn(const char *Id, target_t *Target, void *Arg) {
 
 void cache_scan_set(target_t *Target, stringmap_t *Scans) {
 	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
-	sqlite3_bind_text(ScanDeleteStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_step(ScanDeleteStatement);
-	sqlite3_reset(ScanDeleteStatement);
+	int Size = 1;
+	stringmap_foreach(Scans, &Size, (void *)cache_target_set_size);
+	char *Buffer = snew(Size);
+	char *Next = Buffer;
+	stringmap_foreach(Scans, &Next, (void *)cache_target_set_append);
+	*Next = 0;
 	sqlite3_bind_text(ScanInsertStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	stringmap_foreach(Scans, 0, (void *)cache_scan_set_fn);
+	sqlite3_bind_blob(ScanInsertStatement, 2, Buffer, Size, SQLITE_STATIC);
+	sqlite3_step(ScanInsertStatement);
+	sqlite3_reset(ScanInsertStatement);
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
 }
 
