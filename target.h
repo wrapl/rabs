@@ -18,7 +18,7 @@ typedef struct target_t target_t;
 	const char *Id; \
 	stringmap_t Depends[1]; \
 	stringmap_t Affects[1]; \
-	int WaitCount, DependsLastUpdated, LastUpdated, BuildChecked; \
+	int WaitCount, DependsLastUpdated, LastUpdated, BuildChecked, IdLength; \
 	long IdHash; \
 	BYTE Hash[SHA256_BLOCK_SIZE]; \
 	BYTE BuildHash[SHA256_BLOCK_SIZE];
