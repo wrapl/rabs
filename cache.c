@@ -219,12 +219,12 @@ void cache_last_check_set(target_t *Target, time_t FileTime) {
 	sqlite3_reset(LastCheckSetStatement);
 }
 
-int cache_target_set_size(const char *Id, target_t *Target, int *Size) {
+static int cache_target_set_size(const char *Id, target_t *Target, int *Size) {
 	*Size += Target->IdLength + 1;
 	return 0;
 }
 
-int cache_target_set_append(const char *Id, target_t *Target, char **Buffer) {
+static int cache_target_set_append(const char *Id, target_t *Target, char **Buffer) {
 	*Buffer = stpcpy(*Buffer, Id) + 1;
 	return 0;
 }
@@ -244,13 +244,6 @@ stringmap_t *cache_depends_get(target_t *Target) {
 	}
 	sqlite3_reset(DependsGetStatement);
 	return Depends;
-}
-
-int cache_depends_set_fn(const char *Id, target_t *Target, void *Arg) {
-	sqlite3_bind_text(DependsInsertStatement, 2, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_step(DependsInsertStatement);
-	sqlite3_reset(DependsInsertStatement);
-	return 0;
 }
 
 void cache_depends_set(target_t *Target, stringmap_t *Depends) {
@@ -283,13 +276,6 @@ stringmap_t *cache_scan_get(target_t *Target) {
 	}
 	sqlite3_reset(ScanGetStatement);
 	return Scans;
-}
-
-int cache_scan_set_fn(const char *Id, target_t *Target, void *Arg) {
-	sqlite3_bind_text(ScanInsertStatement, 2, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_step(ScanInsertStatement);
-	sqlite3_reset(ScanInsertStatement);
-	return 0;
 }
 
 void cache_scan_set(target_t *Target, stringmap_t *Scans) {
