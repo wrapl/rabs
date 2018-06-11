@@ -277,7 +277,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 	pthread_mutex_unlock(GlobalLock);
 	if (!S_ISREG(Stat->st_mode)) {
 		memset(Target->Hash, -1, SHA256_BLOCK_SIZE);
-		memcpy(Target->Hash, &Stat->st_ino, sizeof(Stat->st_ino));
+		memcpy(Target->Hash, &Stat->st_ctim, sizeof(Stat->st_ctim));
 	} else if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
 	} else {
