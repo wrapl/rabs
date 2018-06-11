@@ -30,11 +30,13 @@ var Generated := file("generated")["GENFLAGS"] => fun(Generated) do
 	GenDir:mkdir
 	for I := 1 .. 5 do
 		var GenFile := (GenDir / 'gen_{I}.c'):open("w")
-		GenFile:write('void gen_{I}() \{}\n')
+		GenFile:write('#include "test.h"\n\nvoid gen_{I}() \{}\n')
 		GenFile:close
 	end
 	Generated:open("w"):close
 end
+
+CFLAGS := old + ['-I{file("test.h"):dir(:true)}']
 
 var ScanTest := Generated:scan("ScanTest") => fun() do
 	var Objects := []

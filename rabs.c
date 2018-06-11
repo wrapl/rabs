@@ -15,7 +15,7 @@
 #include "ml_file.h"
 #include "rabs.h"
 
-#define VERSION_STRING "1.0.2"
+#define VERSION_STRING "1.0.3"
 
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;

@@ -17,8 +17,8 @@ sources = \
 
 VERSION = test
 
-CFLAGS += -std=gnu99 -I. -Iminilang -g -pthread -DGC_THREADS -D_GNU_SOURCE
-LDFLAGS += -lm -ldl -lsqlite3 -g -lgc
+CFLAGS += -std=gnu99 -fstrict-aliasing -Wstrict-aliasing -I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -g
+LDFLAGS += -lm -ldl -lgc -lsqlite3 -g
 
 rabs: Makefile $(sources) *.h
 	gcc $(CFLAGS) $(sources) $(LDFLAGS) -o $@
