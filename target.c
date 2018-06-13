@@ -34,6 +34,7 @@ typedef struct target_symb_t target_symb_t;
 extern const char *RootPath;
 static stringmap_t TargetCache[1] = {STRINGMAP_INIT};
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
+int StatusUpdates = 0;
 
 pthread_mutex_t GlobalLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
@@ -113,7 +114,7 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 	}
 	//GC_gcollect();
 	++BuiltTargets;
-	printf("\e[35m%d / %d\e[0m #%d Built \e[32m%s\e[0m at version %d\n", BuiltTargets, QueuedTargets, ThreadIndex, Target->Id, Target->LastUpdated);
+	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Built \e[32m%s\e[0m at version %d\n", BuiltTargets, QueuedTargets, ThreadIndex, Target->Id, Target->LastUpdated);
 	stringmap_foreach(Target->Affects, Target, (void *)depends_updated_fn);
 	memset(Target->Depends, 0, sizeof(Target->Depends));
 	memset(Target->Affects, 0, sizeof(Target->Affects));
