@@ -908,7 +908,7 @@ static void target_scan_build(target_scan_t *Target) {
 static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_value_t **Args) {
 	if (ScanTarget->LastUpdated != CurrentVersion) {
 		target_t *Target = (target_t *)Args[0];
-		printf("\n\n\nscan_target_rebuild(%s, %s)\n", ScanTarget->Id, Target->Id);
+		//printf("\n\n\nscan_target_rebuild(%s, %s)\n", ScanTarget->Id, Target->Id);
 
 		ml_value_t *Result = ml_inline(ScanTarget->Build, 1, ScanTarget->Source);
 		if (Result->Type == MLErrorT) {
