@@ -219,25 +219,25 @@ void cache_last_check_set(target_t *Target, time_t FileTime) {
 	sqlite3_reset(LastCheckSetStatement);
 }
 
-static int cache_target_set_size(const char *Id, target_t *Target, int *Size) {
+static int cache_target_set_size(target_t *Target, int *Size) {
 	*Size += Target->IdLength + 1;
 	return 0;
 }
 
-static int cache_target_set_append(const char *Id, target_t *Target, char **Buffer) {
-	*Buffer = stpcpy(*Buffer, Id) + 1;
+static int cache_target_set_append(target_t *Target, char **Buffer) {
+	*Buffer = stpcpy(*Buffer, Target->Id) + 1;
 	return 0;
 }
 
-stringmap_t *cache_depends_get(target_t *Target) {
+targetset_t *cache_depends_get(target_t *Target) {
 	sqlite3_bind_text(DependsGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	stringmap_t *Depends = 0;
+	targetset_t *Depends = 0;
 	if (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
-		Depends = new(stringmap_t);
+		Depends = new(targetset_t);
 		const char *DependId = sqlite3_column_blob(DependsGetStatement, 0);
 		while (*DependId) {
 			target_t *Depend = target_find(DependId);
-			if (Depend) stringmap_hash_insert(Depends, Depend->IdHash, Depend->Id, Depend);
+			if (Depend) targetset_insert(Depends, Depend);
 			do ++DependId; while (*DependId);
 			++DependId;
 		}
@@ -246,13 +246,13 @@ stringmap_t *cache_depends_get(target_t *Target) {
 	return Depends;
 }
 
-void cache_depends_set(target_t *Target, stringmap_t *Depends) {
+void cache_depends_set(target_t *Target, targetset_t *Depends) {
 	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
 	int Size = 1;
-	stringmap_foreach(Depends, &Size, (void *)cache_target_set_size);
+	targetset_foreach(Depends, &Size, (void *)cache_target_set_size);
 	char *Buffer = snew(Size);
 	char *Next = Buffer;
-	stringmap_foreach(Depends, &Next, (void *)cache_target_set_append);
+	targetset_foreach(Depends, &Next, (void *)cache_target_set_append);
 	*Next = 0;
 	sqlite3_bind_text(DependsInsertStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	sqlite3_bind_blob(DependsInsertStatement, 2, Buffer, Size, SQLITE_STATIC);
@@ -261,15 +261,15 @@ void cache_depends_set(target_t *Target, stringmap_t *Depends) {
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
 }
 
-stringmap_t *cache_scan_get(target_t *Target) {
+targetset_t *cache_scan_get(target_t *Target) {
 	sqlite3_bind_text(ScanGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	stringmap_t *Scans = 0;
+	targetset_t *Scans = 0;
 	if (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
-		Scans = new(stringmap_t);
+		Scans = new(targetset_t);
 		const char *ScanId = sqlite3_column_blob(ScanGetStatement, 0);
 		while (*ScanId) {
 			target_t *Scan = target_find(ScanId);
-			if (Scan) stringmap_hash_insert(Scans, Scan->IdHash, Scan->Id, Scan);
+			if (Scan) targetset_insert(Scans, Scan);
 			do ++ScanId; while (*ScanId);
 			++ScanId;
 		}
@@ -278,13 +278,13 @@ stringmap_t *cache_scan_get(target_t *Target) {
 	return Scans;
 }
 
-void cache_scan_set(target_t *Target, stringmap_t *Scans) {
+void cache_scan_set(target_t *Target, targetset_t *Scans) {
 	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
 	int Size = 1;
-	stringmap_foreach(Scans, &Size, (void *)cache_target_set_size);
+	targetset_foreach(Scans, &Size, (void *)cache_target_set_size);
 	char *Buffer = snew(Size);
 	char *Next = Buffer;
-	stringmap_foreach(Scans, &Next, (void *)cache_target_set_append);
+	targetset_foreach(Scans, &Next, (void *)cache_target_set_append);
 	*Next = 0;
 	sqlite3_bind_text(ScanInsertStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	sqlite3_bind_blob(ScanInsertStatement, 2, Buffer, Size, SQLITE_STATIC);

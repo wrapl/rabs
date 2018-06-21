@@ -12,6 +12,7 @@ sources = \
 	context.c \
 	rabs.c \
 	target.c \
+	targetset.c \
 	util.c \
 	vfs.c
 

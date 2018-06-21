@@ -4,7 +4,7 @@
 #include <time.h>
 #include <stdint.h>
 #include <pthread.h>
-#include "stringmap.h"
+#include "targetset.h"
 #include "sha256.h"
 #include "minilang.h"
 
@@ -16,8 +16,8 @@ typedef struct target_t target_t;
 	ml_value_t *Build; \
 	struct context_t *BuildContext; \
 	const char *Id; \
-	stringmap_t Depends[1]; \
-	stringmap_t Affects[1]; \
+	targetset_t Depends[1]; \
+	targetset_t Affects[1]; \
 	int WaitCount, DependsLastUpdated, LastUpdated, BuildChecked, IdLength; \
 	long IdHash; \
 	BYTE Hash[SHA256_BLOCK_SIZE]; \
