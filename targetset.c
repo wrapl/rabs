@@ -22,8 +22,8 @@ static void sort_targets(target_t **First, target_t **Last) {
 }
 
 int targetset_insert(targetset_t *Set, target_t *Target) {
-	int Hash = ((intptr_t)Target) >> 8;
-	int Incr = (((intptr_t)Target) >> 16) | 1;
+	int Hash = ((intptr_t)Target) >> 4;
+	int Incr = (((intptr_t)Target) >> 8) | 1;
 	target_t **Targets = Set->Targets;
 	if (!Targets) {
 		Targets = Set->Targets = anew(target_t *, 5);
@@ -40,12 +40,12 @@ int targetset_insert(targetset_t *Set, target_t *Target) {
 		Index += Incr;
 		Index &= Mask;
 	}
-	if (--Set->Space > (Set->Space >> 3)) {
+	if (--Set->Space > (Set->Size >> 3)) {
 		target_t *OldTarget = Targets[Index];
 		Targets[Index] = Target;
 		while (OldTarget) {
 			Target = OldTarget;
-			Incr = (((intptr_t)Target) >> 16) | 1;
+			Incr = (((intptr_t)Target) >> 8) | 1;
 			Index += Incr;
 			Index &= Mask;
 			for (;;) {
@@ -67,8 +67,8 @@ int targetset_insert(targetset_t *Set, target_t *Target) {
 	sort_targets(Targets, Targets + Set->Size);
 	for (target_t **Old = Targets; *Old; ++Old) {
 		Target = *Old;
-		Hash = ((intptr_t)Target) >> 8;
-		Incr = (((intptr_t)Target) >> 16) | 1;
+		Hash = ((intptr_t)Target) >> 4;
+		Incr = (((intptr_t)Target) >> 8) | 1;
 		Index = Hash & Mask;
 		while (NewTargets[Index]) {
 			Index += Incr;

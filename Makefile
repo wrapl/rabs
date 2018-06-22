@@ -13,6 +13,7 @@ sources = \
 	rabs.c \
 	target.c \
 	targetset.c \
+	targetcache.c \
 	util.c \
 	vfs.c
 

@@ -14,6 +14,7 @@
 #include "minilang.h"
 #include "ml_file.h"
 #include "rabs.h"
+#include "minilang/stringmap.h"
 
 #define VERSION_STRING "1.0.3"
 

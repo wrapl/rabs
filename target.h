@@ -19,7 +19,7 @@ typedef struct target_t target_t;
 	targetset_t Depends[1]; \
 	targetset_t Affects[1]; \
 	int WaitCount, DependsLastUpdated, LastUpdated, BuildChecked, IdLength; \
-	long IdHash; \
+	unsigned long IdHash; \
 	BYTE Hash[SHA256_BLOCK_SIZE]; \
 	BYTE BuildHash[SHA256_BLOCK_SIZE];
 

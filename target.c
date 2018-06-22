@@ -2,6 +2,7 @@
 #include "rabs.h"
 #include "util.h"
 #include "context.h"
+#include "targetcache.h"
 #include "cache.h"
 #include <string.h>
 #include <stdlib.h>
@@ -32,7 +33,6 @@ typedef struct scan_results_t scan_results_t;
 typedef struct target_symb_t target_symb_t;
 
 extern const char *RootPath;
-static stringmap_t TargetCache[1] = {STRINGMAP_INIT};
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 int StatusUpdates = 0;
 
@@ -225,7 +225,7 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id) {
 	Target->IdHash = stringmap_hash(Id);
 	Target->Build = 0;
 	Target->LastUpdated = STATE_UNCHECKED;
-	stringmap_hash_insert(TargetCache, Target->IdHash, Id, Target);
+	//targetcache_lookup(Id)[0] = Target;
 	return Target;
 }
 
@@ -325,14 +325,15 @@ static int target_file_missing(target_file_t *Target) {
 target_t *target_file_check(const char *Path, int Absolute) {
 	Path = concat(Path, NULL);
 	const char *Id = concat("file:", Path, NULL);
-	target_file_t *Target = (target_file_t *)stringmap_search(TargetCache, Id);
-	if (!Target) {
-		Target = target_new(target_file_t, FileTargetT, Id);
+	target_t **Slot = targetcache_lookup(Id);
+	if (!Slot[0]) {
+		target_file_t *Target = target_new(target_file_t, FileTargetT, Id);
 		Target->Absolute = Absolute;
 		Target->Path = Path;
 		Target->BuildContext = CurrentContext;
+		Slot[0] = (target_t *)Target;
 	}
-	return (target_t *)Target;
+	return Slot[0];
 }
 
 ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
@@ -731,12 +732,13 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, NULL);
-	target_meta_t *Target = (target_meta_t *)stringmap_search(TargetCache, Id);
-	if (!Target) {
-		Target = target_new(target_meta_t, MetaTargetT, Id);
+	target_t **Slot = targetcache_lookup(Id);
+	if (!Slot[0]) {
+		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id);
 		Target->Name = Name;
+		Slot[0] = (target_t *)Target;
 	}
-	return (ml_value_t *)Target;
+	return (ml_value_t *)Slot[0];
 }
 
 struct target_expr_t {
@@ -785,11 +787,12 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	const char *Id = concat("expr:", CurrentContext->Path, "::", Name, NULL);
-	target_expr_t *Target = (target_expr_t *)stringmap_search(TargetCache, Id);
-	if (!Target) {
-		Target = target_new(target_expr_t, ExprTargetT, Id);
+	target_t **Slot = targetcache_lookup(Id);
+	if (!Slot[0]) {
+		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id);
+		Slot[0] = (target_t *)Target;
 	}
-	return (ml_value_t *)Target;
+	return (ml_value_t *)Slot[0];
 }
 
 static int target_depends_single(ml_value_t *Arg, target_t *Target) {
@@ -956,9 +959,9 @@ static int scan_depends_update_fn(target_t *Depend, scan_results_t *Target) {
 
 static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name) {
 	const char *Id = concat("results:", ParentTarget->Id, "::", Name, NULL);
-	scan_results_t *Target = (scan_results_t *)stringmap_search(TargetCache, Id);
-	if (!Target) {
-		Target = target_new(scan_results_t, ScanResultsT, Id);
+	target_t **Slot = targetcache_lookup(Id);
+	if (!Slot[0]) {
+		scan_results_t *Target = target_new(scan_results_t, ScanResultsT, Id);
 		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
 		target_scan_t *ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId);
 		targetset_insert(ScanTarget->Depends, ParentTarget);
@@ -967,10 +970,11 @@ static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name
 		ScanTarget->Results = Target;
 		ScanTarget->Rebuild = ml_function(ScanTarget, (void *)scan_target_rebuild);
 		targetset_insert(Target->Depends, (target_t *)ScanTarget);
+		Slot[0] = (target_t *)Target;
 	}
-	targetset_t *Scans = cache_scan_get((target_t *)Target);
-	if (Scans) targetset_foreach(Scans, Target, (void *)scan_depends_update_fn);
-	return Target;
+	targetset_t *Scans = cache_scan_get(Slot[0]);
+	if (Scans) targetset_foreach(Scans, Slot[0], (void *)scan_depends_update_fn);
+	return (scan_results_t *)Slot[0];
 }
 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
@@ -1006,13 +1010,14 @@ static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, BYTE 
 
 target_t *target_symb_new(const char *Name) {
 	const char *Id = concat("symb:", CurrentContext->Name, "/", Name, NULL);
-	target_symb_t *Target = (target_symb_t *)stringmap_search(TargetCache, Id);
-	if (!Target) {
-		Target = target_new(target_symb_t, SymbTargetT, Id);
+	target_t **Slot = targetcache_lookup(Id);
+	if (!Slot[0]) {
+		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id);
 		Target->Context = CurrentContext->Name;
 		Target->Name = Name;
+		Slot[0] = (target_t *)Target;
 	}
-	return (target_t *)Target;
+	return Slot[0];
 }
 
 static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
@@ -1122,8 +1127,8 @@ static int target_missing(target_t *Target, int LastChecked) {
 }
 
 target_t *target_find(const char *Id) {
-	target_t *Target = (target_t *)stringmap_search(TargetCache, Id);
-	if (Target) return Target;
+	target_t **Slot = targetcache_lookup(Id);
+	if (Slot[0]) return Slot[0];
 	if (!memcmp(Id, "file", 4)) {
 		//return target_file_check(Id + 5, Id[5] == '/');
 		Id = concat(Id, NULL);
@@ -1131,7 +1136,7 @@ target_t *target_find(const char *Id) {
 		Target->Absolute = Id[5] == '/';
 		Target->Path = Id + 5;
 		Target->BuildContext = CurrentContext;
-		return (target_t *)Target;
+		return Slot[0] = (target_t *)Target;
 	}
 	if (!memcmp(Id, "symb", 4)) {
 		Id = concat(Id, NULL);
@@ -1146,11 +1151,11 @@ target_t *target_find(const char *Id) {
 		Path[PathLength] = 0;
 		Target->Context = Path;
 		Target->Name = Name + 1;
-		return (target_t *)Target;
+		return Slot[0] = (target_t *)Target;
 	}
 	if (!memcmp(Id, "expr", 4)) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id);
-		return (target_t *)Target;
+		return Slot[0] = (target_t *)Target;
 	}
 	if (!memcmp(Id, "results", 7)) {
 		const char *Name;
@@ -1163,13 +1168,13 @@ target_t *target_find(const char *Id) {
 		ParentId[ParentIdLength] = 0;
 		target_t *ParentTarget = target_find(ParentId);
 		Name += 2;
-		return (target_t *)scan_results_new(ParentTarget, Name);
+		return Slot[0] = (target_t *)scan_results_new(ParentTarget, Name);
 	}
 	return 0;
 }
 
 target_t *target_get(const char *Id) {
-	return (target_t *)stringmap_search(TargetCache, Id);
+	return *targetcache_lookup(Id);
 }
 
 int target_print_fn(const char *TargetId, target_t *Target, void *Data) {
@@ -1178,7 +1183,7 @@ int target_print_fn(const char *TargetId, target_t *Target, void *Data) {
 }
 
 void target_list() {
-	stringmap_foreach(TargetCache, 0, (void *)target_print_fn);
+	//stringmap_foreach(TargetCache, 0, (void *)target_print_fn);
 }
 
 typedef struct build_thread_t build_thread_t;
@@ -1273,13 +1278,14 @@ void target_threads_wait(int NumThreads) {
 		GC_pthread_join(BuildThreads->Handle, 0);
 		BuildThreads = BuildThreads->Next;
 	}
-	stringmap_foreach(TargetCache, 0, (void *)print_unbuilt_target);
+	//stringmap_foreach(TargetCache, 0, (void *)print_unbuilt_target);
 }
 
 #define target_file_methods_is(TYPE) \
 	ml_method_by_name("is_" #TYPE, 0, target_file_is_ ## TYPE, FileTargetT, NULL);
 
 void target_init() {
+	targetcache_init();
 	TargetT = ml_class(MLAnyT, "target");
 	FileTargetT = ml_class(TargetT, "file-target");
 	MetaTargetT = ml_class(TargetT, "meta-target");
