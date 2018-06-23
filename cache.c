@@ -219,6 +219,59 @@ void cache_last_check_set(target_t *Target, time_t FileTime) {
 	sqlite3_reset(LastCheckSetStatement);
 }
 
+#define CACHE_LIST_SIZE 62
+
+typedef struct cache_list_t cache_list_t;
+
+struct cache_list_t {
+	cache_list_t *Next;
+	const char *Ids[CACHE_LIST_SIZE + 1];
+};
+
+static cache_list_t *CacheLists = 0;
+
+static cache_list_t *cache_list_parse(const char *Ids, int *Total) {
+	cache_list_t *List = 0;
+	int I = CACHE_LIST_SIZE, N = 0;
+	const char *Id = Ids;
+	while (*Id) {
+		size_t Length = strlen(Id) + 1;
+		char *Copy = snew(Length);
+		memcpy(Copy, Id, Length);
+		Id += Length;
+		if (I == CACHE_LIST_SIZE) {
+			cache_list_t *Temp = CacheLists ?: new(cache_list_t);
+			CacheLists = Temp->Next;
+			Temp->Next = List;
+			List = Temp;
+			I = 0;
+		}
+		List->Ids[I] = Copy;
+		++I;
+		++N;
+	}
+	if (List) List->Ids[I] = 0;
+	*Total = N;
+	return List;
+}
+
+static targetset_t *cache_list_to_set(cache_list_t *List, int Total) {
+	if (!Total) return 0;
+	targetset_t *Set = new(targetset_t);
+	targetset_init(Set, Total);
+	while (List) {
+		for (const char **Temp = List->Ids; *Temp; ++Temp) {
+			target_t *Target = target_find(*Temp);
+			if (Target) targetset_insert(Set, Target);
+		}
+		cache_list_t *Next = List->Next;
+		List->Next = CacheLists;
+		CacheLists = List;
+		List = Next;
+	}
+	return Set;
+}
+
 static int cache_target_set_size(target_t *Target, int *Size) {
 	*Size += Target->IdLength + 1;
 	return 0;
@@ -231,19 +284,13 @@ static int cache_target_set_append(target_t *Target, char **Buffer) {
 
 targetset_t *cache_depends_get(target_t *Target) {
 	sqlite3_bind_text(DependsGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	targetset_t *Depends = 0;
+	int Total = 0;
+	cache_list_t *List = 0;
 	if (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
-		Depends = new(targetset_t);
-		const char *DependId = sqlite3_column_blob(DependsGetStatement, 0);
-		while (*DependId) {
-			target_t *Depend = target_find(DependId);
-			if (Depend) targetset_insert(Depends, Depend);
-			do ++DependId; while (*DependId);
-			++DependId;
-		}
+		List = cache_list_parse(sqlite3_column_blob(DependsGetStatement, 0), &Total);
 	}
 	sqlite3_reset(DependsGetStatement);
-	return Depends;
+	return cache_list_to_set(List, Total);
 }
 
 void cache_depends_set(target_t *Target, targetset_t *Depends) {
@@ -263,19 +310,13 @@ void cache_depends_set(target_t *Target, targetset_t *Depends) {
 
 targetset_t *cache_scan_get(target_t *Target) {
 	sqlite3_bind_text(ScanGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	targetset_t *Scans = 0;
+	int Total = 0;
+	cache_list_t *List = 0;
 	if (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
-		Scans = new(targetset_t);
-		const char *ScanId = sqlite3_column_blob(ScanGetStatement, 0);
-		while (*ScanId) {
-			target_t *Scan = target_find(ScanId);
-			if (Scan) targetset_insert(Scans, Scan);
-			do ++ScanId; while (*ScanId);
-			++ScanId;
-		}
+		List = cache_list_parse(sqlite3_column_blob(ScanGetStatement, 0), &Total);
 	}
 	sqlite3_reset(ScanGetStatement);
-	return Scans;
+	return cache_list_to_set(List, Total);
 }
 
 void cache_scan_set(target_t *Target, targetset_t *Scans) {

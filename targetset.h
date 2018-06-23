@@ -11,6 +11,7 @@ struct targetset_t {
 
 #define TARGETSET_INIT {0,}
 
+void targetset_init(targetset_t *Set, int Size);
 int targetset_insert(targetset_t *Set, target_t *Target);
 int targetset_foreach(targetset_t *Set, void *Data, int (*callback)(target_t *, void *));
 

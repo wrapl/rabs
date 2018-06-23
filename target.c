@@ -216,7 +216,7 @@ void target_depends_auto(target_t *Depend) {
 	if (CurrentTarget && CurrentTarget != Depend) targetset_insert(CurrentTarget->Depends, Depend);
 }
 
-static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id) {
+static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_t **Slot) {
 	++NumTargets;
 	target_t *Target = (target_t *)GC_MALLOC(Size);
 	Target->Type = Type;
@@ -225,11 +225,11 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id) {
 	Target->IdHash = stringmap_hash(Id);
 	Target->Build = 0;
 	Target->LastUpdated = STATE_UNCHECKED;
-	//targetcache_lookup(Id)[0] = Target;
+	Slot[0] = Target;
 	return Target;
 }
 
-#define target_new(type, Type, Id) ((type *)target_alloc(sizeof(type), Type, Id))
+#define target_new(type, Type, Id, Slot) ((type *)target_alloc(sizeof(type), Type, Id, Slot))
 
 struct target_file_t {
 	TARGET_FIELDS
@@ -327,11 +327,10 @@ target_t *target_file_check(const char *Path, int Absolute) {
 	const char *Id = concat("file:", Path, NULL);
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
-		target_file_t *Target = target_new(target_file_t, FileTargetT, Id);
+		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Slot);
 		Target->Absolute = Absolute;
 		Target->Path = Path;
 		Target->BuildContext = CurrentContext;
-		Slot[0] = (target_t *)Target;
 	}
 	return Slot[0];
 }
@@ -734,9 +733,8 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, NULL);
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
-		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id);
+		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, Slot);
 		Target->Name = Name;
-		Slot[0] = (target_t *)Target;
 	}
 	return (ml_value_t *)Slot[0];
 }
@@ -789,8 +787,7 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Id = concat("expr:", CurrentContext->Path, "::", Name, NULL);
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
-		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id);
-		Slot[0] = (target_t *)Target;
+		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
 	}
 	return (ml_value_t *)Slot[0];
 }
@@ -886,8 +883,8 @@ static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, BYT
 	return 0;
 }
 
-static int build_scan_target_list(target_t *Depend, stringmap_t *Scans) {
-	stringmap_hash_insert(Scans, Depend->IdHash, Depend->Id, Depend);
+static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
+	targetset_insert(Scans, Depend);
 	return 0;
 }
 
@@ -957,28 +954,34 @@ static int scan_depends_update_fn(target_t *Depend, scan_results_t *Target) {
 	return 0;
 }
 
-static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name) {
+static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name, target_t **Slot) {
 	const char *Id = concat("results:", ParentTarget->Id, "::", Name, NULL);
-	target_t **Slot = targetcache_lookup(Id);
+	if (!Slot) Slot = targetcache_lookup(Id);
+	scan_results_t *Target;
 	if (!Slot[0]) {
-		scan_results_t *Target = target_new(scan_results_t, ScanResultsT, Id);
+		Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
 		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
-		target_scan_t *ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId);
+		target_scan_t *ScanTarget;
+		target_t **ScanSlot = targetcache_lookup(ScanId);
+		if (!ScanSlot[0]) {
+			ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId, ScanSlot);
+		} else {
+			ScanTarget = Target->Scan = (target_scan_t *)ScanSlot[0];
+		}
 		targetset_insert(ScanTarget->Depends, ParentTarget);
-		ScanTarget->Name = Name;
+		ScanTarget->Name = concat(Name, NULL);
 		ScanTarget->Source = ParentTarget;
 		ScanTarget->Results = Target;
 		ScanTarget->Rebuild = ml_function(ScanTarget, (void *)scan_target_rebuild);
 		targetset_insert(Target->Depends, (target_t *)ScanTarget);
-		Slot[0] = (target_t *)Target;
 	}
-	targetset_t *Scans = cache_scan_get(Slot[0]);
-	if (Scans) targetset_foreach(Scans, Slot[0], (void *)scan_depends_update_fn);
-	return (scan_results_t *)Slot[0];
+	targetset_t *Scans = cache_scan_get((target_t *)Target);
+	if (Scans) targetset_foreach(Scans, Target, (void *)scan_depends_update_fn);
+	return Target;
 }
 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
-	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]));
+	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]), 0);
 }
 
 struct target_symb_t {
@@ -1012,10 +1015,9 @@ target_t *target_symb_new(const char *Name) {
 	const char *Id = concat("symb:", CurrentContext->Name, "/", Name, NULL);
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
-		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id);
+		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, Slot);
 		Target->Context = CurrentContext->Name;
 		Target->Name = Name;
-		Slot[0] = (target_t *)Target;
 	}
 	return Slot[0];
 }
@@ -1131,16 +1133,14 @@ target_t *target_find(const char *Id) {
 	if (Slot[0]) return Slot[0];
 	if (!memcmp(Id, "file", 4)) {
 		//return target_file_check(Id + 5, Id[5] == '/');
-		Id = concat(Id, NULL);
-		target_file_t *Target = target_new(target_file_t, FileTargetT, Id);
+		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Slot);
 		Target->Absolute = Id[5] == '/';
 		Target->Path = Id + 5;
 		Target->BuildContext = CurrentContext;
-		return Slot[0] = (target_t *)Target;
+		return (target_t *)Target;
 	}
 	if (!memcmp(Id, "symb", 4)) {
-		Id = concat(Id, NULL);
-		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id);
+		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, Slot);
 		const char *Name;
 		for (Name = Id + strlen(Id); --Name > Id + 5;) {
 			if (*Name == '/') break;
@@ -1151,11 +1151,11 @@ target_t *target_find(const char *Id) {
 		Path[PathLength] = 0;
 		Target->Context = Path;
 		Target->Name = Name + 1;
-		return Slot[0] = (target_t *)Target;
+		return (target_t *)Target;
 	}
 	if (!memcmp(Id, "expr", 4)) {
-		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id);
-		return Slot[0] = (target_t *)Target;
+		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
+		return (target_t *)Target;
 	}
 	if (!memcmp(Id, "results", 7)) {
 		const char *Name;
@@ -1168,7 +1168,7 @@ target_t *target_find(const char *Id) {
 		ParentId[ParentIdLength] = 0;
 		target_t *ParentTarget = target_find(ParentId);
 		Name += 2;
-		return Slot[0] = (target_t *)scan_results_new(ParentTarget, Name);
+		return (target_t *)scan_results_new(ParentTarget, Name, Slot);
 	}
 	return 0;
 }

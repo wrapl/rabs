@@ -2,11 +2,27 @@
 #include <gc/gc.h>
 #include "target.h"
 
+#define INITIAL_SIZE 4
+
+void targetset_init(targetset_t *Set, int Min) {
+	int Size = 1;
+	while (Size < Min) Size <<= 1;
+	Set->Size = Size;
+	Set->Space = Size;
+	Set->Targets = anew(target_t *, Size + 1);
+}
+
 static void sort_targets(target_t **First, target_t **Last) {
 	target_t **A = First;
 	target_t **B = Last;
-	target_t *P = *A;
-	target_t *T = *B;
+	target_t *T = *A;
+	target_t *P = *B;
+	while (!P) {
+		--B;
+		--Last;
+		if (A == B) return;
+		P = *B;
+	}
 	while (A != B) {
 		if (T > P) {
 			*A = T;
@@ -26,10 +42,10 @@ int targetset_insert(targetset_t *Set, target_t *Target) {
 	int Incr = (((intptr_t)Target) >> 8) | 1;
 	target_t **Targets = Set->Targets;
 	if (!Targets) {
-		Targets = Set->Targets = anew(target_t *, 5);
-		Set->Size = 4;
-		Set->Space = 3;
-		Targets[Hash & 3] = Target;
+		Targets = Set->Targets = anew(target_t *, INITIAL_SIZE + 1);
+		Set->Size = INITIAL_SIZE;
+		Set->Space = INITIAL_SIZE - 1;
+		Targets[Hash & (INITIAL_SIZE - 1)] = Target;
 		return 0;
 	}
 	int Mask = Set->Size - 1;
