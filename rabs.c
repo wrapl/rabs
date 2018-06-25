@@ -14,6 +14,7 @@
 #include "minilang.h"
 #include "ml_file.h"
 #include "rabs.h"
+#include "minilang/stringmap.h"
 
 #define VERSION_STRING "1.0.3"
 
@@ -21,6 +22,7 @@ const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
 static int EchoCommands = 0;
+extern int StatusUpdates;
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
 static stringmap_t Defines[1] = {STRINGMAP_INIT};
@@ -396,6 +398,10 @@ int main(int Argc, const char **Argv) {
 			};
 			case 'c': {
 				EchoCommands = 1;
+				break;
+			}
+			case 's': {
+				StatusUpdates = 1;
 				break;
 			}
 			case 'q': {
