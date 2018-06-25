@@ -957,8 +957,8 @@ static int scan_depends_update_fn(target_t *Depend, scan_results_t *Target) {
 static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name, target_t **Slot) {
 	const char *Id = concat("results:", ParentTarget->Id, "::", Name, NULL);
 	if (!Slot) Slot = targetcache_lookup(Id);
-	scan_results_t *Target;
-	if (!Slot[0]) {
+	scan_results_t *Target = (scan_results_t *)Slot[0];
+	if (!Target) {
 		Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
 		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
 		target_scan_t *ScanTarget;
