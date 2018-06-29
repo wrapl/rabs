@@ -1237,7 +1237,9 @@ static void *active_mode_thread_fn(void *Arg) {
 		while (!BuildQueue) {
 			//printf("[%d]: No target in build queue, %d threads running\n", Index, RunningThreads);
 			if (--RunningThreads == 0) {
-				// Get command line input
+				pthread_cond_signal(TargetAvailable);
+				pthread_mutex_unlock(GlobalLock);
+				return 0;
 			}
 			pthread_cond_wait(TargetAvailable, GlobalLock);
 			++RunningThreads;
