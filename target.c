@@ -35,6 +35,7 @@ typedef struct target_symb_t target_symb_t;
 extern const char *RootPath;
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 int StatusUpdates = 0;
+int ActiveMode = 0;
 
 pthread_mutex_t GlobalLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
@@ -117,7 +118,7 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Built \e[32m%s\e[0m at version %d\n", BuiltTargets, QueuedTargets, ThreadIndex, Target->Id, Target->LastUpdated);
 	targetset_foreach(Target->Affects, Target, (void *)depends_updated_fn);
 	memset(Target->Depends, 0, sizeof(Target->Depends));
-	memset(Target->Affects, 0, sizeof(Target->Affects));
+	//memset(Target->Affects, 0, sizeof(Target->Affects));
 	pthread_cond_broadcast(TargetAvailable);
 }
 
@@ -1208,6 +1209,35 @@ static void *target_thread_fn(void *Arg) {
 				pthread_cond_signal(TargetAvailable);
 				pthread_mutex_unlock(GlobalLock);
 				return 0;
+			}
+			pthread_cond_wait(TargetAvailable, GlobalLock);
+			++RunningThreads;
+		}
+		target_t *Target = BuildQueue;
+		BuildQueue = Target->Next;
+		Target->Next = 0;
+		target_do_build(Index, Target);
+		if (SpareThreads) {
+			--RunningThreads;
+			--SpareThreads;
+			pthread_cond_signal(TargetAvailable);
+			pthread_mutex_unlock(GlobalLock);
+			return 0;
+		}
+	}
+	return 0;
+}
+
+static void *active_mode_thread_fn(void *Arg) {
+	int Index = (int)(ptrdiff_t)Arg;
+	printf("Starting build thread #%d\n", (int)Index);
+	pthread_mutex_lock(GlobalLock);
+	++RunningThreads;
+	for (;;) {
+		while (!BuildQueue) {
+			//printf("[%d]: No target in build queue, %d threads running\n", Index, RunningThreads);
+			if (--RunningThreads == 0) {
+				// Get command line input
 			}
 			pthread_cond_wait(TargetAvailable, GlobalLock);
 			++RunningThreads;
