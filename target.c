@@ -863,6 +863,7 @@ struct target_scan_t {
 	target_t *Source;
 	scan_results_t *Results;
 	ml_value_t *Scan, *Rebuild;
+	int Recursive;
 };
 
 static ml_type_t *ScanTargetT;
@@ -876,15 +877,13 @@ static ml_type_t *ScanResultsT;
 
 static int scan_results_affects_fn(target_t *Target, target_t *Scan) {
 	targetset_insert(Target->Affects, Scan);
+	targetset_insert(Scan->Depends, Target);
 	return 0;
 }
 
 static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	targetset_t *Scans = cache_scan_get((target_t *)Target->Results);
-	if (Scans) {
-		targetset_foreach(Scans, Target->Results, (void *)depends_update_fn);
-		targetset_foreach(Scans, Target, (void *)scan_results_affects_fn);
-	}
+	if (Scans) targetset_foreach(Scans, Target->Results, (void *)depends_update_fn);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	return 0;
 }
@@ -939,6 +938,9 @@ static void target_scan_build(target_scan_t *Target) {
 	targetset_t Scans[1] = {TARGETSET_INIT};
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 	cache_depends_set((target_t *)Target->Results, Scans);
+	if (Target->Recursive) {
+		targetset_foreach(Scans, Target, (void *)scan_results_affects_fn);
+	}
 	cache_scan_set((target_t *)Target->Results, Scans);
 }
 
@@ -993,8 +995,8 @@ static int scan_depends_update_fn(target_t *Depend, scan_results_t *Target) {
 	return 0;
 }
 
-static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name, target_t **Slot) {
-	const char *Id = concat("results:", ParentTarget->Id, "::", Name, NULL);
+static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name, target_t **Slot, int Recursive) {
+	const char *Id = concat(Recursive ? "results!:" : "results:", ParentTarget->Id, "::", Name, NULL);
 	if (!Slot) Slot = targetcache_lookup(Id);
 	scan_results_t *Target = (scan_results_t *)Slot[0];
 	if (!Target) {
@@ -1012,6 +1014,7 @@ static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name
 		ScanTarget->Source = ParentTarget;
 		ScanTarget->Results = Target;
 		ScanTarget->Rebuild = ml_function(ScanTarget, (void *)scan_target_rebuild);
+		ScanTarget->Recursive = Recursive;
 		targetset_insert(Target->Depends, (target_t *)ScanTarget);
 	}
 	targetset_t *Scans = cache_scan_get((target_t *)Target);
@@ -1020,7 +1023,7 @@ static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name
 }
 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
-	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]), 0);
+	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]), 0, (Count > 2) && Args[2] != MLNil);
 }
 
 struct target_symb_t {
@@ -1196,6 +1199,19 @@ target_t *target_find(const char *Id) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
 		return (target_t *)Target;
 	}
+	if (!memcmp(Id, "results!", 8)) {
+		const char *Name;
+		for (Name = Id + strlen(Id) - 1; --Name > Id + 9;) {
+			if (Name[0] == ':' && Name[1] == ':') break;
+		}
+		size_t ParentIdLength = Name - Id - 9;
+		char *ParentId = snew(ParentIdLength + 1);
+		memcpy(ParentId, Id + 9, ParentIdLength);
+		ParentId[ParentIdLength] = 0;
+		target_t *ParentTarget = target_find(ParentId);
+		Name += 2;
+		return (target_t *)scan_results_new(ParentTarget, Name, Slot, 1);
+	}
 	if (!memcmp(Id, "results", 7)) {
 		const char *Name;
 		for (Name = Id + strlen(Id) - 1; --Name > Id + 8;) {
@@ -1207,7 +1223,7 @@ target_t *target_find(const char *Id) {
 		ParentId[ParentIdLength] = 0;
 		target_t *ParentTarget = target_find(ParentId);
 		Name += 2;
-		return (target_t *)scan_results_new(ParentTarget, Name, Slot);
+		return (target_t *)scan_results_new(ParentTarget, Name, Slot, 0);
 	}
 	return 0;
 }
