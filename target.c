@@ -182,6 +182,7 @@ void target_update(target_t *Target) {
 }
 
 void target_recheck(target_t *Target) {
+	if (Target == (target_t *)-1) restart();
 	printf("Rechecking %s\n", Target->Id);
 	cache_bump_version();
 	++QueuedTargets;

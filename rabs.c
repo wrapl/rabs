@@ -26,6 +26,8 @@ static int EchoCommands = 0;
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
 static stringmap_t Defines[1] = {STRINGMAP_INIT};
+static int SavedArgc;
+static char **SavedArgv;
 
 static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Name);
@@ -55,6 +57,7 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 }
 
 static void load_file(const char *FileName) {
+	if (MonitorFiles) targetwatch_add(FileName, (target_t *)-1);
 	ml_value_t *Closure = ml_load(rabs_ml_global, NULL, FileName);
 	if (Closure->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
@@ -335,7 +338,14 @@ static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
-int main(int Argc, const char **Argv) {
+void restart() {
+	cache_close();
+	execv(SavedArgv[0], SavedArgv);
+}
+
+int main(int Argc, char **Argv) {
+	SavedArgc = Argc;
+	SavedArgv = Argv;
 	GC_INIT();
 	ml_init();
 	AppendMethod = ml_method("append");
