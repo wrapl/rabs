@@ -27,6 +27,10 @@ struct target_t {
 	TARGET_FIELDS
 };
 
+extern int StatusUpdates;
+extern int MonitorFiles;
+extern pthread_mutex_t GlobalLock[1];
+
 void target_init();
 
 ml_value_t *target_dir_new(void *Data, int Count, ml_value_t **Args);
@@ -47,5 +51,7 @@ void target_list();
 target_t *target_file_check(const char *Path, int Absolute);
 void target_threads_start(int NumThreads);
 void target_threads_wait(int NumThreads);
+void target_interactive_start(int NumThreads);
+void target_recheck(target_t *Target);
 
 #endif

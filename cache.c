@@ -168,6 +168,16 @@ void cache_close() {
 	sqlite3_close(Cache);
 }
 
+void cache_bump_version() {
+	++CurrentVersion;
+	printf("CurrentVersion = %d\n", CurrentVersion);
+	char Buffer[100];
+	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', %d)", CurrentVersion);
+	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+}
 
 void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	sqlite3_bind_text(HashGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);

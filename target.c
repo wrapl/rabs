@@ -3,6 +3,7 @@
 #include "util.h"
 #include "context.h"
 #include "targetcache.h"
+#include "targetwatch.h"
 #include "cache.h"
 #include <string.h>
 #include <stdlib.h>
@@ -35,6 +36,7 @@ typedef struct target_symb_t target_symb_t;
 extern const char *RootPath;
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 int StatusUpdates = 0;
+int MonitorFiles = 0;
 
 pthread_mutex_t GlobalLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
@@ -117,7 +119,7 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Built \e[32m%s\e[0m at version %d\n", BuiltTargets, QueuedTargets, ThreadIndex, Target->Id, Target->LastUpdated);
 	targetset_foreach(Target->Affects, Target, (void *)depends_updated_fn);
 	memset(Target->Depends, 0, sizeof(Target->Depends));
-	memset(Target->Affects, 0, sizeof(Target->Affects));
+	//memset(Target->Affects, 0, sizeof(Target->Affects));
 	pthread_cond_broadcast(TargetAvailable);
 }
 
@@ -130,10 +132,22 @@ int depends_update_fn(target_t *Depend, target_t *Target) {
 	if (Depend->LastUpdated == STATE_QUEUED) {
 		if (!targetset_insert(Depend->Affects, Target)) ++Target->WaitCount;
 	} else {
+		targetset_insert(Depend->Affects, Target);
 		if (Depend->LastUpdated > Target->DependsLastUpdated) {
 			Target->DependsLastUpdated = Depend->LastUpdated;
 		}
 	}
+	return 0;
+}
+
+static int affects_refresh_fn(target_t *Affect, target_t *Target) {
+	printf("%s -> %s\n", Target->Id, Affect->Id);
+	if (Affect->LastUpdated != STATE_QUEUED) {
+		Affect->LastUpdated = STATE_QUEUED;
+		++QueuedTargets;
+		targetset_foreach(Affect->Affects, Affect, (void *)affects_refresh_fn);
+	}
+	if (!targetset_insert(Affect->Depends, Target)) ++Affect->WaitCount;
 	return 0;
 }
 
@@ -165,6 +179,15 @@ void target_update(target_t *Target) {
 		//printf("\e[32m[%d/%d] \e[33mtarget_update(%s) -> waiting on %d\e[0m\n", BuiltTargets, TargetCache->Size, Target->Id, Target->WaitCount);
 		if (Target->WaitCount == 0) target_queue_build(Target);
 	}
+}
+
+void target_recheck(target_t *Target) {
+	printf("Rechecking %s\n", Target->Id);
+	cache_bump_version();
+	++QueuedTargets;
+	targetset_foreach(Target->Affects, Target, (void *)affects_refresh_fn);
+	target_queue_build(Target);
+	pthread_cond_broadcast(TargetAvailable);
 }
 
 int depends_query_fn(const char *Id, target_t *Depends, int *DependsLastUpdated) {
@@ -297,6 +320,9 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 		sha256_final(Ctx, Target->Hash);
 	}
 	pthread_mutex_lock(GlobalLock);
+	if (MonitorFiles && !Target->Build) {
+		targetwatch_add(FileName, (target_t *)Target);
+	}
 	return Stat->st_mtime;
 }
 
@@ -826,12 +852,18 @@ ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
+ml_value_t *target_recheck_value(void *Data, int Count, ml_value_t **Args) {
+	target_recheck((target_t *)Args[0]);
+	return Args[0];
+}
+
 struct target_scan_t {
 	TARGET_FIELDS
 	const char *Name;
 	target_t *Source;
 	scan_results_t *Results;
 	ml_value_t *Scan, *Rebuild;
+	int Recursive;
 };
 
 static ml_type_t *ScanTargetT;
@@ -842,6 +874,12 @@ struct scan_results_t {
 };
 
 static ml_type_t *ScanResultsT;
+
+static int scan_results_affects_fn(target_t *Target, target_t *Scan) {
+	targetset_insert(Target->Affects, Scan);
+	targetset_insert(Scan->Depends, Target);
+	return 0;
+}
 
 static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
 	targetset_t *Scans = cache_scan_get((target_t *)Target->Results);
@@ -900,6 +938,9 @@ static void target_scan_build(target_scan_t *Target) {
 	targetset_t Scans[1] = {TARGETSET_INIT};
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 	cache_depends_set((target_t *)Target->Results, Scans);
+	if (Target->Recursive) {
+		targetset_foreach(Scans, Target, (void *)scan_results_affects_fn);
+	}
 	cache_scan_set((target_t *)Target->Results, Scans);
 }
 
@@ -954,8 +995,8 @@ static int scan_depends_update_fn(target_t *Depend, scan_results_t *Target) {
 	return 0;
 }
 
-static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name, target_t **Slot) {
-	const char *Id = concat("results:", ParentTarget->Id, "::", Name, NULL);
+static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name, target_t **Slot, int Recursive) {
+	const char *Id = concat(Recursive ? "results!:" : "results:", ParentTarget->Id, "::", Name, NULL);
 	if (!Slot) Slot = targetcache_lookup(Id);
 	scan_results_t *Target = (scan_results_t *)Slot[0];
 	if (!Target) {
@@ -973,6 +1014,7 @@ static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name
 		ScanTarget->Source = ParentTarget;
 		ScanTarget->Results = Target;
 		ScanTarget->Rebuild = ml_function(ScanTarget, (void *)scan_target_rebuild);
+		ScanTarget->Recursive = Recursive;
 		targetset_insert(Target->Depends, (target_t *)ScanTarget);
 	}
 	targetset_t *Scans = cache_scan_get((target_t *)Target);
@@ -981,7 +1023,7 @@ static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name
 }
 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
-	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]), 0);
+	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]), 0, (Count > 2) && Args[2] != MLNil);
 }
 
 struct target_symb_t {
@@ -1157,6 +1199,19 @@ target_t *target_find(const char *Id) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
 		return (target_t *)Target;
 	}
+	if (!memcmp(Id, "results!", 8)) {
+		const char *Name;
+		for (Name = Id + strlen(Id) - 1; --Name > Id + 9;) {
+			if (Name[0] == ':' && Name[1] == ':') break;
+		}
+		size_t ParentIdLength = Name - Id - 9;
+		char *ParentId = snew(ParentIdLength + 1);
+		memcpy(ParentId, Id + 9, ParentIdLength);
+		ParentId[ParentIdLength] = 0;
+		target_t *ParentTarget = target_find(ParentId);
+		Name += 2;
+		return (target_t *)scan_results_new(ParentTarget, Name, Slot, 1);
+	}
 	if (!memcmp(Id, "results", 7)) {
 		const char *Name;
 		for (Name = Id + strlen(Id) - 1; --Name > Id + 8;) {
@@ -1168,7 +1223,7 @@ target_t *target_find(const char *Id) {
 		ParentId[ParentIdLength] = 0;
 		target_t *ParentTarget = target_find(ParentId);
 		Name += 2;
-		return (target_t *)scan_results_new(ParentTarget, Name, Slot);
+		return (target_t *)scan_results_new(ParentTarget, Name, Slot, 0);
 	}
 	return 0;
 }
@@ -1194,7 +1249,7 @@ struct build_thread_t {
 };
 
 static build_thread_t *BuildThreads = 0;
-int RunningThreads = 1, LastThread = 0;
+int RunningThreads = 0, LastThread = 0;
 
 static void *target_thread_fn(void *Arg) {
 	int Index = (int)(ptrdiff_t)Arg;
@@ -1227,7 +1282,33 @@ static void *target_thread_fn(void *Arg) {
 	return 0;
 }
 
+static void *active_mode_thread_fn(void *Arg) {
+	int Index = (int)(ptrdiff_t)Arg;
+	printf("Starting build thread #%d\n", (int)Index);
+	pthread_mutex_lock(GlobalLock);
+	++RunningThreads;
+	for (;;) {
+		while (!BuildQueue) {
+			//printf("[%d]: No target in build queue, %d threads running\n", Index, RunningThreads);
+			pthread_cond_wait(TargetAvailable, GlobalLock);
+		}
+		target_t *Target = BuildQueue;
+		BuildQueue = Target->Next;
+		Target->Next = 0;
+		target_do_build(Index, Target);
+		if (SpareThreads) {
+			--RunningThreads;
+			--SpareThreads;
+			pthread_cond_signal(TargetAvailable);
+			pthread_mutex_unlock(GlobalLock);
+			return 0;
+		}
+	}
+	return 0;
+}
+
 void target_threads_start(int NumThreads) {
+	RunningThreads = 1;
 	pthread_mutex_init(GlobalLock, NULL);
 	pthread_mutex_lock(GlobalLock);
 	pthread_cond_init(TargetAvailable, NULL);
@@ -1270,6 +1351,21 @@ static int print_unbuilt_target(const char *Id, target_t *Target, void *Data) {
 	return 0;
 }
 
+void target_interactive_start(int NumThreads) {
+	RunningThreads = 0;
+	pthread_mutex_init(GlobalLock, NULL);
+	pthread_mutex_lock(GlobalLock);
+	pthread_cond_init(TargetAvailable, NULL);
+	for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
+		build_thread_t *BuildThread = new(build_thread_t);
+		GC_pthread_create(&BuildThread->Handle, 0, active_mode_thread_fn, (void *)(ptrdiff_t)LastThread);
+		BuildThread->Next = BuildThreads;
+		BuildThreads = BuildThread;
+	}
+	pthread_cond_broadcast(TargetAvailable);
+	pthread_mutex_unlock(GlobalLock);
+}
+
 void target_threads_wait(int NumThreads) {
 	--RunningThreads;
 	pthread_cond_broadcast(TargetAvailable);
@@ -1307,6 +1403,7 @@ void target_init() {
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);
 	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, NULL);
 	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, NULL);
+	ml_method_by_name("refresh", 0, target_recheck_value, TargetT, NULL);
 	ml_method_by_name("=>", 0, scan_results_set_build, ScanResultsT, MLAnyT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
