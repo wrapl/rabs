@@ -8,6 +8,7 @@
 #include <time.h>
 #include <stdio.h>
 #include "target.h"
+#include "targetwatch.h"
 #include "context.h"
 #include "util.h"
 #include "cache.h"
@@ -22,7 +23,6 @@ const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
 static int EchoCommands = 0;
-extern int StatusUpdates;
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
 static stringmap_t Defines[1] = {STRINGMAP_INIT};
@@ -366,6 +366,7 @@ int main(int Argc, const char **Argv) {
 	int QueryOnly = 0;
 	int ListTargets = 0;
 	int NumThreads = 1;
+	int InteractiveMode = 0;
 	for (int I = 1; I < Argc; ++I) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
@@ -420,6 +421,15 @@ int main(int Argc, const char **Argv) {
 				}
 				break;
 			}
+			case 'i': {
+				InteractiveMode = 1;
+				break;
+			}
+			case 'w': {
+				targetwatch_init();
+				MonitorFiles = 1;
+				break;
+			}
 			case 't': {
 				GC_disable();
 				break;
@@ -448,7 +458,11 @@ int main(int Argc, const char **Argv) {
 	context_push("");
 	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
 
-	target_threads_start(NumThreads);
+	if (InteractiveMode || MonitorFiles) {
+
+	} else {
+		target_threads_start(NumThreads);
+	}
 
 	load_file(concat(RootPath, SystemName, NULL));
 	target_t *Target;
@@ -478,6 +492,13 @@ int main(int Argc, const char **Argv) {
 	} else {
 		target_update(Target);
 		target_threads_wait(NumThreads);
+		if (InteractiveMode) {
+			target_interactive_start(NumThreads);
+			ml_console(rabs_ml_global, Globals);
+		} else if (MonitorFiles) {
+			target_interactive_start(NumThreads);
+			targetwatch_wait();
+		}
 	}
 	return 0;
 }
