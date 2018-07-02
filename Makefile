@@ -14,6 +14,7 @@ sources = \
 	target.c \
 	targetset.c \
 	targetcache.c \
+	targetwatch.c \
 	util.c \
 	vfs.c
 

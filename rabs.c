@@ -8,6 +8,7 @@
 #include <time.h>
 #include <stdio.h>
 #include "target.h"
+#include "targetwatch.h"
 #include "context.h"
 #include "util.h"
 #include "cache.h"
@@ -22,10 +23,11 @@ const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
 static int EchoCommands = 0;
-extern int StatusUpdates;
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
 static stringmap_t Defines[1] = {STRINGMAP_INIT};
+static int SavedArgc;
+static char **SavedArgv;
 
 static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Name);
@@ -55,6 +57,7 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 }
 
 static void load_file(const char *FileName) {
+	if (MonitorFiles) targetwatch_add(FileName, (target_t *)-1);
 	ml_value_t *Closure = ml_load(rabs_ml_global, NULL, FileName);
 	if (Closure->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
@@ -335,7 +338,14 @@ static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
-int main(int Argc, const char **Argv) {
+void restart() {
+	cache_close();
+	execv(SavedArgv[0], SavedArgv);
+}
+
+int main(int Argc, char **Argv) {
+	SavedArgc = Argc;
+	SavedArgv = Argv;
 	GC_INIT();
 	ml_init();
 	AppendMethod = ml_method("append");
@@ -366,6 +376,7 @@ int main(int Argc, const char **Argv) {
 	int QueryOnly = 0;
 	int ListTargets = 0;
 	int NumThreads = 1;
+	int InteractiveMode = 0;
 	for (int I = 1; I < Argc; ++I) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
@@ -420,6 +431,15 @@ int main(int Argc, const char **Argv) {
 				}
 				break;
 			}
+			case 'i': {
+				InteractiveMode = 1;
+				break;
+			}
+			case 'w': {
+				targetwatch_init();
+				MonitorFiles = 1;
+				break;
+			}
 			case 't': {
 				GC_disable();
 				break;
@@ -448,7 +468,11 @@ int main(int Argc, const char **Argv) {
 	context_push("");
 	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
 
-	target_threads_start(NumThreads);
+	if (InteractiveMode || MonitorFiles) {
+
+	} else {
+		target_threads_start(NumThreads);
+	}
 
 	load_file(concat(RootPath, SystemName, NULL));
 	target_t *Target;
@@ -478,6 +502,13 @@ int main(int Argc, const char **Argv) {
 	} else {
 		target_update(Target);
 		target_threads_wait(NumThreads);
+		if (InteractiveMode) {
+			target_interactive_start(NumThreads);
+			ml_console(rabs_ml_global, Globals);
+		} else if (MonitorFiles) {
+			target_interactive_start(NumThreads);
+			targetwatch_wait();
+		}
 	}
 	return 0;
 }
