@@ -155,7 +155,8 @@ ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
 	const char *Target = ml_string_value(Args[1]);
 	CurrentContext->Mounts = vfs_mount(CurrentContext->Mounts,
 		concat(CurrentContext->Path, "/", Path, NULL),
-		concat(CurrentContext->Path, "/", Target, NULL)
+		concat(CurrentContext->Path, "/", Target, NULL),
+		Target[0] == '/'
 	);
 	return MLNil;
 }

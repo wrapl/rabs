@@ -15,14 +15,14 @@ struct vmount_t {
 
 extern const char *RootPath;
 
-const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target) {
+const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target, int Absolute) {
 	vmount_t *Mount = new(vmount_t);
 	Mount->Previous = Previous;
 	Mount->Path = concat(RootPath, Path, NULL);
-	if (Target[0] != '/') {
-		Mount->Target = concat(RootPath, Target, NULL);
-	} else {
+	if (Absolute) {
 		Mount->Target = concat(Target, NULL);
+	} else {
+		Mount->Target = concat(RootPath, Target, NULL);
 	}
 	return Mount;
 }
