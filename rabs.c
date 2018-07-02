@@ -383,11 +383,11 @@ int main(int Argc, char **Argv) {
 			case 'h': {
 				printf("Usage: %s { options } [ target ]\n", Argv[0]);
 				puts("    -h              display this message");
+				puts("    -v              print version and exit");
 				puts("    -Dkey[=value]   add a define");
 				puts("    -c              print shell commands");
-				puts("    -q target       print dependencies for target");
-				puts("    -l              lists all targets");
 				puts("    -p n            run n threads");
+				puts("    -w              watch for file changes");
 				exit(0);
 				break;
 			}

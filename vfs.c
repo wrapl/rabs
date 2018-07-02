@@ -19,7 +19,11 @@ const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char
 	vmount_t *Mount = new(vmount_t);
 	Mount->Previous = Previous;
 	Mount->Path = concat(RootPath, Path, NULL);
-	Mount->Target = concat(RootPath, Target, NULL);
+	if (Target[0] != '/') {
+		Mount->Target = concat(RootPath, Target, NULL);
+	} else {
+		Mount->Target = concat(Target, NULL);
+	}
 	return Mount;
 }
 
