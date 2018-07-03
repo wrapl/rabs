@@ -55,31 +55,15 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "CREATE INDEX IF NOT EXISTS hashes_idx ON hashes(id);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
 	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS builds(id TEXT PRIMARY KEY, build BLOB);", 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "CREATE INDEX IF NOT EXISTS builds_idx ON builds(id);", 0, 0, 0) != SQLITE_OK) {
+	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS scans(id TEXT PRIMARY KEY, scan BLOB);", 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS scans(id TEXT, scan BLOB);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE INDEX IF NOT EXISTS scans_idx ON scans(id);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS depends(id TEXT, depend BLOB);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE INDEX IF NOT EXISTS depends_idx ON depends(id);", 0, 0, 0) != SQLITE_OK) {
+	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS depends(id TEXT PRIMARY KEY, depend BLOB);", 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
