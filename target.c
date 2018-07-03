@@ -102,10 +102,10 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 		if ((Target->DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
 			CurrentTarget = Target;
 			target_build(Target);
-			cache_depends_set(Target, Target->Depends);
 			cache_build_hash_set(Target);
 		}
 	}
+	cache_depends_set(Target, Target->Depends);
 	FileTime = target_hash(Target, FileTime, Previous);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 		Target->LastUpdated = CurrentVersion;

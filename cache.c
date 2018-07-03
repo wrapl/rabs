@@ -16,11 +16,9 @@ static sqlite3_stmt *HashBuildGetStatement;
 static sqlite3_stmt *HashBuildSetStatement;
 static sqlite3_stmt *LastCheckSetStatement;
 static sqlite3_stmt *DependsGetStatement;
-static sqlite3_stmt *DependsDeleteStatement;
-static sqlite3_stmt *DependsInsertStatement;
+static sqlite3_stmt *DependsSetStatement;
 static sqlite3_stmt *ScanGetStatement;
-static sqlite3_stmt *ScanDeleteStatement;
-static sqlite3_stmt *ScanInsertStatement;
+static sqlite3_stmt *ScanSetStatement;
 static sqlite3_stmt *ExprGetStatement;
 static sqlite3_stmt *ExprSetStatement;
 int CurrentVersion = 0;
@@ -113,11 +111,7 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_prepare_v2(Cache, "DELETE FROM scans WHERE id = ?", -1, &ScanDeleteStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "INSERT INTO scans(id, scan) VALUES(?, ?)", -1, &ScanInsertStatement, 0) != SQLITE_OK) {
+	if (sqlite3_prepare_v2(Cache, "REPLACE INTO scans(id, scan) VALUES(?, ?)", -1, &ScanSetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -125,11 +119,7 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_prepare_v2(Cache, "DELETE FROM depends WHERE id = ?", -1, &DependsDeleteStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "INSERT INTO depends(id, depend) VALUES(?, ?)", -1, &DependsInsertStatement, 0) != SQLITE_OK) {
+	if (sqlite3_prepare_v2(Cache, "REPLACE INTO depends(id, depend) VALUES(?, ?)", -1, &DependsSetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -160,11 +150,9 @@ void cache_close() {
 	sqlite3_finalize(HashGetStatement);
 	sqlite3_finalize(HashSetStatement);
 	sqlite3_finalize(DependsGetStatement);
-	sqlite3_finalize(DependsDeleteStatement);
-	sqlite3_finalize(DependsInsertStatement);
+	sqlite3_finalize(DependsSetStatement);
 	sqlite3_finalize(ScanGetStatement);
-	sqlite3_finalize(ScanDeleteStatement);
-	sqlite3_finalize(ScanInsertStatement);
+	sqlite3_finalize(ScanSetStatement);
 	sqlite3_close(Cache);
 }
 
@@ -311,10 +299,10 @@ void cache_depends_set(target_t *Target, targetset_t *Depends) {
 	char *Next = Buffer;
 	targetset_foreach(Depends, &Next, (void *)cache_target_set_append);
 	*Next = 0;
-	sqlite3_bind_text(DependsInsertStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_bind_blob(DependsInsertStatement, 2, Buffer, Size, SQLITE_STATIC);
-	sqlite3_step(DependsInsertStatement);
-	sqlite3_reset(DependsInsertStatement);
+	sqlite3_bind_text(DependsSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
+	sqlite3_bind_blob(DependsSetStatement, 2, Buffer, Size, SQLITE_STATIC);
+	sqlite3_step(DependsSetStatement);
+	sqlite3_reset(DependsSetStatement);
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
 }
 
@@ -337,10 +325,10 @@ void cache_scan_set(target_t *Target, targetset_t *Scans) {
 	char *Next = Buffer;
 	targetset_foreach(Scans, &Next, (void *)cache_target_set_append);
 	*Next = 0;
-	sqlite3_bind_text(ScanInsertStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_bind_blob(ScanInsertStatement, 2, Buffer, Size, SQLITE_STATIC);
-	sqlite3_step(ScanInsertStatement);
-	sqlite3_reset(ScanInsertStatement);
+	sqlite3_bind_text(ScanSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
+	sqlite3_bind_blob(ScanSetStatement, 2, Buffer, Size, SQLITE_STATIC);
+	sqlite3_step(ScanSetStatement);
+	sqlite3_reset(ScanSetStatement);
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
 }
 
