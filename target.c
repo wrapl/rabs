@@ -460,7 +460,6 @@ static ml_value_t *target_file_ls_iter_next(ml_value_t *Ref) {
 }
 
 static ml_value_t *target_file_ls_iter_key(ml_value_t *Ref) {
-	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
 	return MLNil;
 }
 
@@ -815,6 +814,7 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
+		Slot[0] = (target_t *)Target;
 	}
 	return (ml_value_t *)Slot[0];
 }
