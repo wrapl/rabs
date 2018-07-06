@@ -711,10 +711,14 @@ static int rmdir_p(char *Buffer, char *End) {
 		while (Entry) {
 			if (strcmp(Entry->d_name, ".") && strcmp(Entry->d_name, "..")) {
 				char *End2 = stpcpy(End + 1, Entry->d_name);
-				if (rmdir_p(Buffer, End2)) return 1;
+				if (rmdir_p(Buffer, End2)) {
+					closedir(Dir);
+					return 1;
+				}
 			}
 			Entry = readdir(Dir);
 		}
+		closedir(Dir);
 		End[0] = 0;
 		if (rmdir(Buffer)) return 1;
 	} else {

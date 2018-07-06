@@ -390,12 +390,10 @@ int main(int Argc, char **Argv) {
 				puts("    -p n            run n threads");
 				puts("    -w              watch for file changes");
 				exit(0);
-				break;
 			}
 			case 'v': {
 				printf("rabs version %s\n", VERSION_STRING);
 				exit(0);
-				break;
 			}
 			case 'D': {
 				char *Define = concat(Argv[I] + 2, NULL);

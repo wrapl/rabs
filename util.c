@@ -23,6 +23,7 @@ char *concat(const char *S, ...) {
 		if (!T) break;
 		P = stpcpy(P, T);
 	}
+	va_end(Args);
 	return C;
 }
 
