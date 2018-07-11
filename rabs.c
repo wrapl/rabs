@@ -477,7 +477,7 @@ int main(int Argc, char **Argv) {
 	target_t *Target;
 	if (TargetName) {
 		int HasPrefix = !strncmp(TargetName, "meta:", strlen("meta:"));
-		HasPrefix |= !strncmp(TargetName, "meta:", strlen("file:"));
+		HasPrefix |= !strncmp(TargetName, "file:", strlen("file:"));
 		if (!HasPrefix) {
 			TargetName = concat("meta:", match_prefix(Path, RootPath), "::", TargetName, NULL);
 		}
