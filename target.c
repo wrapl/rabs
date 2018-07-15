@@ -268,9 +268,11 @@ static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Arg
 	target_file_t *Target = (target_file_t *)Args[1];
 	if (Target->Absolute) {
 		ml_stringbuffer_add(Buffer, Target->Path, strlen(Target->Path));
-	} else {
+	} else if (Target->Path[0]) {
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 		ml_stringbuffer_add(Buffer, Path, strlen(Path));
+	} else {
+		ml_stringbuffer_add(Buffer, RootPath, strlen(RootPath));
 	}
 	return MLSome;
 }
@@ -279,9 +281,11 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Absolute) {
 		return ml_string(Target->Path, -1);
-	} else {
+	} else if (Target->Path[0]) {
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 		return ml_string(Path, -1);
+	} else {
+		return ml_string(RootPath, -1);
 	}
 }
 
@@ -366,23 +370,23 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
-	target_t *Target;
 	if (!Path[0]) {
-		Path = vfs_unsolve(CurrentContext->Mounts, CurrentContext->Path + 1);
-		Target = target_file_check(Path, 0);
+		Path = concat(RootPath, CurrentContext->Path, NULL);
 	} else if (Path[0] != '/') {
-		Path = concat(CurrentContext->Path, "/", Path, 0) + 1;
-		Path = vfs_unsolve(CurrentContext->Mounts, Path);
-		Target = target_file_check(Path, 0);
-	} else {
-		Path = vfs_unsolve(CurrentContext->Mounts, Path);
-		const char *Relative = match_prefix(Path, RootPath);
-		if (Relative) {
-			Target = target_file_check(Relative + 1, 0);
-		} else {
-			Target = target_file_check(Path, 1);
-		}
+		Path = concat(RootPath, CurrentContext->Path, "/", Path, NULL);
 	}
+	//printf("Before vfs_unsolve, Path = %s\n", Path);
+	Path = vfs_unsolve(CurrentContext->Mounts, Path);
+	//printf("After vfs_unsolve, Path = %s\n", Path);
+	const char *Relative = match_prefix(Path, RootPath);
+	//printf("Relative Path = %s\n", Relative);
+	target_t *Target;
+	if (Relative) {
+		Target = target_file_check(Relative + 1, 0);
+	} else {
+		Target = target_file_check(Path, 1);
+	}
+	//printf("Path = %s, Absolute = %d\n", ((target_file_t *)Target)->Path, ((target_file_t *)Target)->Absolute);
 	return (ml_value_t *)Target;
 }
 
@@ -404,128 +408,87 @@ ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
-typedef struct target_file_ls_iter_node_t target_file_ls_iter_node_t;
+typedef struct target_file_ls_t target_file_ls_t;
 
-struct target_file_ls_iter_node_t {
-	target_file_ls_iter_node_t *Next;
-	const char *Path;
+struct target_file_ls_t {
+	ml_value_t *Results;
+	regex_t *Regex;
 };
 
-typedef struct target_file_ls_iter_t {
-	const ml_type_t *Type;
-	regex_t *Regex;
-	DIR *Dir;
-	target_file_ls_iter_node_t *Node;
-	const char *Path;
-	target_t *File;
-} target_file_ls_iter_t;
-
-static ml_value_t *target_file_ls_iter_deref(ml_value_t *Ref) {
-	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
-	return (ml_value_t *)Iter->File;
-}
-
-static ml_value_t *target_file_ls_iter_next(ml_value_t *Ref) {
-	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
-	while (Iter->Dir) {
-		struct dirent *Entry = readdir(Iter->Dir);
-		while (Entry) {
-			if (
-				strcmp(Entry->d_name, ".") &&
-				strcmp(Entry->d_name, "..") &&
-				!(Iter->Regex && regexec(Iter->Regex, Entry->d_name, 0, 0, 0))
-			) {
-				const char *Path = concat(Iter->Path, "/", Entry->d_name, NULL);
-				const char *Relative = match_prefix(Path, RootPath);
-				if (Relative) {
-					Iter->File = target_file_check(Relative + 1, 0);
-				} else {
-					Iter->File = target_file_check(Path, 1);
-				}
-				return Ref;
+static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
+	//printf("Path = %s\n", Path);
+	DIR *Dir = opendir(Path);
+	if (!Dir) {
+		Ls->Results = ml_error("DirError", "failed to open directory %s", Path);
+		return 1;
+	}
+	struct dirent *Entry = readdir(Dir);
+	while (Entry) {
+		if (
+			strcmp(Entry->d_name, ".") &&
+			strcmp(Entry->d_name, "..") &&
+			!(Ls->Regex && regexec(Ls->Regex, Entry->d_name, 0, 0, 0))
+		) {
+			const char *Absolute = concat(Path, "/", Entry->d_name, NULL);
+			const char *Relative = match_prefix(Absolute, RootPath);
+			target_t *File;
+			if (Relative) {
+				File = target_file_check(Relative + 1, 0);
+			} else {
+				File = target_file_check(Absolute, 1);
 			}
-			Entry = readdir(Iter->Dir);
+			ml_list_append(Ls->Results, (ml_value_t *)File);
 		}
-		closedir(Iter->Dir);
-		Iter->Dir = 0;
-		target_file_ls_iter_node_t *Node = Iter->Node;
-		if (Node) {
-			Iter->Node = Node->Next;
-			Iter->Path = Node->Path;
-			Iter->Dir = opendir(Node->Path);
-			if (!Iter->Dir) return ml_error("DirError", "failed to open directory %s", Node->Path);
-		}
+		Entry = readdir(Dir);
 	}
-	return MLNil;
-}
-
-static ml_value_t *target_file_ls_iter_key(ml_value_t *Ref) {
-	return MLNil;
-}
-
-static void target_file_ls_iter_finalize(target_file_ls_iter_t *Iter, void *Data) {
-	if (Iter->Dir) {
-		closedir(Iter->Dir);
-		Iter->Dir = NULL;
-	}
-}
-
-ml_type_t TargetFileLsIter[1] = {{
-	MLAnyT, "file-ls-iterator",
-	ml_default_hash,
-	ml_default_call,
-	target_file_ls_iter_deref,
-	ml_default_assign,
-	target_file_ls_iter_next,
-	target_file_ls_iter_key
-}};
-
-static int target_file_ls_resolve_fn(target_file_ls_iter_t *Iter, const char *Path) {
-	target_file_ls_iter_node_t *Node = new(target_file_ls_iter_node_t);
-	Node->Next = Iter->Node;
-	Node->Path = Path;
-	Iter->Node = Node;
+	closedir(Dir);
 	return 0;
 }
 
 ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
-	target_file_ls_iter_t *Iter = new(target_file_ls_iter_t);
-	Iter->Type = TargetFileLsIter;
-	target_file_t *Target = (target_file_t *)Args[0];
-	if (Target->Absolute) {
-		target_file_ls_iter_node_t *Node = Iter->Node = new(target_file_ls_iter_node_t);
-		Node->Path = Target->Path;
-	} else {
-		vfs_resolve_foreach(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0), Iter, (void *)target_file_ls_resolve_fn);
-	}
+	target_file_ls_t Ls[1] = {{ml_list(), NULL}};
 	if (Count > 1) {
 		const char *Pattern = ml_string_value(Args[1]);
-		Iter->Regex = new(regex_t);
-		int Error = regcomp(Iter->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
+		Ls->Regex = new(regex_t);
+		int Error = regcomp(Ls->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
 		if (Error) {
-			size_t Length = regerror(Error, Iter->Regex, NULL, 0);
+			size_t Length = regerror(Error, Ls->Regex, NULL, 0);
 			char *Message = snew(Length + 1);
-			regerror(Error, Iter->Regex, Message, Length);
-			regfree(Iter->Regex);
+			regerror(Error, Ls->Regex, Message, Length);
+			regfree(Ls->Regex);
 			return ml_error("RegexError", "%s", Message);
 		}
 	}
-	target_file_ls_iter_node_t *Node = Iter->Node;
-	if (Node) {
-		Iter->Node = Node->Next;
-		Iter->Path = Node->Path;
-		Iter->Dir = opendir(Node->Path);
-		if (!Iter->Dir) return ml_error("DirError", "failed to open directory %s", Node->Path);
-		GC_register_finalizer(Iter, (void *)target_file_ls_iter_finalize, 0, 0, 0);
-		return target_file_ls_iter_next((ml_value_t *)Iter);
+	target_file_t *Target = (target_file_t *)Args[0];
+	if (Target->Absolute) {
+		target_file_ls_fn(Ls, Target->Path);
+	} else if (Target->Path[0]) {
+		vfs_resolve_foreach(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0), Ls, (void *)target_file_ls_fn);
 	} else {
-		return MLNil;
+		vfs_resolve_foreach(CurrentContext->Mounts, RootPath, Ls, (void *)target_file_ls_fn);
 	}
+	return Ls->Results;
+}
+
+ml_value_t *target_file_dirname(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
+	char *Path;
+	if (Target->Absolute) {
+		Path = concat(Target->Path, NULL);
+	} else if (Target->Path[0]) {
+		Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+	} else {
+		Path = concat(RootPath);
+	}
+	char *Last = Path;
+	for (char *P = Path; *P; ++P) if (*P == '/') Last = P;
+	*Last = 0;
+	return ml_string(Path, -1);
 }
 
 ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
-	target_file_t *FileTarget = (target_file_t *)Args[0];
-	const char *Path = FileTarget->Path;
+	target_file_t *Target = (target_file_t *)Args[0];
+	const char *Path = Target->Path;
 	const char *Last = Path - 1;
 	for (const char *P = Path; *P; ++P) if (*P == '/') Last = P;
 	return ml_string(concat(Last + 1, 0), -1);
@@ -1413,6 +1376,7 @@ void target_init() {
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, NULL);
+	ml_method_by_name("dirname", 0, target_file_dirname, FileTargetT, NULL);
 	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, NULL);
 	ml_method_by_name("extension", 0, target_file_extension, FileTargetT, NULL);
 	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, NULL);

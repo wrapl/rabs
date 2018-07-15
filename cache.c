@@ -39,7 +39,7 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "PRAGMA journal_mode = PERSIST", 0, 0, 0) != SQLITE_OK) {
+	if (sqlite3_exec(Cache, "PRAGMA journal_mode = MEMORY", 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -133,10 +133,15 @@ void cache_open(const char *RootPath) {
 void cache_close() {
 	sqlite3_finalize(HashGetStatement);
 	sqlite3_finalize(HashSetStatement);
+	sqlite3_finalize(HashBuildGetStatement);
+	sqlite3_finalize(HashBuildSetStatement);
+	sqlite3_finalize(LastCheckSetStatement);
 	sqlite3_finalize(DependsGetStatement);
 	sqlite3_finalize(DependsSetStatement);
 	sqlite3_finalize(ScanGetStatement);
 	sqlite3_finalize(ScanSetStatement);
+	sqlite3_finalize(ExprGetStatement);
+	sqlite3_finalize(ExprSetStatement);
 	sqlite3_close(Cache);
 }
 

@@ -1,0 +1,60 @@
+PLATFORM := defined("PLATFORM") or shell("uname"):trim
+OS := defined("OS")
+DEBUG := defined("DEBUG")
+
+if not OS then
+	if PLATFORM = "Linux" then
+		var File := open("/etc/os-release", "r"), Line
+		loop while Line := File:read
+			if Line[1, 4] = "ID=" then
+				OS := Line[4, 0]
+				exit
+			end
+		end
+		File:close
+	end
+end
+
+CFLAGS := []
+LDFLAGS := []
+
+c_compile := fun(Object) do
+	var Source := Object % "c"
+	execute('gcc -c {CFLAGS} -o{Object} -I{Source:dir} {Source}')
+end
+
+c_includes := fun(Source) do
+	var Files := []
+	var Lines := shell('gcc -c {CFLAGS} -I{Source:dir} -M -MG {Source}')
+	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( )"
+	for File in Files do
+		File := file(File:replace(r"\\ ", " "))
+	end
+	return Files
+end
+
+var SourceTypes := {
+	"c" is [c_includes, c_compile]
+}
+
+c_program := fun(Executable, Objects, Libraries) do
+	Objects := Objects or []
+	Libraries := Libraries or []
+	var Sources := []
+	for Object in Objects do
+		for Extension, Functions in SourceTypes do
+			var Source := Object % Extension
+			if Source:exists then
+				Sources:put(Source)
+				var Scan := Source:scan("INCLUDES", :true) => Functions[1]
+				Object[Source, Scan] => Functions[2]
+				exit
+			end
+		end
+	end
+	Executable[Objects, Libraries] => fun(Executable) do
+		execute('gcc', '-o', Executable, Objects, Libraries, LDFLAGS)
+		DEBUG or execute('strip', Executable)
+	end
+	DEFAULT[Executable]
+end

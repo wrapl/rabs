@@ -5,7 +5,11 @@ all: rabs
 sources = \
 	minilang/sha256.c \
 	minilang/minilang.c \
+	minilang/ml_compiler.c \
+	minilang/ml_runtime.c \
+	minilang/ml_types.c \
 	minilang/ml_file.c \
+	minilang/ml_console.c \
 	minilang/stringmap.c \
 	minilang/linenoise.c \
 	cache.c \

@@ -14,6 +14,7 @@
 #include "cache.h"
 #include "minilang.h"
 #include "ml_file.h"
+#include "ml_console.h"
 #include "rabs.h"
 #include "minilang/stringmap.h"
 
