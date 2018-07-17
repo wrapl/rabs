@@ -116,7 +116,7 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
-	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	context_scope(Name);
