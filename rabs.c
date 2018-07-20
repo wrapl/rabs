@@ -177,7 +177,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
-	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentContext->FullPath, Command);
+	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
 	clock_t Start = clock();
 	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
@@ -212,7 +212,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
-	if (EchoCommands) printf("\e[34m%s\e[0m\n", Command);
+	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
 	clock_t Start = clock();
 	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
@@ -258,8 +258,13 @@ ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *rabs_chdir(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
-	ML_CHECK_ARG_TYPE(0, MLStringT);
-	CurrentDirectory = ml_string_value(Args[0]);
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		if (Result->Type == MLErrorT) return Result;
+	}
+	if (CurrentDirectory) GC_free((void *)CurrentDirectory);
+	CurrentDirectory = ml_stringbuffer_get_uncollectable(Buffer);
 	return Args[0];
 }
 
@@ -466,6 +471,7 @@ int main(int Argc, char **Argv) {
 	char *Path = snew(1024);
 	getcwd(Path, 1024);
 #endif
+	CurrentDirectory = Path;
 	RootPath = find_root(Path);
 	if (!RootPath) {
 		puts("\e[31mError: could not find project root\e[0m");

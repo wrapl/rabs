@@ -84,6 +84,7 @@ static void target_queue_build(target_t *Target) {
 
 static int depends_updated_fn(target_t *Affect, target_t *Target) {
 	if (Target->LastUpdated > Affect->DependsLastUpdated) {
+		//if (Target->LastUpdated == CurrentVersion) printf("Updating %s due to %s\n", Affect->Id, Target->Id);
 		Affect->DependsLastUpdated = Target->LastUpdated;
 	}
 	if (--Affect->WaitCount == 0) target_queue_build(Affect);
@@ -134,6 +135,7 @@ int depends_update_fn(target_t *Depend, target_t *Target) {
 	} else {
 		targetset_insert(Depend->Affects, Target);
 		if (Depend->LastUpdated > Target->DependsLastUpdated) {
+			//if (Depend->LastUpdated == CurrentVersion) printf("Updating %s due to %s\n", Target->Id, Depend->Id);
 			Target->DependsLastUpdated = Depend->LastUpdated;
 		}
 	}
@@ -304,7 +306,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 	pthread_mutex_unlock(GlobalLock);
 	if (!S_ISREG(Stat->st_mode)) {
 		memset(Target->Hash, -1, SHA256_BLOCK_SIZE);
-		memcpy(Target->Hash, &Stat->st_ino, sizeof(Stat->st_ino));
+		memcpy(Target->Hash, &Stat->st_mtim, sizeof(Stat->st_mtim));
 	} else if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
 	} else {
@@ -709,9 +711,12 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *target_file_chdir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Absolute) {
-		CurrentDirectory = concat(Target->Path, NULL);
+		char *Path2 = GC_malloc_atomic_uncollectable(strlen(Target->Path) + 1);
+		CurrentDirectory = strcpy(Path2, Target->Path);
 	} else {
-		CurrentDirectory = concat(RootPath, "/", Target->Path, NULL);
+		const char *Path = concat(RootPath, "/", Target->Path, NULL);
+		char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
+		CurrentDirectory = strcpy(Path2, Path);
 	}
 	return Args[0];
 }
@@ -1231,6 +1236,9 @@ static build_thread_t *BuildThreads = 0;
 int RunningThreads = 0, LastThread = 0;
 
 static void *target_thread_fn(void *Arg) {
+	const char *Path = get_current_dir_name();
+	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
+	CurrentDirectory = strcpy(Path2, Path);
 	int Index = (int)(ptrdiff_t)Arg;
 	printf("Starting build thread #%d\n", (int)Index);
 	pthread_mutex_lock(GlobalLock);
@@ -1262,7 +1270,9 @@ static void *target_thread_fn(void *Arg) {
 }
 
 static void *active_mode_thread_fn(void *Arg) {
-	CurrentDirectory = get_current_dir_name();
+	const char *Path = get_current_dir_name();
+	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
+	CurrentDirectory = strcpy(Path2, Path);
 	int Index = (int)(ptrdiff_t)Arg;
 	printf("Starting build thread #%d\n", (int)Index);
 	pthread_mutex_lock(GlobalLock);
