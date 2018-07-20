@@ -706,6 +706,16 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
+ml_value_t *target_file_chdir(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
+	if (Target->Absolute) {
+		CurrentDirectory = concat(Target->Path, NULL);
+	} else {
+		CurrentDirectory = concat(RootPath, "/", Target->Path, NULL);
+	}
+	return Args[0];
+}
+
 struct target_meta_t {
 	TARGET_FIELDS
 	const char *Name;
@@ -1122,6 +1132,7 @@ static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHa
 }
 
 static void target_build(target_t *Target) {
+	CurrentDirectory = Target->BuildContext->FullPath;
 	if (Target->Type == FileTargetT) return target_default_build(Target);
 	if (Target->Type == MetaTargetT) return target_default_build(Target);
 	if (Target->Type == ScanTargetT) return target_scan_build((target_scan_t *)Target);
@@ -1251,6 +1262,7 @@ static void *target_thread_fn(void *Arg) {
 }
 
 static void *active_mode_thread_fn(void *Arg) {
+	CurrentDirectory = get_current_dir_name();
 	int Index = (int)(ptrdiff_t)Arg;
 	printf("Starting build thread #%d\n", (int)Index);
 	pthread_mutex_lock(GlobalLock);
@@ -1385,6 +1397,7 @@ void target_init() {
 	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, NULL);
 	ml_method_by_name("rmdir", 0, target_file_rmdir, FileTargetT, NULL);
+	ml_method_by_name("chdir", 0, target_file_chdir, FileTargetT, NULL);
 	target_file_methods_is(dir);
 	target_file_methods_is(chr);
 	target_file_methods_is(blk);

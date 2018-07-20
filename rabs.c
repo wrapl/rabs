@@ -30,6 +30,8 @@ static stringmap_t Defines[1] = {STRINGMAP_INIT};
 static int SavedArgc;
 static char **SavedArgv;
 
+__thread const char *CurrentDirectory = 0;
+
 static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Name);
 	if (Value) {
@@ -177,7 +179,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentContext->FullPath, Command);
 	clock_t Start = clock();
-	chdir(CurrentContext->FullPath);
+	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
 	pthread_mutex_unlock(GlobalLock);
 	char Chars[120];
@@ -212,7 +214,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s\e[0m\n", Command);
 	clock_t Start = clock();
-	chdir(CurrentContext->FullPath);
+	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
 	pthread_mutex_unlock(GlobalLock);
 	char Chars[ML_STRINGBUFFER_NODE_SIZE];
@@ -252,6 +254,13 @@ ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 		return ml_error("FileError", "error creating directory %s", Path);
 	}
 	return MLNil;
+}
+
+ml_value_t *rabs_chdir(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	CurrentDirectory = ml_string_value(Args[0]);
+	return Args[0];
 }
 
 ml_value_t *rabs_open(void *Data, int Count, ml_value_t **Args) {
@@ -361,6 +370,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "execute", ml_function(0, execute));
 	stringmap_insert(Globals, "shell", ml_function(0, shell));
 	stringmap_insert(Globals, "mkdir", ml_function(0, rabs_mkdir));
+	stringmap_insert(Globals, "chdir", ml_function(0, rabs_chdir));
 	stringmap_insert(Globals, "scope", ml_function(0, scope));
 	stringmap_insert(Globals, "print", ml_function(0, print));
 	stringmap_insert(Globals, "open", ml_function(0, rabs_open));
