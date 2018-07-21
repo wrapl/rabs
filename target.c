@@ -106,11 +106,11 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 			cache_build_hash_set(Target);
 		}
 	}
-	cache_depends_set(Target, Target->Depends);
 	FileTime = target_hash(Target, FileTime, Previous);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 		Target->LastUpdated = CurrentVersion;
 		cache_hash_set(Target, FileTime);
+		cache_depends_set(Target, Target->Depends);
 	} else {
 		Target->LastUpdated = LastUpdated;
 		cache_last_check_set(Target, FileTime);
