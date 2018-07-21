@@ -84,7 +84,7 @@ static void target_queue_build(target_t *Target) {
 
 static int depends_updated_fn(target_t *Affect, target_t *Target) {
 	if (Target->LastUpdated > Affect->DependsLastUpdated) {
-		//if (Target->LastUpdated == CurrentVersion) printf("Updating %s due to %s\n", Affect->Id, Target->Id);
+		if (Target->LastUpdated == CurrentVersion) printf("Updating %s due to %s\n", Affect->Id, Target->Id);
 		Affect->DependsLastUpdated = Target->LastUpdated;
 	}
 	if (--Affect->WaitCount == 0) target_queue_build(Affect);
@@ -98,6 +98,8 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
+	//if (!strcmp(Target->Id, "scan:file:dev/web/tools/rabs/guide::WEBFILES")) asm("int3");
+	//if (!strcmp(Target->Id, "file:web/tools/rabs/guide/chapter3.xhtml")) asm("int3");
 	if (Target->Build) {
 		CurrentContext = Target->BuildContext;
 		if ((Target->DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
@@ -135,7 +137,7 @@ int depends_update_fn(target_t *Depend, target_t *Target) {
 	} else {
 		targetset_insert(Depend->Affects, Target);
 		if (Depend->LastUpdated > Target->DependsLastUpdated) {
-			//if (Depend->LastUpdated == CurrentVersion) printf("Updating %s due to %s\n", Target->Id, Depend->Id);
+			if (Depend->LastUpdated == CurrentVersion) printf("Updating %s due to %s\n", Target->Id, Depend->Id);
 			Target->DependsLastUpdated = Depend->LastUpdated;
 		}
 	}
@@ -155,7 +157,7 @@ static int affects_refresh_fn(target_t *Affect, target_t *Target) {
 
 void target_update(target_t *Target) {
 	if (Target->LastUpdated == STATE_CHECKING) {
-		printf("\e[31mError: build cycle with %s\e[0m\n", Target->Id);
+		fprintf(stderr, "\e[31mError: build cycle with %s\e[0m\n", Target->Id);
 		exit(1);
 	}
 	if (Target->LastUpdated == STATE_UNCHECKED) {
@@ -318,7 +320,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 			int Count = read(File, Buffer, 8192);
 			if (Count == 0) break;
 			if (Count == -1) {
-				printf("\e[31mError: read error: %s\e[0m\n", FileName);
+				fprintf(stderr, "\e[31mError: read error: %s\e[0m\n", FileName);
 				exit(1);
 			}
 			sha256_update(Ctx, Buffer, Count);
@@ -339,7 +341,7 @@ static void target_default_build(target_t *Target) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
 }
@@ -377,18 +379,14 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	} else if (Path[0] != '/') {
 		Path = concat(RootPath, CurrentContext->Path, "/", Path, NULL);
 	}
-	//printf("Before vfs_unsolve, Path = %s\n", Path);
 	Path = vfs_unsolve(CurrentContext->Mounts, Path);
-	//printf("After vfs_unsolve, Path = %s\n", Path);
 	const char *Relative = match_prefix(Path, RootPath);
-	//printf("Relative Path = %s\n", Relative);
 	target_t *Target;
 	if (Relative) {
 		Target = target_file_check(Relative + 1, 0);
 	} else {
 		Target = target_file_check(Path, 1);
 	}
-	//printf("Path = %s, Absolute = %d\n", ((target_file_t *)Target)->Path, ((target_file_t *)Target)->Absolute);
 	return (ml_value_t *)Target;
 }
 
@@ -418,7 +416,6 @@ struct target_file_ls_t {
 };
 
 static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
-	//printf("Path = %s\n", Path);
 	DIR *Dir = opendir(Path);
 	if (!Dir) {
 		Ls->Results = ml_error("DirError", "failed to open directory %s", Path);
@@ -512,6 +509,18 @@ ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
+ml_value_t *target_file_relative(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *FileTarget = (target_file_t *)Args[0];
+	target_file_t *BaseTarget = (target_file_t *)Args[1];
+	const char *Relative = match_prefix(FileTarget->Path, BaseTarget->Path);
+	if (Relative) {
+		if (Relative[0] == '/') ++Relative;
+		return ml_string(Relative, -1);
+	} else {
+		return MLNil;
+	}
+}
+
 ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Build /*&& Target->Build->Type == MLClosureT*/) return (ml_value_t *)Target;
@@ -561,6 +570,7 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
+	if (ml_string_length(Args[1]) == 0) return Args[0];
 	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), NULL);
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
 	return (ml_value_t *)Target;
@@ -782,7 +792,7 @@ static void target_expr_build(target_expr_t *Target) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
 	cache_expr_set((target_t *)Target, Result);
@@ -829,6 +839,7 @@ ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
+	//printf("target_set_build(%s)\n", Target->Id);
 	//if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
@@ -891,10 +902,16 @@ ml_value_t *scan_results_depend(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *scan_results_set_build(void *Data, int Count, ml_value_t **Args) {
 	target_scan_t *Target = ((scan_results_t *)Args[0])->Scan;
+	//printf("scan_results_set_build(%s)\n", Target->Id);
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
 	Target->LastUpdated = STATE_UNCHECKED;
 	return Args[0];
+}
+
+ml_value_t *target_scan_source(void *Data, int Count, ml_value_t **Args) {
+	target_scan_t *Target = (target_scan_t *)Args[0];
+	return (ml_value_t *)Target->Source;
 }
 
 static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
@@ -910,12 +927,12 @@ static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
 }
 
 static void target_scan_build(target_scan_t *Target) {
-	ml_value_t *Result = ml_inline(Target->Build, 1, Target->Source);
+	ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 	if (Result->Type == MLErrorT) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
 	targetset_t Scans[1] = {TARGETSET_INIT};
@@ -931,23 +948,24 @@ static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_
 	if (ScanTarget->LastUpdated != CurrentVersion) {
 		target_t *Target = (target_t *)Args[0];
 		//printf("\n\n\nscan_target_rebuild(%s, %s)\n", ScanTarget->Id, Target->Id);
-
-		ml_value_t *Result = ml_inline(ScanTarget->Build, 1, ScanTarget->Source);
+		Target->Build = 0;
+		ml_value_t *Result = ml_inline(ScanTarget->Build, 1, ScanTarget);
 		if (Result->Type == MLErrorT) {
 			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 			const char *Source;
 			int Line;
-			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 			exit(1);
 		}
 		ScanTarget->LastUpdated = CurrentVersion;
-		if (Target->Build != ScanTarget->Rebuild) {
+		if (Target->Build) {
+			CurrentContext = Target->BuildContext;
 			ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 			if (Result->Type == MLErrorT) {
 				fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 				const char *Source;
 				int Line;
-				for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+				for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 				exit(1);
 			}
 			if (Target->Build->Type == MLClosureT) {
@@ -955,23 +973,26 @@ static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_
 			} else {
 				memset(Target->BuildHash, -1, SHA256_BLOCK_SIZE);
 			}
-			//cache_build_hash_set(Target, Target->BuildHash);
-		} else {
-			Target->Build = 0;
+			return Result;
 		}
 	}
 	return MLNil;
 }
 
 static int scan_depends_update_fn(target_t *Depend, scan_results_t *Target) {
+	//if (!strcmp(Depend->Id, "file:web/tools/rabs/guide/chapter3.xhtml")) asm("int3");
+	if (Depend == (target_t *)Target->Scan) return 0;
+	//printf("scan_depends_update_fn(%s, %s)\n", Depend->Id, Target->Id);
 	if (!Depend->Build && !Depend->BuildChecked) {
 		BYTE BuildHash[SHA256_BLOCK_SIZE];
 		cache_build_hash_get(Depend, BuildHash);
 		for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) if (BuildHash[I]) {
 			Depend->Build = Target->Scan->Rebuild;
+			Depend->BuildContext = CurrentContext;
 			break;
 		}
 		Depend->BuildChecked = 1;
+		//targetset_foreach(Depend->Depends, Target, (void *)scan_depends_update_fn);
 		targetset_t *Depends = cache_depends_get(Depend);
 		if (Depends) targetset_foreach(Depends, Target, (void *)scan_depends_update_fn);
 	}
@@ -1144,7 +1165,7 @@ static void target_build(target_t *Target) {
 	if (Target->Type == ExprTargetT) return target_expr_build((target_expr_t *)Target);
 	//if (Target->Type == ScanResultsT) return scan_results_build((scan_results_t *)Target);
 	//if (Target->Type == SymbTargetT) return target_symb_build((target_symb_t *)Target);
-	printf("\e[31mError: not expecting to build %s\e[0m\n", Target->Type->Name);
+	fprintf(stderr, "\e[31mError: not expecting to build %s\e[0m\n", Target->Type->Name);
 	exit(1);
 }
 
@@ -1395,12 +1416,14 @@ void target_init() {
 	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, NULL);
 	ml_method_by_name("refresh", 0, target_recheck_value, TargetT, NULL);
 	ml_method_by_name("=>", 0, scan_results_set_build, ScanResultsT, MLAnyT, NULL);
+	ml_method_by_name("source", 0, target_scan_source, ScanTargetT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, NULL);
 	ml_method_by_name("dirname", 0, target_file_dirname, FileTargetT, NULL);
 	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, NULL);
 	ml_method_by_name("extension", 0, target_file_extension, FileTargetT, NULL);
+	ml_method_by_name("-", 0, target_file_relative, FileTargetT, FileTargetT, NULL);
 	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, NULL);
 	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, NULL);
 	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, NULL);
