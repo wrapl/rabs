@@ -872,6 +872,12 @@ static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
 	return 0;
 }
 
+static int scan_update_fn(target_t *Depend, target_t *Results) {
+	targetset_insert(Results->Depends, Depend);
+	depends_update_fn(Depend, Results);
+	return 0;
+}
+
 static void target_scan_build(target_scan_t *Target) {
 	ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 	if (Result->Type == MLErrorT) {
@@ -883,7 +889,8 @@ static void target_scan_build(target_scan_t *Target) {
 	}
 	targetset_t Scans[1] = {TARGETSET_INIT};
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
-	cache_depends_set((target_t *)Target->Results, Scans);
+	//cache_depends_set((target_t *)Target->Results, Scans);
+	targetset_foreach(Scans, Target->Results, (void *)scan_update_fn);
 	if (Target->Recursive) {
 		targetset_foreach(Scans, Target, (void *)scan_results_affects_fn);
 	}
