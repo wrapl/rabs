@@ -18,7 +18,7 @@
 #include "rabs.h"
 #include "minilang/stringmap.h"
 
-#define VERSION_STRING "1.0.3"
+#define VERSION_STRING "1.1.0"
 
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
@@ -29,8 +29,6 @@ static stringmap_t Globals[1] = {STRINGMAP_INIT};
 static stringmap_t Defines[1] = {STRINGMAP_INIT};
 static int SavedArgc;
 static char **SavedArgv;
-
-__thread const char *CurrentDirectory = 0;
 
 static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Name);
@@ -111,7 +109,7 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	FileName = vfs_resolve(CurrentContext->Mounts, FileName);
 	target_t *ParentDefault = CurrentContext->Default;
 	context_push(Path);
-	target_depends_add(ParentDefault, CurrentContext->Default);
+	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	load_file(FileName);
 	context_pop();
 	return MLNil;
@@ -511,20 +509,14 @@ int main(int Argc, char **Argv) {
 		}
 		Target = Context->Default;
 	}
-	if (ListTargets) {
-		target_list();
-	} else if (QueryOnly) {
-		target_query(Target);
-	} else {
-		target_update(Target);
-		target_threads_wait(NumThreads);
-		if (InteractiveMode) {
-			target_interactive_start(NumThreads);
-			ml_console(rabs_ml_global, Globals);
-		} else if (MonitorFiles) {
-			target_interactive_start(NumThreads);
-			targetwatch_wait();
-		}
+	target_update(Target);
+	target_threads_wait(NumThreads);
+	if (InteractiveMode) {
+		target_interactive_start(NumThreads);
+		ml_console(rabs_ml_global, Globals);
+	} else if (MonitorFiles) {
+		target_interactive_start(NumThreads);
+		targetwatch_wait();
 	}
 	return 0;
 }
