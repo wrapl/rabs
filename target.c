@@ -806,6 +806,7 @@ static ml_type_t *ScanTargetT;
 struct scan_results_t {
 	TARGET_FIELDS
 	target_scan_t *Scan;
+	targetset_t *Scans;
 };
 
 static ml_type_t *ScanResultsT;
@@ -816,9 +817,15 @@ static int scan_results_affects_fn(target_t *Target, target_t *Scan) {
 	return 0;
 }
 
+static int scan_update_fn(target_t *Depend, target_t *Results) {
+	targetset_insert(Results->Depends, Depend);
+	depends_update_fn(Depend, Results);
+	return 0;
+}
+
 static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
-	targetset_t *Scans = cache_scan_get((target_t *)Target->Results);
-	if (Scans) targetset_foreach(Scans, Target->Results, (void *)depends_update_fn);
+	targetset_t *Scans = Target->Results->Scans;
+	if (Scans) targetset_foreach(Scans, Target->Results, (void *)scan_update_fn);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	return 0;
 }
@@ -861,20 +868,13 @@ static int depends_hash_fn(target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZE]) {
 }
 
 static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
-	targetset_t *Scans = cache_scan_get((target_t *)Target);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
-	if (Scans) targetset_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
+	if (Target->Scans) targetset_foreach(Target->Scans, Target->Hash, (void *)depends_hash_fn);
 	return 0;
 }
 
 static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
 	targetset_insert(Scans, Depend);
-	return 0;
-}
-
-static int scan_update_fn(target_t *Depend, target_t *Results) {
-	targetset_insert(Results->Depends, Depend);
-	depends_update_fn(Depend, Results);
 	return 0;
 }
 
@@ -887,10 +887,10 @@ static void target_scan_build(target_scan_t *Target) {
 		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
-	targetset_t Scans[1] = {TARGETSET_INIT};
+	targetset_t *Scans = Target->Results->Scans = new(targetset_t);
+	targetset_init(Scans, ml_list_length(Result));
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 	//cache_depends_set((target_t *)Target->Results, Scans);
-	targetset_foreach(Scans, Target->Results, (void *)scan_update_fn);
 	if (Target->Recursive) {
 		targetset_foreach(Scans, Target, (void *)scan_results_affects_fn);
 	}
@@ -974,8 +974,8 @@ static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name
 		ScanTarget->Recursive = Recursive;
 		targetset_insert(Target->Depends, (target_t *)ScanTarget);
 	}
-	targetset_t *Scans = cache_scan_get((target_t *)Target);
-	if (Scans) targetset_foreach(Scans, Target, (void *)scan_depends_update_fn);
+	Target->Scans = cache_scan_get((target_t *)Target);
+	if (Target->Scans) targetset_foreach(Target->Scans, Target, (void *)scan_depends_update_fn);
 	return Target;
 }
 
