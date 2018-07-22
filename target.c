@@ -890,11 +890,10 @@ static void target_scan_build(target_scan_t *Target) {
 	targetset_t *Scans = Target->Results->Scans = new(targetset_t);
 	targetset_init(Scans, ml_list_length(Result));
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
-	//cache_depends_set((target_t *)Target->Results, Scans);
+	cache_scan_set((target_t *)Target->Results, Scans);
 	if (Target->Recursive) {
 		targetset_foreach(Scans, Target, (void *)scan_results_affects_fn);
 	}
-	cache_scan_set((target_t *)Target->Results, Scans);
 }
 
 static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_value_t **Args) {
