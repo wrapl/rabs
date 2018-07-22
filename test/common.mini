@@ -20,12 +20,12 @@ LDFLAGS := []
 
 c_compile := fun(Object) do
 	var Source := Object % "c"
-	execute('gcc -c {CFLAGS} -o{Object} -I{Source:dir} {Source}')
+	execute('gcc -c {CFLAGS} -o{Object} {Source}')
 end
 
-c_includes := fun(Source) do
+c_includes := fun(Target) do
 	var Files := []
-	var Lines := shell('gcc -c {CFLAGS} -I{Source:dir} -M -MG {Source}')
+	var Lines := shell('gcc -c {CFLAGS} -M -MG {Target:source}')
 	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( )"
 	for File in Files do
 		File := file(File:replace(r"\\ ", " "))
