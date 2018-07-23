@@ -3,7 +3,7 @@
 
 typedef struct vmount_t vmount_t;
 
-const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target);
+const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target, int Absolute);
 
 char *vfs_resolve(const vmount_t *Mount, const char *Path);
 char *vfs_unsolve(const vmount_t *Mount, const char *Path);

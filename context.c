@@ -7,7 +7,6 @@
 #include <gc.h>
 #include <unistd.h>
 
-__thread context_t *CurrentContext = 0;
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;
 

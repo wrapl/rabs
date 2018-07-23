@@ -15,11 +15,15 @@ struct vmount_t {
 
 extern const char *RootPath;
 
-const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target) {
+const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target, int Absolute) {
 	vmount_t *Mount = new(vmount_t);
 	Mount->Previous = Previous;
 	Mount->Path = concat(RootPath, Path, NULL);
-	Mount->Target = concat(RootPath, Target, NULL);
+	if (Absolute) {
+		Mount->Target = concat(Target, NULL);
+	} else {
+		Mount->Target = concat(RootPath, Target, NULL);
+	}
 	return Mount;
 }
 
@@ -82,6 +86,7 @@ static char *unsolve0(const vmount_t *Mount, const char *Path) {
 char *vfs_unsolve(const vmount_t *Mount, const char *Path) {
 	const char *Orig = Path;
 	while (Mount) {
+		//printf("%s -> %s\n", Mount->Path, Mount->Target);
 		const char *Suffix = match_prefix(Path, Mount->Target);
 		if (Suffix) Path = concat(Mount->Path, Suffix, NULL);
 		Mount = Mount->Previous;

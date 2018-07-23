@@ -14,10 +14,11 @@
 #include "cache.h"
 #include "minilang.h"
 #include "ml_file.h"
+#include "ml_console.h"
 #include "rabs.h"
 #include "minilang/stringmap.h"
 
-#define VERSION_STRING "1.0.3"
+#define VERSION_STRING "1.1.0"
 
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
@@ -108,14 +109,14 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	FileName = vfs_resolve(CurrentContext->Mounts, FileName);
 	target_t *ParentDefault = CurrentContext->Default;
 	context_push(Path);
-	target_depends_add(ParentDefault, CurrentContext->Default);
+	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	load_file(FileName);
 	context_pop();
 	return MLNil;
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
-	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	context_scope(Name);
@@ -155,7 +156,8 @@ ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
 	const char *Target = ml_string_value(Args[1]);
 	CurrentContext->Mounts = vfs_mount(CurrentContext->Mounts,
 		concat(CurrentContext->Path, "/", Path, NULL),
-		concat(CurrentContext->Path, "/", Target, NULL)
+		concat(CurrentContext->Path, "/", Target, NULL),
+		Target[0] == '/'
 	);
 	return MLNil;
 }
@@ -173,9 +175,9 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
-	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentContext->FullPath, Command);
+	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
 	clock_t Start = clock();
-	chdir(CurrentContext->FullPath);
+	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
 	pthread_mutex_unlock(GlobalLock);
 	char Chars[120];
@@ -208,9 +210,9 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
-	if (EchoCommands) printf("\e[34m%s\e[0m\n", Command);
+	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
 	clock_t Start = clock();
-	chdir(CurrentContext->FullPath);
+	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
 	pthread_mutex_unlock(GlobalLock);
 	char Chars[ML_STRINGBUFFER_NODE_SIZE];
@@ -250,6 +252,18 @@ ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 		return ml_error("FileError", "error creating directory %s", Path);
 	}
 	return MLNil;
+}
+
+ml_value_t *rabs_chdir(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		if (Result->Type == MLErrorT) return Result;
+	}
+	if (CurrentDirectory) GC_free((void *)CurrentDirectory);
+	CurrentDirectory = ml_stringbuffer_get_uncollectable(Buffer);
+	return Args[0];
 }
 
 ml_value_t *rabs_open(void *Data, int Count, ml_value_t **Args) {
@@ -359,6 +373,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "execute", ml_function(0, execute));
 	stringmap_insert(Globals, "shell", ml_function(0, shell));
 	stringmap_insert(Globals, "mkdir", ml_function(0, rabs_mkdir));
+	stringmap_insert(Globals, "chdir", ml_function(0, rabs_chdir));
 	stringmap_insert(Globals, "scope", ml_function(0, scope));
 	stringmap_insert(Globals, "print", ml_function(0, print));
 	stringmap_insert(Globals, "open", ml_function(0, rabs_open));
@@ -383,18 +398,16 @@ int main(int Argc, char **Argv) {
 			case 'h': {
 				printf("Usage: %s { options } [ target ]\n", Argv[0]);
 				puts("    -h              display this message");
+				puts("    -v              print version and exit");
 				puts("    -Dkey[=value]   add a define");
 				puts("    -c              print shell commands");
-				puts("    -q target       print dependencies for target");
-				puts("    -l              lists all targets");
 				puts("    -p n            run n threads");
+				puts("    -w              watch for file changes");
 				exit(0);
-				break;
 			}
 			case 'v': {
 				printf("rabs version %s\n", VERSION_STRING);
 				exit(0);
-				break;
 			}
 			case 'D': {
 				char *Define = concat(Argv[I] + 2, NULL);
@@ -456,6 +469,7 @@ int main(int Argc, char **Argv) {
 	char *Path = snew(1024);
 	getcwd(Path, 1024);
 #endif
+	CurrentDirectory = Path;
 	RootPath = find_root(Path);
 	if (!RootPath) {
 		puts("\e[31mError: could not find project root\e[0m");
@@ -478,7 +492,7 @@ int main(int Argc, char **Argv) {
 	target_t *Target;
 	if (TargetName) {
 		int HasPrefix = !strncmp(TargetName, "meta:", strlen("meta:"));
-		HasPrefix |= !strncmp(TargetName, "meta:", strlen("file:"));
+		HasPrefix |= !strncmp(TargetName, "file:", strlen("file:"));
 		if (!HasPrefix) {
 			TargetName = concat("meta:", match_prefix(Path, RootPath), "::", TargetName, NULL);
 		}
@@ -495,20 +509,14 @@ int main(int Argc, char **Argv) {
 		}
 		Target = Context->Default;
 	}
-	if (ListTargets) {
-		target_list();
-	} else if (QueryOnly) {
-		target_query(Target);
-	} else {
-		target_update(Target);
-		target_threads_wait(NumThreads);
-		if (InteractiveMode) {
-			target_interactive_start(NumThreads);
-			ml_console(rabs_ml_global, Globals);
-		} else if (MonitorFiles) {
-			target_interactive_start(NumThreads);
-			targetwatch_wait();
-		}
+	target_update(Target);
+	target_threads_wait(NumThreads);
+	if (InteractiveMode) {
+		target_interactive_start(NumThreads);
+		ml_console(rabs_ml_global, Globals);
+	} else if (MonitorFiles) {
+		target_interactive_start(NumThreads);
+		targetwatch_wait();
 	}
 	return 0;
 }

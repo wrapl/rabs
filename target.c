@@ -23,7 +23,8 @@
 enum {
 	STATE_UNCHECKED = 0,
 	STATE_CHECKING = -1,
-	STATE_QUEUED = -2
+	STATE_QUEUED = -2,
+	STATE_BUILDING = -3
 };
 
 typedef struct target_file_t target_file_t;
@@ -33,8 +34,6 @@ typedef struct target_scan_t target_scan_t;
 typedef struct scan_results_t scan_results_t;
 typedef struct target_symb_t target_symb_t;
 
-extern const char *RootPath;
-static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 int StatusUpdates = 0;
 int MonitorFiles = 0;
 
@@ -49,27 +48,18 @@ static ml_value_t *AppendMethod;
 static ml_type_t *TargetT;
 
 __thread target_t *CurrentTarget = 0;
+__thread context_t *CurrentContext = 0;
+__thread const char *CurrentDirectory = 0;
 
+static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 static target_t *BuildQueue = 0;
 static int SpareThreads = 0;
 
 static void target_wait(target_t *Target);
-
-void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]);
-
+static void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]);
 static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]);
 static void target_build(target_t *Target);
 static int target_missing(target_t *Target, int LastChecked);
-
-int depends_hash_fn(target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZE]) {
-	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
-	//for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) printf(" %x", Depend->Hash[I]);
-	return 0;
-}
-
-void target_depends_add(target_t *Target, target_t *Depend) {
-	if (Target != Depend) targetset_insert(Target->Depends, Depend);
-}
 
 static int depends_print_fn(const char *DependId, target_t *Depend, int *DependsLastUpdated) {
 	printf("\t\e[35m%s[%d]\e[0m\n", Depend->Id, Depend->LastUpdated);
@@ -82,11 +72,38 @@ static void target_queue_build(target_t *Target) {
 	BuildQueue = Target;
 }
 
-static int depends_updated_fn(target_t *Affect, target_t *Target) {
-	if (Target->LastUpdated > Affect->DependsLastUpdated) {
-		Affect->DependsLastUpdated = Target->LastUpdated;
+static int depends_update_fn(target_t *Depend, target_t *Affect) {
+	if (Depend->LastUpdated == STATE_CHECKING) {
+		printf("\e[31mError: build cycle with %s -> %s\e[0m\n", Affect->Id, Depend->Id);
+		exit(1);
 	}
-	if (--Affect->WaitCount == 0) target_queue_build(Affect);
+	if (Depend->LastUpdated == STATE_UNCHECKED) target_update(Depend);
+	if (Depend->LastUpdated == STATE_QUEUED) {
+		if (!targetset_insert(Depend->Affects, Affect)) ++Affect->WaitCount;
+	} else {
+		targetset_insert(Depend->Affects, Affect);
+		if (Depend->LastUpdated > Affect->DependsLastUpdated) {
+			if (Depend->LastUpdated == CurrentVersion) printf("\e[33mUpdating [1] %s due to %s\e[0m\n", Affect->Id, Depend->Id);
+			Affect->DependsLastUpdated = Depend->LastUpdated;
+		}
+	}
+	return 0;
+}
+
+static int affects_update_fn(target_t *Affect, target_t *Depend) {
+	if (Depend->LastUpdated > Affect->DependsLastUpdated) {
+		if (Depend->LastUpdated == CurrentVersion) printf("\e[33mUpdating [2] %s due to %s\e[0m\n", Affect->Id, Depend->Id);
+		Affect->DependsLastUpdated = Depend->LastUpdated;
+	}
+	--Affect->WaitCount;
+	if (Affect->WaitCount == 0 && Affect->DependsLastUpdated < CurrentVersion && !Affect->DependsChecked) {
+		Affect->DependsChecked = 1;
+		targetset_t *PreviousDetectedDepends = cache_depends_get(Affect);
+		if (PreviousDetectedDepends) {
+			targetset_foreach(PreviousDetectedDepends, Affect, (void *)depends_update_fn);
+		}
+	}
+	if (Affect->WaitCount == 0) target_queue_build(Affect);
 	//printf("\e[35mDecreasing wait count for %s to %d\e[0m\n", Affect->Id, Affect->WaitCount);
 	return 0;
 }
@@ -97,14 +114,14 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
-	if (Target->Build) {
-		CurrentContext = Target->BuildContext;
-		if ((Target->DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
+	CurrentContext = Target->BuildContext;
+	if ((Target->DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
+		if (Target->Build) {
 			CurrentTarget = Target;
 			target_build(Target);
-			cache_depends_set(Target, Target->Depends);
 			cache_build_hash_set(Target);
 		}
+		cache_depends_set(Target, Target->Depends);
 	}
 	FileTime = target_hash(Target, FileTime, Previous);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
@@ -114,30 +131,43 @@ static void target_do_build(int ThreadIndex, target_t *Target) {
 		Target->LastUpdated = LastUpdated;
 		cache_last_check_set(Target, FileTime);
 	}
-	//GC_gcollect();
 	++BuiltTargets;
 	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Built \e[32m%s\e[0m at version %d\n", BuiltTargets, QueuedTargets, ThreadIndex, Target->Id, Target->LastUpdated);
-	targetset_foreach(Target->Affects, Target, (void *)depends_updated_fn);
+	targetset_foreach(Target->Affects, Target, (void *)affects_update_fn);
 	memset(Target->Depends, 0, sizeof(Target->Depends));
 	//memset(Target->Affects, 0, sizeof(Target->Affects));
 	pthread_cond_broadcast(TargetAvailable);
 }
 
-int depends_update_fn(target_t *Depend, target_t *Target) {
-	if (Depend->LastUpdated == STATE_CHECKING) {
-		printf("\e[31mError: build cycle with %s -> %s\e[0m\n", Target->Id, Depend->Id);
+void target_update(target_t *Target) {
+	if (Target->LastUpdated == STATE_CHECKING) {
+		fprintf(stderr, "\e[31mError: build cycle with %s\e[0m\n", Target->Id);
 		exit(1);
 	}
-	if (Depend->LastUpdated == STATE_UNCHECKED) target_update(Depend);
-	if (Depend->LastUpdated == STATE_QUEUED) {
-		if (!targetset_insert(Depend->Affects, Target)) ++Target->WaitCount;
-	} else {
-		targetset_insert(Depend->Affects, Target);
-		if (Depend->LastUpdated > Target->DependsLastUpdated) {
-			Target->DependsLastUpdated = Depend->LastUpdated;
+	if (Target->LastUpdated == STATE_UNCHECKED) {
+		Target->LastUpdated = STATE_CHECKING;
+		++QueuedTargets;
+		//printf("Added new target to queue: %s\n", Target->Id);
+		targetset_foreach(Target->Depends, Target, (void *)depends_update_fn);
+		if (Target->Build && Target->Build->Type == MLClosureT) {
+			ml_closure_hash(Target->Build, Target->BuildHash);
+			BYTE Previous[SHA256_BLOCK_SIZE];
+			cache_build_hash_get(Target, Previous);
+			if (memcmp(Previous, Target->BuildHash, SHA256_BLOCK_SIZE)) {
+				printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
+				Target->DependsLastUpdated = CurrentVersion;
+			}
 		}
+		Target->LastUpdated = STATE_QUEUED;
+		if (Target->WaitCount == 0 && Target->DependsLastUpdated < CurrentVersion) {
+			Target->DependsChecked = 1;
+			targetset_t *PreviousDetectedDepends = cache_depends_get(Target);
+			if (PreviousDetectedDepends) {
+				targetset_foreach(PreviousDetectedDepends, Target, (void *)depends_update_fn);
+			}
+		}
+		if (Target->WaitCount == 0) target_queue_build(Target);
 	}
-	return 0;
 }
 
 static int affects_refresh_fn(target_t *Affect, target_t *Target) {
@@ -151,36 +181,6 @@ static int affects_refresh_fn(target_t *Affect, target_t *Target) {
 	return 0;
 }
 
-void target_update(target_t *Target) {
-	if (Target->LastUpdated == STATE_CHECKING) {
-		printf("\e[31mError: build cycle with %s\e[0m\n", Target->Id);
-		exit(1);
-	}
-	if (Target->LastUpdated == STATE_UNCHECKED) {
-		Target->LastUpdated = STATE_CHECKING;
-		++QueuedTargets;
-		//printf("Added new target to queue: %s\n", Target->Id);
-		targetset_foreach(Target->Depends, Target, (void *)depends_update_fn);
-		if (Target->Build && Target->Build->Type == MLClosureT) {
-			ml_closure_hash(Target->Build, Target->BuildHash);
-			BYTE Previous[SHA256_BLOCK_SIZE];
-			cache_build_hash_get(Target, Previous);
-			if (memcmp(Previous, Target->BuildHash, SHA256_BLOCK_SIZE)) {
-				Target->DependsLastUpdated = CurrentVersion;
-			}
-		}
-		if (Target->DependsLastUpdated < CurrentVersion) {
-			targetset_t *PreviousDetectedDepends = cache_depends_get(Target);
-			if (PreviousDetectedDepends) {
-				targetset_foreach(PreviousDetectedDepends, Target, (void *)depends_update_fn);
-			}
-		}
-		Target->LastUpdated = STATE_QUEUED;
-		//printf("\e[32m[%d/%d] \e[33mtarget_update(%s) -> waiting on %d\e[0m\n", BuiltTargets, TargetCache->Size, Target->Id, Target->WaitCount);
-		if (Target->WaitCount == 0) target_queue_build(Target);
-	}
-}
-
 void target_recheck(target_t *Target) {
 	if (Target == (target_t *)-1) restart();
 	printf("Rechecking %s\n", Target->Id);
@@ -189,51 +189,6 @@ void target_recheck(target_t *Target) {
 	targetset_foreach(Target->Affects, Target, (void *)affects_refresh_fn);
 	target_queue_build(Target);
 	pthread_cond_broadcast(TargetAvailable);
-}
-
-int depends_query_fn(const char *Id, target_t *Depends, int *DependsLastUpdated) {
-	target_query(Depends);
-	if (Depends->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depends->LastUpdated;
-	return 0;
-}
-
-void target_query(target_t *Target) {
-	/*if (Target->LastUpdated == STATE_CHECKING) {
-		printf("\e[31mError: build cycle with %s\e[0m\n", Target->Id);
-		exit(1);
-	}
-	if (Target->LastUpdated == STATE_UNCHECKED) {
-		Target->LastUpdated = STATE_CHECKING;
-		printf("Target: %s\n", Target->Id);
-		int DependsLastUpdated = 0;
-		stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_query_fn);
-		BYTE Previous[SHA256_BLOCK_SIZE];
-		int LastUpdated, LastChecked;
-		time_t FileTime = 0;
-		if (Target->Build) {
-			BYTE BuildHash[SHA256_BLOCK_SIZE];
-			ml_closure_hash(Target->Build, BuildHash);
-			stringmap_t *PreviousDetectedDepends = cache_depends_get(Target);
-			const char *BuildId = concat(Target->Id, "::build", NULL);
-			cache_hash_get(BuildId, &LastUpdated, &LastChecked, &FileTime, Previous);
-			if (!LastUpdated || memcmp(Previous, BuildHash, SHA256_BLOCK_SIZE)) {
-				DependsLastUpdated = CurrentVersion;
-				printf("\t\e[35m<build function updated>\e[0m\n");
-			} else if (PreviousDetectedDepends) {
-				stringmap_foreach(PreviousDetectedDepends, &DependsLastUpdated, (void *)depends_query_fn);
-			}
-			cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);
-			if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
-				printf("\e[33mtarget_build(%s) Depends = %d, Last Updated = %d\e[0m\n", Target->Id, DependsLastUpdated, LastChecked);
-				stringmap_foreach(Target->Depends, &DependsLastUpdated, (void *)depends_print_fn);
-				if (PreviousDetectedDepends) {
-					stringmap_foreach(PreviousDetectedDepends, &DependsLastUpdated, (void *)depends_print_fn);
-				}
-			}
-		} else {
-			cache_hash_get(Target->Id, &LastUpdated, &LastChecked, &FileTime, Previous);	
-		}
-	}*/
 }
 
 void target_depends_auto(target_t *Depend) {
@@ -268,9 +223,11 @@ static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Arg
 	target_file_t *Target = (target_file_t *)Args[1];
 	if (Target->Absolute) {
 		ml_stringbuffer_add(Buffer, Target->Path, strlen(Target->Path));
-	} else {
+	} else if (Target->Path[0]) {
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 		ml_stringbuffer_add(Buffer, Path, strlen(Path));
+	} else {
+		ml_stringbuffer_add(Buffer, RootPath, strlen(RootPath));
 	}
 	return MLSome;
 }
@@ -279,13 +236,16 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Absolute) {
 		return ml_string(Target->Path, -1);
-	} else {
+	} else if (Target->Path[0]) {
 		const char *Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
 		return ml_string(Path, -1);
+	} else {
+		return ml_string(RootPath, -1);
 	}
 }
 
 static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+	if (!Target->Path) asm("int3");
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -294,17 +254,17 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 	}
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
-		//printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
+		printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
 		return 0;
 	}
-	pthread_mutex_unlock(GlobalLock);
-	if (!S_ISREG(Stat->st_mode)) {
-		memset(Target->Hash, -1, SHA256_BLOCK_SIZE);
-		memcpy(Target->Hash, &Stat->st_ino, sizeof(Stat->st_ino));
-	} else if (Stat->st_mtime == PreviousTime) {
+	if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
+	} else if (S_ISDIR(Stat->st_mode)) {
+		memset(Target->Hash, 0xD0, SHA256_BLOCK_SIZE);
+		memcpy(Target->Hash, &Stat->st_mtim, sizeof(Stat->st_mtim));
 	} else {
 		int File = open(FileName, 0, O_RDONLY);
+		pthread_mutex_unlock(GlobalLock);
 		SHA256_CTX Ctx[1];
 		uint8_t Buffer[8192];
 		sha256_init(Ctx);
@@ -312,15 +272,15 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 			int Count = read(File, Buffer, 8192);
 			if (Count == 0) break;
 			if (Count == -1) {
-				printf("\e[31mError: read error: %s\e[0m\n", FileName);
+				fprintf(stderr, "\e[31mError: read error: %s\e[0m\n", FileName);
 				exit(1);
 			}
 			sha256_update(Ctx, Buffer, Count);
 		}
+		pthread_mutex_lock(GlobalLock);
 		close(File);
 		sha256_final(Ctx, Target->Hash);
 	}
-	pthread_mutex_lock(GlobalLock);
 	if (MonitorFiles && !Target->Build) {
 		targetwatch_add(FileName, (target_t *)Target);
 	}
@@ -333,7 +293,7 @@ static void target_default_build(target_t *Target) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
 }
@@ -350,13 +310,12 @@ static int target_file_missing(target_file_t *Target) {
 }
 
 target_t *target_file_check(const char *Path, int Absolute) {
-	Path = concat(Path, NULL);
 	const char *Id = concat("file:", Path, NULL);
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
 		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Slot);
 		Target->Absolute = Absolute;
-		Target->Path = Path;
+		Target->Path = concat(Path, NULL);
 		Target->BuildContext = CurrentContext;
 	}
 	return Slot[0];
@@ -366,22 +325,18 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
-	target_t *Target;
 	if (!Path[0]) {
-		Path = vfs_unsolve(CurrentContext->Mounts, CurrentContext->Path + 1);
-		Target = target_file_check(Path, 0);
+		Path = concat(RootPath, CurrentContext->Path, NULL);
 	} else if (Path[0] != '/') {
-		Path = concat(CurrentContext->Path, "/", Path, 0) + 1;
-		Path = vfs_unsolve(CurrentContext->Mounts, Path);
-		Target = target_file_check(Path, 0);
+		Path = concat(RootPath, CurrentContext->Path, "/", Path, NULL);
+	}
+	Path = vfs_unsolve(CurrentContext->Mounts, Path);
+	const char *Relative = match_prefix(Path, RootPath);
+	target_t *Target;
+	if (Relative) {
+		Target = target_file_check(Relative + 1, 0);
 	} else {
-		Path = vfs_unsolve(CurrentContext->Mounts, Path);
-		const char *Relative = match_prefix(Path, RootPath);
-		if (Relative) {
-			Target = target_file_check(Relative + 1, 0);
-		} else {
-			Target = target_file_check(Path, 1);
-		}
+		Target = target_file_check(Path, 1);
 	}
 	return (ml_value_t *)Target;
 }
@@ -404,129 +359,86 @@ ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
-typedef struct target_file_ls_iter_node_t target_file_ls_iter_node_t;
+typedef struct target_file_ls_t target_file_ls_t;
 
-struct target_file_ls_iter_node_t {
-	target_file_ls_iter_node_t *Next;
-	const char *Path;
+struct target_file_ls_t {
+	ml_value_t *Results;
+	regex_t *Regex;
 };
 
-typedef struct target_file_ls_iter_t {
-	const ml_type_t *Type;
-	regex_t *Regex;
-	DIR *Dir;
-	target_file_ls_iter_node_t *Node;
-	const char *Path;
-	target_t *File;
-} target_file_ls_iter_t;
-
-static ml_value_t *target_file_ls_iter_deref(ml_value_t *Ref) {
-	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
-	return (ml_value_t *)Iter->File;
-}
-
-static ml_value_t *target_file_ls_iter_next(ml_value_t *Ref) {
-	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
-	while (Iter->Dir) {
-		struct dirent *Entry = readdir(Iter->Dir);
-		while (Entry) {
-			if (
-				strcmp(Entry->d_name, ".") &&
-				strcmp(Entry->d_name, "..") &&
-				!(Iter->Regex && regexec(Iter->Regex, Entry->d_name, 0, 0, 0))
-			) {
-				const char *Path = concat(Iter->Path, "/", Entry->d_name, NULL);
-				const char *Relative = match_prefix(Path, RootPath);
-				if (Relative) {
-					Iter->File = target_file_check(Relative + 1, 0);
-				} else {
-					Iter->File = target_file_check(Path, 1);
-				}
-				return Ref;
+static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
+	DIR *Dir = opendir(Path);
+	if (!Dir) {
+		Ls->Results = ml_error("DirError", "failed to open directory %s", Path);
+		return 1;
+	}
+	struct dirent *Entry = readdir(Dir);
+	while (Entry) {
+		if (
+			strcmp(Entry->d_name, ".") &&
+			strcmp(Entry->d_name, "..") &&
+			!(Ls->Regex && regexec(Ls->Regex, Entry->d_name, 0, 0, 0))
+		) {
+			const char *Absolute = concat(Path, "/", Entry->d_name, NULL);
+			const char *Relative = match_prefix(Absolute, RootPath);
+			target_t *File;
+			if (Relative) {
+				File = target_file_check(Relative + 1, 0);
+			} else {
+				File = target_file_check(Absolute, 1);
 			}
-			Entry = readdir(Iter->Dir);
+			ml_list_append(Ls->Results, (ml_value_t *)File);
 		}
-		closedir(Iter->Dir);
-		Iter->Dir = 0;
-		target_file_ls_iter_node_t *Node = Iter->Node;
-		if (Node) {
-			Iter->Node = Node->Next;
-			Iter->Path = Node->Path;
-			Iter->Dir = opendir(Node->Path);
-			if (!Iter->Dir) return ml_error("DirError", "failed to open directory %s", Node->Path);
-		}
+		Entry = readdir(Dir);
 	}
-	return MLNil;
-}
-
-static ml_value_t *target_file_ls_iter_key(ml_value_t *Ref) {
-	target_file_ls_iter_t *Iter = (target_file_ls_iter_t *)Ref;
-	return MLNil;
-}
-
-static void target_file_ls_iter_finalize(target_file_ls_iter_t *Iter, void *Data) {
-	if (Iter->Dir) {
-		closedir(Iter->Dir);
-		Iter->Dir = NULL;
-	}
-}
-
-ml_type_t TargetFileLsIter[1] = {{
-	MLAnyT, "file-ls-iterator",
-	ml_default_hash,
-	ml_default_call,
-	target_file_ls_iter_deref,
-	ml_default_assign,
-	target_file_ls_iter_next,
-	target_file_ls_iter_key
-}};
-
-static int target_file_ls_resolve_fn(target_file_ls_iter_t *Iter, const char *Path) {
-	target_file_ls_iter_node_t *Node = new(target_file_ls_iter_node_t);
-	Node->Next = Iter->Node;
-	Node->Path = Path;
-	Iter->Node = Node;
+	closedir(Dir);
 	return 0;
 }
 
 ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
-	target_file_ls_iter_t *Iter = new(target_file_ls_iter_t);
-	Iter->Type = TargetFileLsIter;
-	target_file_t *Target = (target_file_t *)Args[0];
-	if (Target->Absolute) {
-		target_file_ls_iter_node_t *Node = Iter->Node = new(target_file_ls_iter_node_t);
-		Node->Path = Target->Path;
-	} else {
-		vfs_resolve_foreach(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0), Iter, (void *)target_file_ls_resolve_fn);
-	}
+	target_file_ls_t Ls[1] = {{ml_list(), NULL}};
 	if (Count > 1) {
 		const char *Pattern = ml_string_value(Args[1]);
-		Iter->Regex = new(regex_t);
-		int Error = regcomp(Iter->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
+		Ls->Regex = new(regex_t);
+		int Error = regcomp(Ls->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
 		if (Error) {
-			size_t Length = regerror(Error, Iter->Regex, NULL, 0);
+			size_t Length = regerror(Error, Ls->Regex, NULL, 0);
 			char *Message = snew(Length + 1);
-			regerror(Error, Iter->Regex, Message, Length);
-			regfree(Iter->Regex);
+			regerror(Error, Ls->Regex, Message, Length);
+			regfree(Ls->Regex);
 			return ml_error("RegexError", "%s", Message);
 		}
 	}
-	target_file_ls_iter_node_t *Node = Iter->Node;
-	if (Node) {
-		Iter->Node = Node->Next;
-		Iter->Path = Node->Path;
-		Iter->Dir = opendir(Node->Path);
-		if (!Iter->Dir) return ml_error("DirError", "failed to open directory %s", Node->Path);
-		GC_register_finalizer(Iter, (void *)target_file_ls_iter_finalize, 0, 0, 0);
-		return target_file_ls_iter_next((ml_value_t *)Iter);
+	target_file_t *Target = (target_file_t *)Args[0];
+	if (Target->Absolute) {
+		target_file_ls_fn(Ls, Target->Path);
+	} else if (Target->Path[0]) {
+		vfs_resolve_foreach(CurrentContext->Mounts, concat(RootPath, "/", Target->Path, 0), Ls, (void *)target_file_ls_fn);
 	} else {
-		return MLNil;
+		vfs_resolve_foreach(CurrentContext->Mounts, RootPath, Ls, (void *)target_file_ls_fn);
 	}
+	return Ls->Results;
+}
+
+ml_value_t *target_file_dirname(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
+	char *Path;
+	if (Target->Absolute) {
+		Path = concat(Target->Path, NULL);
+	} else if (Target->Path[0]) {
+		Path = vfs_resolve(Target->BuildContext->Mounts, concat(RootPath, "/", Target->Path, 0));
+	} else {
+		Path = concat(RootPath);
+	}
+	char *Last = Path;
+	for (char *P = Path; *P; ++P) if (*P == '/') Last = P;
+	*Last = 0;
+	return ml_string(Path, -1);
 }
 
 ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
-	target_file_t *FileTarget = (target_file_t *)Args[0];
-	const char *Path = FileTarget->Path;
+	target_file_t *Target = (target_file_t *)Args[0];
+	const char *Path = Target->Path;
 	const char *Last = Path - 1;
 	for (const char *P = Path; *P; ++P) if (*P == '/') Last = P;
 	return ml_string(concat(Last + 1, 0), -1);
@@ -545,6 +457,18 @@ ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
 		return ml_string(concat(LastDot + 1, 0), -1);
 	} else {
 		return ml_string("", 0);
+	}
+}
+
+ml_value_t *target_file_relative(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *FileTarget = (target_file_t *)Args[0];
+	target_file_t *BaseTarget = (target_file_t *)Args[1];
+	const char *Relative = match_prefix(FileTarget->Path, BaseTarget->Path);
+	if (Relative) {
+		if (Relative[0] == '/') ++Relative;
+		return ml_string(Relative, -1);
+	} else {
+		return MLNil;
 	}
 }
 
@@ -597,6 +521,7 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
+	if (ml_string_length(Args[1]) == 0) return Args[0];
 	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), NULL);
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
 	return (ml_value_t *)Target;
@@ -712,10 +637,14 @@ static int rmdir_p(char *Buffer, char *End) {
 		while (Entry) {
 			if (strcmp(Entry->d_name, ".") && strcmp(Entry->d_name, "..")) {
 				char *End2 = stpcpy(End + 1, Entry->d_name);
-				if (rmdir_p(Buffer, End2)) return 1;
+				if (rmdir_p(Buffer, End2)) {
+					closedir(Dir);
+					return 1;
+				}
 			}
 			Entry = readdir(Dir);
 		}
+		closedir(Dir);
 		End[0] = 0;
 		if (rmdir(Buffer)) return 1;
 	} else {
@@ -736,6 +665,19 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 	char *End = stpcpy(Buffer, Path);
 	if (rmdir_p(Buffer, End) < 0) {
 		return ml_error("FileError", "error removing file / directory %s", Buffer);
+	}
+	return Args[0];
+}
+
+ml_value_t *target_file_chdir(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
+	if (Target->Absolute) {
+		char *Path2 = GC_malloc_atomic_uncollectable(strlen(Target->Path) + 1);
+		CurrentDirectory = strcpy(Path2, Target->Path);
+	} else {
+		const char *Path = concat(RootPath, "/", Target->Path, NULL);
+		char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
+		CurrentDirectory = strcpy(Path2, Path);
 	}
 	return Args[0];
 }
@@ -774,18 +716,18 @@ static ml_type_t *ExprTargetT;
 
 static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
-	target_expr_t *Target = (target_expr_t *)Args[1];
-	target_wait((target_t *)Target);
-	target_depends_auto((target_t *)Target);
-	ml_value_t *Value = cache_expr_get((target_t *)Target);
+	target_t *Target = (target_t *)Args[1];
+	target_wait(Target);
+	target_depends_auto(Target);
+	ml_value_t *Value = cache_expr_get(Target);
 	return ml_inline(AppendMethod, 2, Buffer, Value);
 }
 
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
-	target_expr_t *Target = (target_expr_t *)Args[0];
-	target_wait((target_t *)Target);
-	target_depends_auto((target_t *)Target);
-	ml_value_t *Value = cache_expr_get((target_t *)Target);
+	target_t *Target = (target_t *)Args[0];
+	target_wait(Target);
+	target_depends_auto(Target);
+	ml_value_t *Value = cache_expr_get(Target);
 	return ml_inline(StringMethod, 1, Value);
 }
 
@@ -801,7 +743,7 @@ static void target_expr_build(target_expr_t *Target) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
 	cache_expr_set((target_t *)Target, Result);
@@ -815,6 +757,7 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
+		Slot[0] = (target_t *)Target;
 	}
 	return (ml_value_t *)Slot[0];
 }
@@ -847,6 +790,7 @@ ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
+	//printf("target_set_build(%s)\n", Target->Id);
 	//if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
@@ -872,6 +816,7 @@ static ml_type_t *ScanTargetT;
 struct scan_results_t {
 	TARGET_FIELDS
 	target_scan_t *Scan;
+	targetset_t *Scans;
 };
 
 static ml_type_t *ScanResultsT;
@@ -882,9 +827,15 @@ static int scan_results_affects_fn(target_t *Target, target_t *Scan) {
 	return 0;
 }
 
+static int scan_update_fn(target_t *Depend, target_t *Results) {
+	targetset_insert(Results->Depends, Depend);
+	depends_update_fn(Depend, Results);
+	return 0;
+}
+
 static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
-	targetset_t *Scans = cache_scan_get((target_t *)Target->Results);
-	if (Scans) targetset_foreach(Scans, Target->Results, (void *)depends_update_fn);
+	targetset_t *Scans = Target->Results->Scans;
+	if (Scans) targetset_foreach(Scans, Target->Results, (void *)scan_update_fn);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 	return 0;
 }
@@ -907,18 +858,28 @@ ml_value_t *scan_results_depend(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-ml_value_t *scan_results_set_build(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *scan_results_set_build(void *Data, int Count, ml_value_t **Args) {
 	target_scan_t *Target = ((scan_results_t *)Args[0])->Scan;
+	//printf("scan_results_set_build(%s)\n", Target->Id);
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
 	Target->LastUpdated = STATE_UNCHECKED;
 	return Args[0];
 }
 
+static ml_value_t *target_scan_source(void *Data, int Count, ml_value_t **Args) {
+	target_scan_t *Target = (target_scan_t *)Args[0];
+	return (ml_value_t *)Target->Source;
+}
+
+static int depends_hash_fn(target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZE]) {
+	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
+	return 0;
+}
+
 static time_t scan_results_hash(scan_results_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
-	targetset_t *Scans = cache_scan_get((target_t *)Target);
 	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
-	if (Scans) targetset_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
+	if (Target->Scans) targetset_foreach(Target->Scans, Target->Hash, (void *)depends_hash_fn);
 	return 0;
 }
 
@@ -928,44 +889,45 @@ static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
 }
 
 static void target_scan_build(target_scan_t *Target) {
-	ml_value_t *Result = ml_inline(Target->Build, 1, Target->Source);
+	ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 	if (Result->Type == MLErrorT) {
 		fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 		const char *Source;
 		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
-	targetset_t Scans[1] = {TARGETSET_INIT};
+	targetset_t *Scans = Target->Results->Scans = new(targetset_t);
+	targetset_init(Scans, ml_list_length(Result));
 	ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
-	cache_depends_set((target_t *)Target->Results, Scans);
+	cache_scan_set((target_t *)Target->Results, Scans);
 	if (Target->Recursive) {
 		targetset_foreach(Scans, Target, (void *)scan_results_affects_fn);
 	}
-	cache_scan_set((target_t *)Target->Results, Scans);
 }
 
-static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_value_t **Args) {
+static ml_value_t *target_scan_rebuild(target_scan_t *ScanTarget, int Count, ml_value_t **Args) {
 	if (ScanTarget->LastUpdated != CurrentVersion) {
 		target_t *Target = (target_t *)Args[0];
-		//printf("\n\n\nscan_target_rebuild(%s, %s)\n", ScanTarget->Id, Target->Id);
-
-		ml_value_t *Result = ml_inline(ScanTarget->Build, 1, ScanTarget->Source);
+		printf("\n\n\nscan_target_rebuild(%s, %s)\n", ScanTarget->Id, Target->Id);
+		Target->Build = 0;
+		ml_value_t *Result = ml_inline(ScanTarget->Build, 1, ScanTarget);
 		if (Result->Type == MLErrorT) {
 			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 			const char *Source;
 			int Line;
-			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 			exit(1);
 		}
 		ScanTarget->LastUpdated = CurrentVersion;
-		if (Target->Build != ScanTarget->Rebuild) {
+		if (Target->Build) {
+			CurrentContext = Target->BuildContext;
 			ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 			if (Result->Type == MLErrorT) {
 				fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 				const char *Source;
 				int Line;
-				for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+				for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 				exit(1);
 			}
 			if (Target->Build->Type == MLClosureT) {
@@ -973,58 +935,67 @@ static ml_value_t *scan_target_rebuild(target_scan_t *ScanTarget, int Count, ml_
 			} else {
 				memset(Target->BuildHash, -1, SHA256_BLOCK_SIZE);
 			}
-			//cache_build_hash_set(Target, Target->BuildHash);
+			return Result;
 		} else {
-			Target->Build = 0;
+			memset(Target->BuildHash, 0, SHA256_BLOCK_SIZE);
+			return MLNil;
 		}
 	}
 	return MLNil;
 }
 
 static int scan_depends_update_fn(target_t *Depend, scan_results_t *Target) {
+	//if (!strcmp(Depend->Id, "file:web/tools/rabs/guide/chapter3.xhtml")) asm("int3");
+	if (Depend == (target_t *)Target->Scan) return 0;
+	//printf("scan_depends_update_fn(%s, %s)\n", Depend->Id, Target->Id);
 	if (!Depend->Build && !Depend->BuildChecked) {
 		BYTE BuildHash[SHA256_BLOCK_SIZE];
 		cache_build_hash_get(Depend, BuildHash);
 		for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) if (BuildHash[I]) {
 			Depend->Build = Target->Scan->Rebuild;
+			Depend->BuildContext = CurrentContext;
 			break;
 		}
 		Depend->BuildChecked = 1;
+		//targetset_foreach(Depend->Depends, Target, (void *)scan_depends_update_fn);
 		targetset_t *Depends = cache_depends_get(Depend);
 		if (Depends) targetset_foreach(Depends, Target, (void *)scan_depends_update_fn);
 	}
 	return 0;
 }
 
-static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name, target_t **Slot, int Recursive) {
-	const char *Id = concat(Recursive ? "results!:" : "results:", ParentTarget->Id, "::", Name, NULL);
-	if (!Slot) Slot = targetcache_lookup(Id);
-	scan_results_t *Target = (scan_results_t *)Slot[0];
-	if (!Target) {
-		Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
-		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
-		target_scan_t *ScanTarget;
-		target_t **ScanSlot = targetcache_lookup(ScanId);
-		if (!ScanSlot[0]) {
-			ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId, ScanSlot);
-		} else {
-			ScanTarget = Target->Scan = (target_scan_t *)ScanSlot[0];
-		}
-		targetset_insert(ScanTarget->Depends, ParentTarget);
-		ScanTarget->Name = concat(Name, NULL);
-		ScanTarget->Source = ParentTarget;
-		ScanTarget->Results = Target;
-		ScanTarget->Rebuild = ml_function(ScanTarget, (void *)scan_target_rebuild);
-		ScanTarget->Recursive = Recursive;
-		targetset_insert(Target->Depends, (target_t *)ScanTarget);
+static target_t *scan_results_init(scan_results_t *Target, target_t *ParentTarget, const char *Name, int Recursive) {
+	const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
+	target_scan_t *ScanTarget;
+	target_t **ScanSlot = targetcache_lookup(ScanId);
+	if (!ScanSlot[0]) {
+		ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId, ScanSlot);
+	} else {
+		ScanTarget = Target->Scan = (target_scan_t *)ScanSlot[0];
 	}
-	targetset_t *Scans = cache_scan_get((target_t *)Target);
-	if (Scans) targetset_foreach(Scans, Target, (void *)scan_depends_update_fn);
-	return Target;
+	targetset_insert(ScanTarget->Depends, ParentTarget);
+	ScanTarget->Name = concat(Name, NULL);
+	ScanTarget->Source = ParentTarget;
+	ScanTarget->Results = Target;
+	ScanTarget->Rebuild = ml_function(ScanTarget, (void *)target_scan_rebuild);
+	ScanTarget->Recursive = Recursive;
+	targetset_insert(Target->Depends, (target_t *)ScanTarget);
+	Target->Scans = cache_scan_get((target_t *)Target);
+	if (Target->Scans) targetset_foreach(Target->Scans, Target, (void *)scan_depends_update_fn);
+	return (target_t *)Target;
 }
 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
-	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]), 0, (Count > 2) && Args[2] != MLNil);
+	target_t *ParentTarget = (target_t *)Args[0];
+	const char *Name = ml_string_value(Args[1]);
+	int Recursive = (Count > 2) && Args[2] != MLNil;
+	const char *Id = concat(Recursive ? "results!:" : "results:", ParentTarget->Id, "::", Name, NULL);
+	target_t **Slot = targetcache_lookup(Id);
+	if (!Slot[0]) {
+		scan_results_t *Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
+		Slot[0] = scan_results_init(Target, ParentTarget, Name, Recursive);
+	}
+	return (ml_value_t *)Slot[0];
 }
 
 struct target_symb_t {
@@ -1155,13 +1126,14 @@ static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHa
 }
 
 static void target_build(target_t *Target) {
+	CurrentDirectory = Target->BuildContext->FullPath;
 	if (Target->Type == FileTargetT) return target_default_build(Target);
 	if (Target->Type == MetaTargetT) return target_default_build(Target);
 	if (Target->Type == ScanTargetT) return target_scan_build((target_scan_t *)Target);
 	if (Target->Type == ExprTargetT) return target_expr_build((target_expr_t *)Target);
 	//if (Target->Type == ScanResultsT) return scan_results_build((scan_results_t *)Target);
 	//if (Target->Type == SymbTargetT) return target_symb_build((target_symb_t *)Target);
-	printf("\e[31mError: not expecting to build %s\e[0m\n", Target->Type->Name);
+	fprintf(stderr, "\e[31mError: not expecting to build %s\e[0m\n", Target->Type->Name);
 	exit(1);
 }
 
@@ -1172,6 +1144,7 @@ static int target_missing(target_t *Target, int LastChecked) {
 }
 
 target_t *target_find(const char *Id) {
+	//if (!strcmp(Id, "file:dev/obj/lib/Gir/Gio/Settings.c")) asm("int3");
 	target_t **Slot = targetcache_lookup(Id);
 	if (Slot[0]) return Slot[0];
 	if (!memcmp(Id, "file", 4)) {
@@ -1201,6 +1174,8 @@ target_t *target_find(const char *Id) {
 		return (target_t *)Target;
 	}
 	if (!memcmp(Id, "results!", 8)) {
+		scan_results_t *Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
+		Slot[0] = (target_t *)Target;
 		const char *Name;
 		for (Name = Id + strlen(Id) - 1; --Name > Id + 9;) {
 			if (Name[0] == ':' && Name[1] == ':') break;
@@ -1211,9 +1186,11 @@ target_t *target_find(const char *Id) {
 		ParentId[ParentIdLength] = 0;
 		target_t *ParentTarget = target_find(ParentId);
 		Name += 2;
-		return (target_t *)scan_results_new(ParentTarget, Name, Slot, 1);
+		return scan_results_init(Target, ParentTarget, Name, 1);
 	}
 	if (!memcmp(Id, "results", 7)) {
+		scan_results_t *Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
+		Slot[0] = (target_t *)Target;
 		const char *Name;
 		for (Name = Id + strlen(Id) - 1; --Name > Id + 8;) {
 			if (Name[0] == ':' && Name[1] == ':') break;
@@ -1224,8 +1201,10 @@ target_t *target_find(const char *Id) {
 		ParentId[ParentIdLength] = 0;
 		target_t *ParentTarget = target_find(ParentId);
 		Name += 2;
-		return (target_t *)scan_results_new(ParentTarget, Name, Slot, 0);
+		return scan_results_init(Target, ParentTarget, Name, 0);
 	}
+	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
+	asm("int3");
 	return 0;
 }
 
@@ -1236,10 +1215,6 @@ target_t *target_get(const char *Id) {
 int target_print_fn(const char *TargetId, target_t *Target, void *Data) {
 	printf("%s\n", Target->Id);
 	return 0;
-}
-
-void target_list() {
-	//stringmap_foreach(TargetCache, 0, (void *)target_print_fn);
 }
 
 typedef struct build_thread_t build_thread_t;
@@ -1253,6 +1228,9 @@ static build_thread_t *BuildThreads = 0;
 int RunningThreads = 0, LastThread = 0;
 
 static void *target_thread_fn(void *Arg) {
+	const char *Path = get_current_dir_name();
+	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
+	CurrentDirectory = strcpy(Path2, Path);
 	int Index = (int)(ptrdiff_t)Arg;
 	printf("Starting build thread #%d\n", (int)Index);
 	pthread_mutex_lock(GlobalLock);
@@ -1284,6 +1262,9 @@ static void *target_thread_fn(void *Arg) {
 }
 
 static void *active_mode_thread_fn(void *Arg) {
+	const char *Path = get_current_dir_name();
+	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
+	CurrentDirectory = strcpy(Path2, Path);
 	int Index = (int)(ptrdiff_t)Arg;
 	printf("Starting build thread #%d\n", (int)Index);
 	pthread_mutex_lock(GlobalLock);
@@ -1326,7 +1307,6 @@ static void target_wait(target_t *Target) {
 	if (!Target->Build) return;
 	if (Target->LastUpdated == STATE_UNCHECKED) target_update((target_t *)Target);
 	if (Target->LastUpdated == STATE_QUEUED) {
-		//printf("target_wait(%s)\n", Target->Id);
 		build_thread_t *BuildThread = new(build_thread_t);
 		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, (void *)(ptrdiff_t)(LastThread++));
 		build_thread_t **Slot = &BuildThreads;
@@ -1335,7 +1315,6 @@ static void target_wait(target_t *Target) {
 		pthread_cond_broadcast(TargetAvailable);
 		while (Target->LastUpdated == STATE_QUEUED) pthread_cond_wait(TargetAvailable, GlobalLock);
 		++SpareThreads;
-		//printf("target_waited(%s)\n", Target->Id);
 	}
 }
 
@@ -1406,17 +1385,21 @@ void target_init() {
 	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, NULL);
 	ml_method_by_name("refresh", 0, target_recheck_value, TargetT, NULL);
 	ml_method_by_name("=>", 0, scan_results_set_build, ScanResultsT, MLAnyT, NULL);
+	ml_method_by_name("source", 0, target_scan_source, ScanTargetT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, NULL);
+	ml_method_by_name("dirname", 0, target_file_dirname, FileTargetT, NULL);
 	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, NULL);
 	ml_method_by_name("extension", 0, target_file_extension, FileTargetT, NULL);
+	ml_method_by_name("-", 0, target_file_relative, FileTargetT, FileTargetT, NULL);
 	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, NULL);
 	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, NULL);
 	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, NULL);
 	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, NULL);
 	ml_method_by_name("rmdir", 0, target_file_rmdir, FileTargetT, NULL);
+	ml_method_by_name("chdir", 0, target_file_chdir, FileTargetT, NULL);
 	target_file_methods_is(dir);
 	target_file_methods_is(chr);
 	target_file_methods_is(blk);
