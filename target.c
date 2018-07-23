@@ -245,6 +245,7 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 }
 
 static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+	if (!Target->Path) asm("int3");
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -309,13 +310,12 @@ static int target_file_missing(target_file_t *Target) {
 }
 
 target_t *target_file_check(const char *Path, int Absolute) {
-	Path = concat(Path, NULL);
 	const char *Id = concat("file:", Path, NULL);
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
 		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Slot);
 		Target->Absolute = Absolute;
-		Target->Path = Path;
+		Target->Path = concat(Path, NULL);
 		Target->BuildContext = CurrentContext;
 	}
 	return Slot[0];
@@ -964,35 +964,38 @@ static int scan_depends_update_fn(target_t *Depend, scan_results_t *Target) {
 	return 0;
 }
 
-static scan_results_t *scan_results_new(target_t *ParentTarget, const char *Name, target_t **Slot, int Recursive) {
-	const char *Id = concat(Recursive ? "results!:" : "results:", ParentTarget->Id, "::", Name, NULL);
-	if (!Slot) Slot = targetcache_lookup(Id);
-	scan_results_t *Target = (scan_results_t *)Slot[0];
-	if (!Target) {
-		Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
-		const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
-		target_scan_t *ScanTarget;
-		target_t **ScanSlot = targetcache_lookup(ScanId);
-		if (!ScanSlot[0]) {
-			ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId, ScanSlot);
-		} else {
-			ScanTarget = Target->Scan = (target_scan_t *)ScanSlot[0];
-		}
-		targetset_insert(ScanTarget->Depends, ParentTarget);
-		ScanTarget->Name = concat(Name, NULL);
-		ScanTarget->Source = ParentTarget;
-		ScanTarget->Results = Target;
-		ScanTarget->Rebuild = ml_function(ScanTarget, (void *)target_scan_rebuild);
-		ScanTarget->Recursive = Recursive;
-		targetset_insert(Target->Depends, (target_t *)ScanTarget);
+static target_t *scan_results_init(scan_results_t *Target, target_t *ParentTarget, const char *Name, int Recursive) {
+	const char *ScanId = concat("scan:", ParentTarget->Id, "::", Name, NULL);
+	target_scan_t *ScanTarget;
+	target_t **ScanSlot = targetcache_lookup(ScanId);
+	if (!ScanSlot[0]) {
+		ScanTarget = Target->Scan = target_new(target_scan_t, ScanTargetT, ScanId, ScanSlot);
+	} else {
+		ScanTarget = Target->Scan = (target_scan_t *)ScanSlot[0];
 	}
+	targetset_insert(ScanTarget->Depends, ParentTarget);
+	ScanTarget->Name = concat(Name, NULL);
+	ScanTarget->Source = ParentTarget;
+	ScanTarget->Results = Target;
+	ScanTarget->Rebuild = ml_function(ScanTarget, (void *)target_scan_rebuild);
+	ScanTarget->Recursive = Recursive;
+	targetset_insert(Target->Depends, (target_t *)ScanTarget);
 	Target->Scans = cache_scan_get((target_t *)Target);
 	if (Target->Scans) targetset_foreach(Target->Scans, Target, (void *)scan_depends_update_fn);
-	return Target;
+	return (target_t *)Target;
 }
 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
-	return (ml_value_t *)scan_results_new((target_t *)Args[0], ml_string_value(Args[1]), 0, (Count > 2) && Args[2] != MLNil);
+	target_t *ParentTarget = (target_t *)Args[0];
+	const char *Name = ml_string_value(Args[1]);
+	int Recursive = (Count > 2) && Args[2] != MLNil;
+	const char *Id = concat(Recursive ? "results!:" : "results:", ParentTarget->Id, "::", Name, NULL);
+	target_t **Slot = targetcache_lookup(Id);
+	if (!Slot[0]) {
+		scan_results_t *Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
+		Slot[0] = scan_results_init(Target, ParentTarget, Name, Recursive);
+	}
+	return (ml_value_t *)Slot[0];
 }
 
 struct target_symb_t {
@@ -1141,6 +1144,7 @@ static int target_missing(target_t *Target, int LastChecked) {
 }
 
 target_t *target_find(const char *Id) {
+	//if (!strcmp(Id, "file:dev/obj/lib/Gir/Gio/Settings.c")) asm("int3");
 	target_t **Slot = targetcache_lookup(Id);
 	if (Slot[0]) return Slot[0];
 	if (!memcmp(Id, "file", 4)) {
@@ -1170,6 +1174,8 @@ target_t *target_find(const char *Id) {
 		return (target_t *)Target;
 	}
 	if (!memcmp(Id, "results!", 8)) {
+		scan_results_t *Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
+		Slot[0] = (target_t *)Target;
 		const char *Name;
 		for (Name = Id + strlen(Id) - 1; --Name > Id + 9;) {
 			if (Name[0] == ':' && Name[1] == ':') break;
@@ -1180,9 +1186,11 @@ target_t *target_find(const char *Id) {
 		ParentId[ParentIdLength] = 0;
 		target_t *ParentTarget = target_find(ParentId);
 		Name += 2;
-		return (target_t *)scan_results_new(ParentTarget, Name, Slot, 1);
+		return scan_results_init(Target, ParentTarget, Name, 1);
 	}
 	if (!memcmp(Id, "results", 7)) {
+		scan_results_t *Target = target_new(scan_results_t, ScanResultsT, Id, Slot);
+		Slot[0] = (target_t *)Target;
 		const char *Name;
 		for (Name = Id + strlen(Id) - 1; --Name > Id + 8;) {
 			if (Name[0] == ':' && Name[1] == ':') break;
@@ -1193,8 +1201,10 @@ target_t *target_find(const char *Id) {
 		ParentId[ParentIdLength] = 0;
 		target_t *ParentTarget = target_find(ParentId);
 		Name += 2;
-		return (target_t *)scan_results_new(ParentTarget, Name, Slot, 0);
+		return scan_results_init(Target, ParentTarget, Name, 0);
 	}
+	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
+	asm("int3");
 	return 0;
 }
 

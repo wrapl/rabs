@@ -68,12 +68,12 @@ target_t **targetcache_lookup(const char *Id) {
 		node_t *Nodes = NodesA;
 		for (;;) {
 			if (!Nodes[Index].Target) break;
+			if (Nodes[Index].Hash < Hash) break;
 			if (Nodes[Index].Hash == Hash) {
 				int Cmp = strcmp(Nodes[Index].Target->Id, Id);
 				if (Cmp == 0) return &Nodes[Index].Target;
 				if (Cmp < 0) break;
 			}
-			if (Nodes[Index].Hash < Hash) break;
 			Index += Incr;
 			Index &= Mask;
 		}
@@ -96,6 +96,11 @@ target_t **targetcache_lookup(const char *Id) {
 						Nodes[Index].Target = Target;
 						Nodes[Index].Hash = Hash;
 						return &Nodes[Result].Target;
+					} else if (Nodes[Index].Hash < Hash) {
+						OldTarget = Nodes[Index].Target;
+						Nodes[Index].Target = Target;
+						Nodes[Index].Hash = Hash;
+						break;
 					} else if (Nodes[Index].Hash == Hash) {
 						int Cmp = strcmp(Nodes[Index].Target->Id, Id);
 						if (Cmp < 0) {
@@ -103,11 +108,6 @@ target_t **targetcache_lookup(const char *Id) {
 							Nodes[Index].Target = Target;
 							break;
 						}
-					} else if (Nodes[Index].Hash < Hash) {
-						OldTarget = Nodes[Index].Target;
-						Nodes[Index].Target = Target;
-						Nodes[Index].Hash = Hash;
-						break;
 					}
 				}
 			}
