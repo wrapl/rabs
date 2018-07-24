@@ -7,6 +7,8 @@
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 
+typedef struct vmount_t vmount_t;
+
 struct vmount_t {
 	const vmount_t *Previous;
 	const char *Path;
@@ -14,17 +16,18 @@ struct vmount_t {
 };
 
 extern const char *RootPath;
+static vmount_t *Mounts = 0;
 
-const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target, int Absolute) {
+void vfs_mount(const char *Path, const char *Target, int Absolute) {
 	vmount_t *Mount = new(vmount_t);
-	Mount->Previous = Previous;
+	Mount->Previous = Mounts;
 	Mount->Path = concat(RootPath, Path, NULL);
 	if (Absolute) {
 		Mount->Target = concat(Target, NULL);
 	} else {
 		Mount->Target = concat(RootPath, Target, NULL);
 	}
-	return Mount;
+	Mounts = Mount;
 }
 
 static char *resolve0(const vmount_t *Mount, const char *Path) {
@@ -42,7 +45,8 @@ static char *resolve0(const vmount_t *Mount, const char *Path) {
 	return 0;
 }
 
-char *vfs_resolve(const vmount_t *Mount, const char *Path) {
+char *vfs_resolve(const char *Path) {
+	const vmount_t *Mount = Mounts;
 	struct stat Stat[1];
 	if (stat(Path, Stat) == 0) return concat(Path, NULL);
 	return resolve0(Mount, Path) ?: concat(Path, NULL);
@@ -62,7 +66,8 @@ static int vfs_resolve_foreach0(const vmount_t *Mount, const char *Path, void *D
 	return 0;
 }
 
-int vfs_resolve_foreach(const vmount_t *Mount, const char *Path, void *Data, int (*callback)(void *Data, const char *Path)) {
+int vfs_resolve_foreach(const char *Path, void *Data, int (*callback)(void *Data, const char *Path)) {
+	const vmount_t *Mount = Mounts;
 	struct stat Stat[1];
 	if (stat(Path, Stat) == 0) if (callback(Data, concat(Path, 0))) return 1;
 	return vfs_resolve_foreach0(Mount, Path, Data, callback);
@@ -83,7 +88,8 @@ static char *unsolve0(const vmount_t *Mount, const char *Path) {
 	return 0;
 }
 
-char *vfs_unsolve(const vmount_t *Mount, const char *Path) {
+char *vfs_unsolve(const char *Path) {
+	const vmount_t *Mount = Mounts;
 	const char *Orig = Path;
 	while (Mount) {
 		//printf("%s -> %s\n", Mount->Path, Mount->Target);
@@ -93,8 +99,4 @@ char *vfs_unsolve(const vmount_t *Mount, const char *Path) {
 	}
 	if (Path == Orig) Path = concat(Path, NULL);
 	return (char *)Path;
-}
-
-void vfs_init() {
-	
 }

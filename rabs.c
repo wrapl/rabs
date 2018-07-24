@@ -106,7 +106,7 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	mkdir_p(concat(RootPath, Path, NULL));
 	const char *FileName = concat(RootPath, Path, SystemName, NULL);
 	//printf("FileName = %s\n", FileName);
-	FileName = vfs_resolve(CurrentContext->Mounts, FileName);
+	FileName = vfs_resolve(FileName);
 	target_t *ParentDefault = CurrentContext->Default;
 	context_push(Path);
 	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
@@ -154,7 +154,7 @@ ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_TYPE(1, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
 	const char *Target = ml_string_value(Args[1]);
-	CurrentContext->Mounts = vfs_mount(CurrentContext->Mounts,
+	vfs_mount(
 		concat(CurrentContext->Path, "/", Path, NULL),
 		concat(CurrentContext->Path, "/", Target, NULL),
 		Target[0] == '/'
@@ -382,7 +382,6 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "defined", ml_function(0, defined));
 	stringmap_insert(Globals, "debug", ml_function(0, debug));
 
-	vfs_init();
 	target_init();
 	context_init();
 	ml_file_init();

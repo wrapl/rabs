@@ -20,11 +20,6 @@ context_t *context_push(const char *Path) {
 	Context->Path = Path;
 	Context->Name = Path;
 	Context->FullPath = concat(RootPath, Path, NULL);
-	if (CurrentContext) {
-		Context->Mounts = CurrentContext->Mounts;
-	} else {
-		Context->Mounts = 0;
-	}
 	CurrentContext = Context;
 	Context->Locals[0] = (stringmap_t)STRINGMAP_INIT;
 	target_t *Default = Context->Default = (target_t *)target_meta_new(0, 1, &DefaultString);
@@ -41,11 +36,6 @@ context_t *context_scope(const char *Name) {
 	Context->Path = CurrentContext->Path;
 	Context->Name = concat(CurrentContext->Name, ":", Name, NULL);
 	Context->FullPath = CurrentContext->FullPath;
-	if (CurrentContext) {
-		Context->Mounts = CurrentContext->Mounts;
-	} else {
-		Context->Mounts = 0;
-	}
 	CurrentContext = Context;
 	Context->Default = Context->Parent->Default;
 	Context->Locals[0] = (stringmap_t)STRINGMAP_INIT;
