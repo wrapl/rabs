@@ -1017,7 +1017,7 @@ int target_queue(target_t *Target, target_t *Parent) {
 }
 
 static int target_depends_fn(target_t *Depend, int *DependsLastUpdated) {
-	printf("\e[34m%s version = %d\e[0m\n", Depend->Id, Depend->LastUpdated);
+	//printf("\e[34m%s version = %d\e[0m\n", Depend->Id, Depend->LastUpdated);
 	if (Depend->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depend->LastUpdated;
 	return 0;
 }
@@ -1040,7 +1040,7 @@ static void target_rebuild(target_t *Target) {
 }
 
 void target_update(target_t *Target) {
-	printf("target_update(%s)\n", Target->Id);
+	//printf("target_update(%s)\n", Target->Id);
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
 	BYTE PreviousBuild[SHA256_BLOCK_SIZE];
@@ -1126,7 +1126,7 @@ int target_wait(target_t *Target, target_t *Waiter) {
 	if (Target->LastUpdated == STATE_QUEUED) {
 		target_update(Target);
 	} else while (Target->LastUpdated == STATE_CHECKING) {
-		fprintf(stderr, "\e[31m%s waiting on %s\n\e[0m", Waiter->Id, Target->Id);
+		//fprintf(stderr, "\e[31m%s waiting on %s\n\e[0m", Waiter->Id, Target->Id);
 		pthread_cond_wait(TargetAvailable, GlobalLock);
 	}
 	return 0;

@@ -243,7 +243,6 @@ static cache_list_t *cache_list_parse(const char *Ids, int *Total) {
 }
 
 static targetset_t *cache_list_to_set(cache_list_t *List, int Total) {
-	if (!Total) return 0;
 	targetset_t *Set = new(targetset_t);
 	targetset_init(Set, Total);
 	while (List) {
