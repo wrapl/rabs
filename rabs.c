@@ -35,7 +35,8 @@ static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	if (Value) {
 		target_t *Target = target_symb_new(Name);
 		target_depends_auto(Target);
-		target_update(Target);
+		target_queue(Target, 0);
+		target_wait(Target, 0);
 		return Value;
 	} else {
 		return stringmap_search(Globals, Name) ?: ml_error("NameError", "%s undefined", Name);
@@ -508,8 +509,7 @@ int main(int Argc, char **Argv) {
 		}
 		Target = Context->Default;
 	}
-	target_update(Target);
-	target_threads_wait(NumThreads);
+	target_threads_wait(Target);
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
 		ml_console(rabs_ml_global, Globals);
