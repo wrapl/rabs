@@ -10,7 +10,6 @@ typedef struct context_t context_t;
 struct context_t {
 	context_t *Parent;
 	const char *Path, *Name, *FullPath;
-	const vmount_t *Mounts;
 	struct target_t *Default;
 	stringmap_t Locals[1];
 };

@@ -27,6 +27,7 @@ c_includes := fun(Target) do
 	var Files := []
 	var Lines := shell('gcc -c {CFLAGS} -M -MG {Target:source}')
 	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( )"
+	Files:pop
 	for File in Files do
 		File := file(File:replace(r"\\ ", " "))
 	end

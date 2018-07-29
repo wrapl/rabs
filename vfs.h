@@ -1,17 +1,13 @@
 #ifndef VFS_H
 #define VFS_H
 
-typedef struct vmount_t vmount_t;
+void vfs_mount(const char *Path, const char *Target, int Absolute);
 
-const vmount_t *vfs_mount(const vmount_t *Previous, const char *Path, const char *Target, int Absolute);
+char *vfs_resolve(const char *Path);
+char *vfs_unsolve(const char *Path);
 
-char *vfs_resolve(const vmount_t *Mount, const char *Path);
-char *vfs_unsolve(const vmount_t *Mount, const char *Path);
+const char **vfs_resolve_all(const char *Path);
 
-const char **vfs_resolve_all(const vmount_t *Mount, const char *Path);
-
-int vfs_resolve_foreach(const vmount_t *Mount, const char *Path, void *Data, int (*callback)(void *Data, const char *Path));
-
-void vfs_init();
+int vfs_resolve_foreach(const char *Path, void *Data, int (*callback)(void *Data, const char *Path));
 
 #endif
