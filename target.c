@@ -1048,7 +1048,7 @@ void target_update(target_t *Target) {
 		ml_closure_sha256(Target->Build, Target->BuildHash);
 		cache_build_hash_get(Target, PreviousBuild);
 		if (memcmp(PreviousBuild, Target->BuildHash, SHA256_BLOCK_SIZE)) {
-			printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
+			//printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
 			DependsLastUpdated = CurrentVersion;
 		}
 	}
@@ -1068,7 +1068,7 @@ void target_update(target_t *Target) {
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
 	if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
-		printf("\e[34m rebuilding %s\e[0m\n", Target->Id);
+		//printf("\e[34m rebuilding %s\e[0m\n", Target->Id);
 		//asm("int3");
 		if (!Target->Build && Target->Parent) target_rebuild(Target->Parent);
 		if (Target->Build) {
