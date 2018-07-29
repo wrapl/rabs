@@ -120,7 +120,7 @@ void cache_open(const char *RootPath) {
 		exit(1);
 	}
 	++CurrentVersion;
-	printf("CurrentVersion = %d\n", CurrentVersion);
+	printf("Build iteration = %d\n", CurrentVersion);
 	char Buffer[100];
 	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', %d)", CurrentVersion);
 	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {

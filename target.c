@@ -750,7 +750,7 @@ static ml_value_t *target_scan_rebuild(target_scan_t *ScanTarget, int Count, ml_
 				exit(1);
 			}
 			if (Target->Build->Type == MLClosureT) {
-				ml_closure_hash(Target->Build, Target->BuildHash);
+				ml_closure_sha256(Target->Build, Target->BuildHash);
 			} else {
 				memset(Target->BuildHash, -1, SHA256_BLOCK_SIZE);
 			}
@@ -862,7 +862,7 @@ void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
 		ml_tree_foreach(Value, Ctx, (void *)tree_update_hash);
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == MLClosureT) {
-		ml_closure_hash(Value, Hash);
+		ml_closure_sha256(Value, Hash);
 	} else if (Value->Type == FileTargetT) {
 		target_t *Target = (target_t *)Value;
 		SHA256_CTX Ctx[1];
@@ -1045,7 +1045,7 @@ void target_update(target_t *Target) {
 	int DependsLastUpdated = 0;
 	BYTE PreviousBuild[SHA256_BLOCK_SIZE];
 	if (Target->Build && Target->Build->Type == MLClosureT) {
-		ml_closure_hash(Target->Build, Target->BuildHash);
+		ml_closure_sha256(Target->Build, Target->BuildHash);
 		cache_build_hash_get(Target, PreviousBuild);
 		if (memcmp(PreviousBuild, Target->BuildHash, SHA256_BLOCK_SIZE)) {
 			printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
@@ -1118,7 +1118,7 @@ void target_update(target_t *Target) {
 		cache_last_check_set(Target, FileTime);
 	}
 	++BuiltTargets;
-	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Built \e[32m%s\e[0m at version %d\n", BuiltTargets, QueuedTargets, CurrentThread, Target->Id, Target->LastUpdated);
+	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to version %d\n", BuiltTargets, QueuedTargets, CurrentThread, Target->Id, Target->LastUpdated);
 	pthread_cond_broadcast(TargetAvailable);
 }
 
@@ -1137,7 +1137,6 @@ static void *target_thread_fn(void *Arg) {
 	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
 	CurrentDirectory = strcpy(Path2, Path);
 	CurrentThread = (intptr_t)Arg;
-	printf("Starting build thread #%d\n", CurrentThread);
 	pthread_mutex_lock(GlobalLock);
 	++RunningThreads;
 	for (;;) {

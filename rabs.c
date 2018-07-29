@@ -190,7 +190,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	int Result = pclose(File);
 	clock_t End = clock();
 	pthread_mutex_lock(GlobalLock);
-	if (EchoCommands) printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
+	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Result)) {
 		if (WEXITSTATUS(Result) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
@@ -227,7 +227,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	int Result = pclose(File);
 	clock_t End = clock();
 	pthread_mutex_lock(GlobalLock);
-	if (EchoCommands) printf("\t\e[34m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
+	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Result)) {
 		if (WEXITSTATUS(Result) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
