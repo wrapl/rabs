@@ -86,6 +86,8 @@ void target_recheck(target_t *Target) {
 
 void target_depends_auto(target_t *Depend) {
 	if (CurrentTarget && CurrentTarget != Depend) targetset_insert(CurrentTarget->Depends, Depend);
+	target_queue(Depend, 0);
+	target_wait(Depend, CurrentTarget);
 }
 
 static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_t **Slot) {
@@ -600,15 +602,13 @@ static ml_type_t *ExprTargetT;
 static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_expr_t *Target = (target_expr_t *)Args[1];
-	target_queue((target_t *)Target, 0);
-	target_wait((target_t *)Target, CurrentTarget);
+	target_depends_auto((target_t *)Target);
 	return ml_inline(AppendMethod, 2, Buffer, Target->Value);
 }
 
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
 	target_expr_t *Target = (target_expr_t *)Args[0];
-	target_queue((target_t *)Target, 0);
-	target_wait((target_t *)Target, CurrentTarget);
+	target_depends_auto((target_t *)Target);
 	return ml_inline(StringMethod, 1, Target->Value);
 }
 
@@ -643,15 +643,15 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 	} else if (Arg->Type == MLStringT) {
 		target_t *Depend = target_symb_new(ml_string_value(Arg));
 		targetset_insert(Target->Depends, Depend);
+		return 0;
 	} else if (ml_is(Arg, TargetT)) {
 		target_t *Depend = (target_t *)Arg;
 		targetset_insert(Target->Depends, Depend);
+		return 0;
 	} else if (Arg == MLNil) {
 		return 0;
-	} else {
-		return 1;
 	}
-	return 0;
+	return 1;
 }
 
 ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
@@ -815,6 +815,28 @@ target_t *target_symb_new(const char *Name) {
 		Target->Name = Name;
 	}
 	return Slot[0];
+}
+
+static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
+	if (Arg->Type == MLListT) {
+		return ml_list_foreach(Arg, 0, (void *)target_depends_auto_single);
+	} else if (Arg->Type == MLStringT) {
+		target_t *Depend = target_symb_new(ml_string_value(Arg));
+		target_depends_auto(Depend);
+		return 0;
+	} else if (ml_is(Arg, TargetT)) {
+		target_t *Depend = (target_t *)Arg;
+		target_depends_auto((target_t *)Arg);
+		return 0;
+	} else if (Arg == MLNil) {
+		return 0;
+	}
+	return 1;
+}
+
+ml_value_t *target_depends_auto_value(void *Data, int Count, ml_value_t **Args) {
+	for (int I = 0; I < Count; ++I) target_depends_auto_single(Args[I], 0);
+	return MLNil;
 }
 
 static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {

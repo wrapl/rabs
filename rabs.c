@@ -35,8 +35,6 @@ static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	if (Value) {
 		target_t *Target = target_symb_new(Name);
 		target_depends_auto(Target);
-		target_queue(Target, 0);
-		target_wait(Target, 0);
 		return Value;
 	} else {
 		return stringmap_search(Globals, Name) ?: ml_error("NameError", "%s undefined", Name);
@@ -381,6 +379,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "getenv", ml_function(0, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(0, ml_setenv));
 	stringmap_insert(Globals, "defined", ml_function(0, defined));
+	stringmap_insert(Globals, "check", ml_function(0, target_depends_auto_value));
 	stringmap_insert(Globals, "debug", ml_function(0, debug));
 
 	target_init();
