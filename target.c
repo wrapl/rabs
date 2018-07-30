@@ -720,49 +720,6 @@ static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
 	return 0;
 }
 
-static ml_value_t *target_scan_rebuild(target_scan_t *ScanTarget, int Count, ml_value_t **Args) {
-	if (ScanTarget->LastUpdated != CurrentVersion) {
-		target_t *Target = (target_t *)Args[0];
-		printf("\e[33mRescanning %s due to %s\e[0m\n", ScanTarget->Id, Target->Id);
-		Target->Build = 0;
-		CurrentTarget = (target_t *)ScanTarget;
-		CurrentContext = ScanTarget->BuildContext;
-		CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
-		ml_value_t *Result = ml_inline(ScanTarget->Build, 1, ScanTarget);
-		if (Result->Type == MLErrorT) {
-			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
-			const char *Source;
-			int Line;
-			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
-			exit(1);
-		}
-		ScanTarget->LastUpdated = CurrentVersion;
-		if (Target->Build) {
-			CurrentTarget = Target;
-			CurrentContext = Target->BuildContext;
-			CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
-			ml_value_t *Result = ml_inline(Target->Build, 1, Target);
-			if (Result->Type == MLErrorT) {
-				fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
-				const char *Source;
-				int Line;
-				for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
-				exit(1);
-			}
-			if (Target->Build->Type == MLClosureT) {
-				ml_closure_sha256(Target->Build, Target->BuildHash);
-			} else {
-				memset(Target->BuildHash, -1, SHA256_BLOCK_SIZE);
-			}
-			return Result;
-		} else {
-			memset(Target->BuildHash, 0, SHA256_BLOCK_SIZE);
-			return MLNil;
-		}
-	}
-	return MLNil;
-}
-
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	target_t *Source = (target_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
@@ -1047,6 +1004,7 @@ static int target_depends_fn(target_t *Depend, int *DependsLastUpdated) {
 static void target_rebuild(target_t *Target) {
 	if (!Target->Build && Target->Parent) target_rebuild(Target->Parent);
 	if (Target->Build) {
+		target_t *OldTarget = CurrentTarget;
 		CurrentContext = Target->BuildContext;
 		CurrentTarget = Target;
 		CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
@@ -1058,6 +1016,8 @@ static void target_rebuild(target_t *Target) {
 			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 			exit(1);
 		}
+		CurrentContext = OldTarget->BuildContext;
+		CurrentTarget = OldTarget;
 	}
 }
 
@@ -1094,6 +1054,7 @@ void target_update(target_t *Target) {
 		//asm("int3");
 		if (!Target->Build && Target->Parent) target_rebuild(Target->Parent);
 		if (Target->Build) {
+			target_t *OldTarget = CurrentTarget;
 			CurrentContext = Target->BuildContext;
 			CurrentTarget = Target;
 			CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
@@ -1121,6 +1082,8 @@ void target_update(target_t *Target) {
 			}
 			cache_build_hash_set(Target);
 			cache_depends_set(Target, Target->Depends);
+			CurrentContext = OldTarget->BuildContext;
+			CurrentTarget = OldTarget;
 		}
 	} else {
 		if (Target->Type == ExprTargetT) {
