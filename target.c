@@ -1016,8 +1016,7 @@ static void target_rebuild(target_t *Target) {
 			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 			exit(1);
 		}
-		CurrentContext = OldTarget->BuildContext;
-		CurrentTarget = OldTarget;
+		if ((CurrentTarget = OldTarget)) CurrentContext = OldTarget->BuildContext;
 	}
 }
 
@@ -1082,8 +1081,7 @@ void target_update(target_t *Target) {
 			}
 			cache_build_hash_set(Target);
 			cache_depends_set(Target, Target->Depends);
-			CurrentContext = OldTarget->BuildContext;
-			CurrentTarget = OldTarget;
+			if ((CurrentTarget = OldTarget)) CurrentContext = OldTarget->BuildContext;
 		}
 	} else {
 		if (Target->Type == ExprTargetT) {
