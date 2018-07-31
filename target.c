@@ -3,7 +3,6 @@
 #include "util.h"
 #include "context.h"
 #include "targetcache.h"
-#include "targetwatch.h"
 #include "cache.h"
 #include <string.h>
 #include <stdlib.h>
@@ -119,7 +118,7 @@ static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Arg
 	if (Target->Absolute) {
 		ml_stringbuffer_add(Buffer, Target->Path, strlen(Target->Path));
 	} else if (Target->Path[0]) {
-		const char *Path = vfs_resolve(concat(RootPath, "/", Target->Path, 0));
+		const char *Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 		ml_stringbuffer_add(Buffer, Path, strlen(Path));
 	} else {
 		ml_stringbuffer_add(Buffer, RootPath, strlen(RootPath));
@@ -132,7 +131,7 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 	if (Target->Absolute) {
 		return ml_string(Target->Path, -1);
 	} else if (Target->Path[0]) {
-		const char *Path = vfs_resolve(concat(RootPath, "/", Target->Path, 0));
+		const char *Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 		return ml_string(Path, -1);
 	} else {
 		return ml_string(RootPath, -1);
@@ -144,7 +143,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 	if (Target->Absolute) {
 		FileName = Target->Path;
 	} else {
-		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, 0));
+		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	}
 	pthread_mutex_unlock(GlobalLock);
 	struct stat Stat[1];
@@ -157,7 +156,11 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
 	} else if (S_ISDIR(Stat->st_mode)) {
 		memset(Target->Hash, 0xD0, SHA256_BLOCK_SIZE);
+#ifdef __APPLE__
+		memcpy(Target->Hash, &Stat->st_mtimespec, sizeof(Stat->st_mtimespec));
+#else
 		memcpy(Target->Hash, &Stat->st_mtim, sizeof(Stat->st_mtim));
+#endif
 	} else {
 		int File = open(FileName, 0, O_RDONLY);
 		SHA256_CTX Ctx[1];
@@ -176,9 +179,9 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 		sha256_final(Ctx, Target->Hash);
 	}
 	pthread_mutex_lock(GlobalLock);
-	if (MonitorFiles && !Target->Build) {
+	/*if (MonitorFiles && !Target->Build) {
 		targetwatch_add(FileName, (target_t *)Target);
-	}
+	}*/
 	return Stat->st_mtime;
 }
 
@@ -187,7 +190,7 @@ static int target_file_missing(target_file_t *Target) {
 	if (Target->Absolute) {
 		FileName = Target->Path;
 	} else {
-		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, 0));
+		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	}
 	struct stat Stat[1];
 	return !!stat(FileName, Stat);
@@ -230,7 +233,7 @@ ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
 	char *Path;
 	int Absolute;
 	if (Count > 1 && Args[1] != MLNil && !FileTarget->Absolute) {
-		Path = vfs_resolve(concat(RootPath, "/", FileTarget->Path, 0));
+		Path = vfs_resolve(concat(RootPath, "/", FileTarget->Path, NULL));
 		Absolute = 1;
 	} else {
 		Path = concat(FileTarget->Path, NULL);
@@ -297,7 +300,7 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 	if (Target->Absolute) {
 		target_file_ls_fn(Ls, Target->Path);
 	} else if (Target->Path[0]) {
-		vfs_resolve_foreach(concat(RootPath, "/", Target->Path, 0), Ls, (void *)target_file_ls_fn);
+		vfs_resolve_foreach(concat(RootPath, "/", Target->Path, NULL), Ls, (void *)target_file_ls_fn);
 	} else {
 		vfs_resolve_foreach(RootPath, Ls, (void *)target_file_ls_fn);
 	}
@@ -310,9 +313,9 @@ ml_value_t *target_file_dirname(void *Data, int Count, ml_value_t **Args) {
 	if (Target->Absolute) {
 		Path = concat(Target->Path, NULL);
 	} else if (Target->Path[0]) {
-		Path = vfs_resolve(concat(RootPath, "/", Target->Path, 0));
+		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	} else {
-		Path = concat(RootPath);
+		Path = concat(RootPath, NULL);
 	}
 	char *Last = Path;
 	for (char *P = Path; *P; ++P) if (*P == '/') Last = P;
@@ -325,7 +328,7 @@ ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
 	const char *Path = Target->Path;
 	const char *Last = Path - 1;
 	for (const char *P = Path; *P; ++P) if (*P == '/') Last = P;
-	return ml_string(concat(Last + 1, 0), -1);
+	return ml_string(concat(Last + 1, NULL), -1);
 }
 
 ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
@@ -338,7 +341,7 @@ ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
 		if (*P == '/') LastSlash = P;
 	}
 	if (LastDot > LastSlash) {
-		return ml_string(concat(LastDot + 1, 0), -1);
+		return ml_string(concat(LastDot + 1, NULL), -1);
 	} else {
 		return ml_string("", 0);
 	}
@@ -363,7 +366,7 @@ ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
 	if (Target->Absolute) {
 		FileName = Target->Path;
 	} else {
-		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, 0));
+		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	}
 	struct stat Stat[1];
 	if (!stat(FileName, Stat)) {
@@ -380,12 +383,12 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 	if (Source->Absolute) {
 		SourcePath = Source->Path;
 	} else {
-		SourcePath = vfs_resolve(concat(RootPath, "/", Source->Path, 0));
+		SourcePath = vfs_resolve(concat(RootPath, "/", Source->Path, NULL));
 	}
 	if (Dest->Absolute) {
 		DestPath = Dest->Path;
 	} else {
-		DestPath = vfs_resolve(concat(RootPath, "/", Dest->Path, 0));
+		DestPath = vfs_resolve(concat(RootPath, "/", Dest->Path, NULL));
 	}
 	int SourceFile = open(SourcePath, O_RDONLY);
 	if (SourceFile < 0) return ml_error("FileError", "could not open source %s", SourcePath);
@@ -434,7 +437,7 @@ ml_value_t *target_file_open(void *Data, int Count, ml_value_t **Args) {
 	if (Target->Absolute) {
 		FileName = Target->Path;
 	} else if (Mode[0] == 'r') {
-		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, 0));
+		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	} else {
 		FileName = concat(RootPath, "/", Target->Path, NULL);
 	}
@@ -453,7 +456,7 @@ ml_value_t *target_file_is_ ## NAME(void *Data, int Count, ml_value_t **Args) { 
 	if (Target->Absolute) { \
 		FileName = Target->Path; \
 	} else { \
-		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, 0)); \
+		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, NULL)); \
 	} \
 	struct stat Stat[1]; \
 	if (!stat(FileName, Stat)) { \
@@ -1116,7 +1119,11 @@ int target_wait(target_t *Target, target_t *Waiter) {
 }
 
 static void *target_thread_fn(void *Arg) {
+#ifdef __APPLE__
+	const char *Path = getcwd(NULL, 0);
+#else
 	const char *Path = get_current_dir_name();
+#endif
 	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
 	CurrentDirectory = strcpy(Path2, Path);
 	CurrentThread = (intptr_t)Arg;

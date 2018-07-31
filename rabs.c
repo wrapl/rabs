@@ -8,7 +8,6 @@
 #include <time.h>
 #include <stdio.h>
 #include "target.h"
-#include "targetwatch.h"
 #include "context.h"
 #include "util.h"
 #include "cache.h"
@@ -57,7 +56,7 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 }
 
 static void load_file(const char *FileName) {
-	if (MonitorFiles) targetwatch_add(FileName, (target_t *)-1);
+	//if (MonitorFiles) targetwatch_add(FileName, (target_t *)-1);
 	ml_value_t *Closure = ml_load(rabs_ml_global, NULL, FileName);
 	if (Closure->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
@@ -447,11 +446,11 @@ int main(int Argc, char **Argv) {
 				InteractiveMode = 1;
 				break;
 			}
-			case 'w': {
+			/*case 'w': {
 				targetwatch_init();
 				MonitorFiles = 1;
 				break;
-			}
+			}*/
 			case 't': {
 				GC_disable();
 				break;
@@ -512,9 +511,6 @@ int main(int Argc, char **Argv) {
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
 		ml_console(rabs_ml_global, Globals);
-	} else if (MonitorFiles) {
-		target_interactive_start(NumThreads);
-		targetwatch_wait();
 	}
 	return 0;
 }

@@ -18,11 +18,10 @@ sources = \
 	target.c \
 	targetset.c \
 	targetcache.c \
-	targetwatch.c \
 	util.c \
 	vfs.c
 
-CFLAGS += -std=gnu99 -fstrict-aliasing -Wstrict-aliasing -I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE
+CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE
 LDFLAGS += -lm -ldl -lgc -lsqlite3
 
 ifdef DEBUG

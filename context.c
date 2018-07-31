@@ -45,7 +45,7 @@ context_t *context_scope(const char *Name) {
 
 void context_pop() {
 	CurrentContext = CurrentContext->Parent;
-	chdir(concat(RootPath, CurrentContext->Path, 0));
+	chdir(concat(RootPath, CurrentContext->Path, NULL));
 }
 
 ml_value_t *context_symb_get(context_t *Context, const char *Name) {

@@ -69,7 +69,7 @@ static int vfs_resolve_foreach0(const vmount_t *Mount, const char *Path, void *D
 int vfs_resolve_foreach(const char *Path, void *Data, int (*callback)(void *Data, const char *Path)) {
 	const vmount_t *Mount = Mounts;
 	struct stat Stat[1];
-	if (stat(Path, Stat) == 0) if (callback(Data, concat(Path, 0))) return 1;
+	if (stat(Path, Stat) == 0) if (callback(Data, concat(Path, NULL))) return 1;
 	return vfs_resolve_foreach0(Mount, Path, Data, callback);
 }
 
