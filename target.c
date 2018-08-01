@@ -1008,6 +1008,9 @@ static void target_rebuild(target_t *Target) {
 	if (!Target->Build && Target->Parent) target_rebuild(Target->Parent);
 	if (Target->Build) {
 		target_t *OldTarget = CurrentTarget;
+		context_t *OldContext = CurrentContext;
+		const char *OldDirectory = CurrentDirectory;
+
 		CurrentContext = Target->BuildContext;
 		CurrentTarget = Target;
 		CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
@@ -1019,7 +1022,10 @@ static void target_rebuild(target_t *Target) {
 			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
 			exit(1);
 		}
-		if ((CurrentTarget = OldTarget)) CurrentContext = OldTarget->BuildContext;
+
+		CurrentDirectory = OldDirectory;
+		CurrentContext = OldContext;
+		CurrentTarget = OldTarget;
 	}
 }
 
@@ -1057,6 +1063,9 @@ void target_update(target_t *Target) {
 		if (!Target->Build && Target->Parent) target_rebuild(Target->Parent);
 		if (Target->Build) {
 			target_t *OldTarget = CurrentTarget;
+			context_t *OldContext = CurrentContext;
+			const char *OldDirectory = CurrentDirectory;
+
 			CurrentContext = Target->BuildContext;
 			CurrentTarget = Target;
 			CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
@@ -1084,7 +1093,10 @@ void target_update(target_t *Target) {
 			}
 			cache_build_hash_set(Target);
 			cache_depends_set(Target, Target->Depends);
-			if ((CurrentTarget = OldTarget)) CurrentContext = OldTarget->BuildContext;
+
+			CurrentDirectory = OldDirectory;
+			CurrentContext = OldContext;
+			CurrentTarget = OldTarget;
 		}
 	} else {
 		if (Target->Type == ExprTargetT) {
@@ -1119,11 +1131,7 @@ int target_wait(target_t *Target, target_t *Waiter) {
 }
 
 static void *target_thread_fn(void *Arg) {
-#ifdef __APPLE__
 	const char *Path = getcwd(NULL, 0);
-#else
-	const char *Path = get_current_dir_name();
-#endif
 	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
 	CurrentDirectory = strcpy(Path2, Path);
 	CurrentThread = (intptr_t)Arg;

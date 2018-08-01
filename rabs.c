@@ -461,12 +461,7 @@ int main(int Argc, char **Argv) {
 		}
 	}
 
-#ifdef LINUX
-	const char *Path = get_current_dir_name();
-#else
-	char *Path = snew(1024);
-	getcwd(Path, 1024);
-#endif
+	char *Path = getcwd(Path, 0);
 	CurrentDirectory = Path;
 	RootPath = find_root(Path);
 	if (!RootPath) {
