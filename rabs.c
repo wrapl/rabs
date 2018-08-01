@@ -461,7 +461,7 @@ int main(int Argc, char **Argv) {
 		}
 	}
 
-	char *Path = getcwd(Path, 0);
+	const char *Path = getcwd(NULL, 0);
 	CurrentDirectory = Path;
 	RootPath = find_root(Path);
 	if (!RootPath) {
