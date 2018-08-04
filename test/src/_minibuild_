@@ -28,7 +28,7 @@ end
 var Generated := file("generated")["GENFLAGS"] => fun(Generated) do
 	var GenDir := file("gen")
 	GenDir:mkdir
-	for I := 1 .. 5 do
+	for I in 1 .. 5 do
 		var GenFile := (GenDir / 'gen_{I}.c'):open("w")
 		GenFile:write('#include "test.h"\n\nvoid gen_{I}() \{}\n')
 		GenFile:close
