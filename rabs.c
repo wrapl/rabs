@@ -8,7 +8,6 @@
 #include <time.h>
 #include <stdio.h>
 #include "target.h"
-#include "targetwatch.h"
 #include "context.h"
 #include "util.h"
 #include "cache.h"
@@ -18,7 +17,7 @@
 #include "rabs.h"
 #include "minilang/stringmap.h"
 
-#define VERSION_STRING "1.1.0"
+#define VERSION_STRING "1.2.0"
 
 const char *SystemName = "/_minibuild_";
 const char *RootPath = 0;
@@ -35,8 +34,6 @@ static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	if (Value) {
 		target_t *Target = target_symb_new(Name);
 		target_depends_auto(Target);
-		target_queue(Target, 0);
-		target_wait(Target, 0);
 		return Value;
 	} else {
 		return stringmap_search(Globals, Name) ?: ml_error("NameError", "%s undefined", Name);
@@ -59,7 +56,7 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 }
 
 static void load_file(const char *FileName) {
-	if (MonitorFiles) targetwatch_add(FileName, (target_t *)-1);
+	//if (MonitorFiles) targetwatch_add(FileName, (target_t *)-1);
 	ml_value_t *Closure = ml_load(rabs_ml_global, NULL, FileName);
 	if (Closure->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
@@ -381,6 +378,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "getenv", ml_function(0, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(0, ml_setenv));
 	stringmap_insert(Globals, "defined", ml_function(0, defined));
+	stringmap_insert(Globals, "check", ml_function(0, target_depends_auto_value));
 	stringmap_insert(Globals, "debug", ml_function(0, debug));
 
 	target_init();
@@ -448,11 +446,11 @@ int main(int Argc, char **Argv) {
 				InteractiveMode = 1;
 				break;
 			}
-			case 'w': {
+			/*case 'w': {
 				targetwatch_init();
 				MonitorFiles = 1;
 				break;
-			}
+			}*/
 			case 't': {
 				GC_disable();
 				break;
@@ -463,12 +461,7 @@ int main(int Argc, char **Argv) {
 		}
 	}
 
-#ifdef LINUX
-	const char *Path = get_current_dir_name();
-#else
-	char *Path = snew(1024);
-	getcwd(Path, 1024);
-#endif
+	const char *Path = getcwd(NULL, 0);
 	CurrentDirectory = Path;
 	RootPath = find_root(Path);
 	if (!RootPath) {
@@ -513,9 +506,6 @@ int main(int Argc, char **Argv) {
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
 		ml_console(rabs_ml_global, Globals);
-	} else if (MonitorFiles) {
-		target_interactive_start(NumThreads);
-		targetwatch_wait();
 	}
 	return 0;
 }
