@@ -1,4 +1,4 @@
-.PHONY: clean all
+.PHONY: clean all install
 
 all: rabs
 
@@ -27,8 +27,20 @@ else
 	CFLAGS += -O2
 endif
 
-rabs: Makefile $(objects) *.h
+rabs: Makefile $(objects) *.h minilang/libminilang.a
 	gcc $(objects) $(LDFLAGS) -o $@
 
 clean:
-	rm rabs
+	rm -f rabs
+	rm -f *.o
+
+PREFIX = /usr
+install_bin = $(PREFIX)/bin
+
+install_exe = $(install_bin)/rabs
+
+$(install_exe): $(install_bin)/%: %
+	mkdir -p $(install_bin)
+	cp $< $@
+
+install: $(install_exe) 
