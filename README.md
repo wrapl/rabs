@@ -17,34 +17,53 @@ in a function call).
 ### Sample Code
 
 ```lua
-c_includes := fun(Source) do
+PLATFORM := defined("PLATFORM") or shell("uname"):trim
+OS := defined("OS")
+DEBUG := defined("DEBUG")
+
+CFLAGS := []
+LDFLAGS := []
+
+c_compile := fun(Object) do
+	var Source := Object % "c"
+	execute('gcc -c {CFLAGS} -o{Object} {Source}')
+end
+
+c_includes := fun(Target) do
 	var Files := []
-	var Lines := shell('gcc {CFLAGS} -I{Source:dir} -M -MG {Source}')
-	var Start, File := ""
-	var I := for J := 1 .. Lines:length do
-		if Lines[J, J + 2] = ": " then
-			exit J + 2
-		end
-	end
-	loop while I <= Lines:length
-		var Char := Lines[I]
-		if Char <= " " then
-			if File != "" then
-				Files:put(file(File))
-				File := ""
-			end
-		elseif Char = "\\" then
-			I := old + 1
-			Char := Lines[I]
-			if Char = " " then
-				File := '{old} '
-			end
-		else
-			File := '{old}{Char}'
-		end
-		I := old + 1
+	var Lines := shell('gcc -c {CFLAGS} -M -MG {Target:source}')
+	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( )"
+	Files:pop
+	for File in Files do
+		File := file(File:replace(r"\\ ", " "))
 	end
 	return Files
+end
+
+var SourceTypes := {
+	"c" is [c_includes, c_compile]
+}
+
+c_program := fun(Executable, Objects, Libraries) do
+	Objects := Objects or []
+	Libraries := Libraries or []
+	var Sources := []
+	for Object in Objects do
+		for Extension, Functions in SourceTypes do
+			var Source := Object % Extension
+			if Source:exists then
+				Sources:put(Source)
+				var Scan := Source:scan("INCLUDES", :true) => Functions[1]
+				Object[Source, Scan] => Functions[2]
+				exit
+			end
+		end
+	end
+	Executable[Objects, Libraries] => fun(Executable) do
+		execute('gcc', '-o', Executable, Objects, Libraries, LDFLAGS)
+		DEBUG or execute('strip', Executable)
+	end
+	DEFAULT[Executable]
 end
 ```
 

@@ -2,19 +2,6 @@ PLATFORM := defined("PLATFORM") or shell("uname"):trim
 OS := defined("OS")
 DEBUG := defined("DEBUG")
 
-if not OS then
-	if PLATFORM = "Linux" then
-		var File := open("/etc/os-release", "r"), Line
-		loop while Line := File:read
-			if Line[1, 4] = "ID=" then
-				OS := Line[4, 0]
-				exit
-			end
-		end
-		File:close
-	end
-end
-
 CFLAGS := []
 LDFLAGS := []
 
