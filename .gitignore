@@ -1,3 +1,7 @@
 /rabs
 /test/obj
 /test/_minibuild_.db*
+/bin/
+*.o
+*.a
+*cppcheck*
