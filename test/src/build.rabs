@@ -11,7 +11,7 @@ var Config := file("config") => fun(Target) do
 	var File := Target:open("w")
 	File:write("#!/bin/sh\n")
 	File:write("echo \"-g -O1 $TEST_CFLAGS\"\n")
-	File:close()
+	File:close
 	execute("chmod +x", Target)
 end
 

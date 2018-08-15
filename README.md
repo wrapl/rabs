@@ -69,7 +69,7 @@ end
 
 ## Usage
 
-### The Build Process
+### Targets
 
 Everything in the Rabs build tree is considered a _target_.
 Every target has a unique id, and every unique id corresponds to a unique target.
@@ -99,7 +99,7 @@ This will trigger other target to be rebuilt as required.
 Rabs executes minilang code within _contexts_. Each context maintains its own set of variables, and is associated with a directory in the file system.
 This directory is used to resolve relative file paths evaluated within the context.
 
-Contexts are hierarchical, each context has exactly one parent context (typically associated with the parent directory), and variables undefined in one context and searched for up the parent context chain.
+Contexts are hierarchical, each context has exactly one parent context (typically associated with the parent directory), and variables undefined in one context are searched for up the parent context chain.
 However, assigning a variable in a context only changes its value within that context and its children. 
 This means the variables defined in a context are automatically available to child contexts and that parent values of variables can be extended or modified within a context and its children without affected its parents. 
 
@@ -129,7 +129,7 @@ CFLAGS := old + ["-march=native"]
 ```
 
 Then `CFLAGS` will have the new value `["-O2", "-march=native"]` within the child context (and its children).
-Note before the assignment completes, the value of the parent context is used, allowing child contexts to extend the values of symbols from their parents.
+`old` in this case will refer to the value of the symbol before the assignment, i.e. the value of `CFLAGS` in the parent context. This allows child contexts to extend the values of symbols from their parents.
 
 Symbols are targets.
 When used in a build function, an automatic dependency on that symbol is added to the target being built.
@@ -149,10 +149,10 @@ var Main := file("main.o") => compile_c
 
 DEFAULT[Main]
 
-subdir("dir")
+subdir("test")
 ```
 
-And if the following `_minibuild_` script is in the folder `dir`:
+And if the following `_minibuild_` script is in the folder `test`:
 
 ```lua
 CFLAGS := old + ["-march=native"]

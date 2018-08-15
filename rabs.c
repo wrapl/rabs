@@ -19,7 +19,7 @@
 
 #define VERSION_STRING "1.2.0"
 
-const char *SystemName = "/_minibuild_";
+const char *SystemName = "build.rabs";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
 static int EchoCommands = 0;
@@ -102,7 +102,7 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	Path = concat(CurrentContext->Path, "/", Path, NULL);
 	//printf("Path = %s\n", Path);
 	mkdir_p(concat(RootPath, Path, NULL));
-	const char *FileName = concat(RootPath, Path, SystemName, NULL);
+	const char *FileName = concat(RootPath, Path, "/", SystemName, NULL);
 	//printf("FileName = %s\n", FileName);
 	FileName = vfs_resolve(FileName);
 	target_t *ParentDefault = CurrentContext->Default;
@@ -275,9 +275,10 @@ ml_value_t *rabs_open(void *Data, int Count, ml_value_t **Args) {
 }
 
 static const char *find_root(const char *Path) {
-	char *FileName = snew(strlen(Path) + strlen(SystemName) + 1);
+	char *FileName = snew(strlen(Path) + strlen(SystemName) + 2);
 	char *End = stpcpy(FileName, Path);
-	strcpy(End, SystemName);
+	End[0] = '/';
+	strcpy(End + 1, SystemName);
 	char Line[strlen("-- ROOT --\n")];
 	FILE *File = 0;
 loop:
@@ -294,7 +295,7 @@ loop:
 	}
 	while (--End > FileName) {
 		if (*End == '/') {
-			strcpy(End, SystemName);
+			strcpy(End + 1, SystemName);
 			goto loop;
 		}
 	}
@@ -442,6 +443,14 @@ int main(int Argc, char **Argv) {
 				}
 				break;
 			}
+			case 'F': {
+				if (Argv[I][2]) {
+					SystemName = Argv[I] + 2;
+				} else {
+					SystemName = Argv[++I];
+				}
+				break;
+			}
 			case 'i': {
 				InteractiveMode = 1;
 				break;
@@ -465,6 +474,10 @@ int main(int Argc, char **Argv) {
 	CurrentDirectory = Path;
 	RootPath = find_root(Path);
 	if (!RootPath) {
+		SystemName = "_minibuild_";
+		RootPath = find_root(Path);
+	}
+	if (!RootPath) {
 		puts("\e[31mError: could not find project root\e[0m");
 		exit(1);
 	}
@@ -481,7 +494,7 @@ int main(int Argc, char **Argv) {
 		target_threads_start(NumThreads);
 	}
 
-	load_file(concat(RootPath, SystemName, NULL));
+	load_file(concat(RootPath, "/", SystemName, NULL));
 	target_t *Target;
 	if (TargetName) {
 		int HasPrefix = !strncmp(TargetName, "meta:", strlen("meta:"));
