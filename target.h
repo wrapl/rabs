@@ -30,6 +30,7 @@ struct target_t {
 
 extern int StatusUpdates;
 extern int MonitorFiles;
+extern int DebugThreads;
 extern pthread_mutex_t GlobalLock[1];
 
 void target_init();

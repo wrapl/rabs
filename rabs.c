@@ -455,6 +455,10 @@ int main(int Argc, char **Argv) {
 				InteractiveMode = 1;
 				break;
 			}
+			case 'd': {
+				DebugThreads = 1;
+				break;
+			}
 			/*case 'w': {
 				targetwatch_init();
 				MonitorFiles = 1;
