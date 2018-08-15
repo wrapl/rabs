@@ -36,7 +36,7 @@ static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 		target_depends_auto(Target);
 		return Value;
 	} else {
-		return stringmap_search(Globals, Name) ?: ml_error("NameError", "%s undefined", Name);
+		return stringmap_search(Globals, Name) ?: MLNil; //ml_error("NameError", "%s undefined", Name);
 	}
 }
 
@@ -106,11 +106,11 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	//printf("FileName = %s\n", FileName);
 	FileName = vfs_resolve(FileName);
 	target_t *ParentDefault = CurrentContext->Default;
-	context_push(Path);
+	context_t *Context = context_push(Path);
 	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	load_file(FileName);
 	context_pop();
-	return MLNil;
+	return (ml_value_t*)Context->Default;
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
