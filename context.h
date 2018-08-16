@@ -8,6 +8,7 @@
 typedef struct context_t context_t;
 
 struct context_t {
+	const ml_type_t *Type;
 	context_t *Parent;
 	const char *Path, *Name, *FullPath;
 	struct target_t *Default;

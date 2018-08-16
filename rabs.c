@@ -110,14 +110,14 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	load_file(FileName);
 	context_pop();
-	return (ml_value_t*)Context->Default;
+	return (ml_value_t*)Context;
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
-	context_scope(Name);
+	context_t *Context = context_scope(Name);
 	ml_value_t *Result = ml_call(Args[1], 0, NULL);
 	if (Result->Type == MLErrorT) {
 		printf("Error: %s\n", ml_error_message(Result));
@@ -127,7 +127,7 @@ ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 		exit(1);
 	}
 	context_pop();
-	return MLNil;
+	return (ml_value_t *)Context;
 }
 
 ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
