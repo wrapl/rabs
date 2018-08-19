@@ -224,10 +224,10 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
-	if (!Path[0]) {
-		Path = concat(RootPath, CurrentContext->Path, NULL);
-	} else if (Path[0] != '/') {
+	if (Path[0]) {
 		Path = concat(RootPath, CurrentContext->Path, "/", Path, NULL);
+	} else if (Path[0] != '/') {
+		Path = concat(RootPath, CurrentContext->Path, NULL);
 	}
 	Path = vfs_unsolve(Path);
 	const char *Relative = match_prefix(Path, RootPath);
@@ -421,7 +421,12 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	if (ml_string_length(Args[1]) == 0) return Args[0];
-	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), NULL);
+	const char *Path;
+	if (FileTarget->Path[0]) {
+		Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), NULL);
+	} else {
+		Path = ml_string_value(Args[1]);
+	}
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
 	return (ml_value_t *)Target;
 }
