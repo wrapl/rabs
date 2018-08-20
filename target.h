@@ -42,6 +42,7 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args);
 ml_value_t *target_depends_auto_value(void *Data, int Count, ml_value_t **Args);
 
 target_t *target_symb_new(const char *Name);
+void target_symb_update(const char *Name);
 
 void target_depends_add(target_t *Target, target_t *Depend);
 void target_depends_auto(target_t *Depend);

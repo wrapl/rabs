@@ -96,9 +96,11 @@ void target_recheck(target_t *Target) {
 }
 
 void target_depends_auto(target_t *Depend) {
-	if (CurrentTarget && CurrentTarget != Depend) targetset_insert(CurrentTarget->Depends, Depend);
-	target_queue(Depend, 0);
-	target_wait(Depend, CurrentTarget);
+	if (CurrentTarget && CurrentTarget != Depend) {
+		targetset_insert(CurrentTarget->Depends, Depend);
+		target_queue(Depend, 0);
+		target_wait(Depend, CurrentTarget);
+	}
 }
 
 static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_t **Slot) {
@@ -421,7 +423,12 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	if (ml_string_length(Args[1]) == 0) return Args[0];
-	const char *Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), NULL);
+	const char *Path;
+	if (FileTarget->Path[0]) {
+		Path = concat(FileTarget->Path, "/", ml_string_value(Args[1]), NULL);
+	} else {
+		Path = ml_string_value(Args[1]);
+	}
 	target_t *Target = target_file_check(Path, FileTarget->Absolute);
 	return (ml_value_t *)Target;
 }
@@ -618,12 +625,16 @@ static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Arg
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_expr_t *Target = (target_expr_t *)Args[1];
 	target_depends_auto((target_t *)Target);
+	target_queue((target_t *)Target, 0);
+	target_wait((target_t *)Target, CurrentTarget);
 	return ml_inline(AppendMethod, 2, Buffer, Target->Value);
 }
 
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
 	target_expr_t *Target = (target_expr_t *)Args[0];
 	target_depends_auto((target_t *)Target);
+	target_queue((target_t *)Target, 0);
+	target_wait((target_t *)Target, CurrentTarget);
 	return ml_inline(StringMethod, 1, Target->Value);
 }
 
@@ -777,6 +788,22 @@ target_t *target_symb_new(const char *Name) {
 		Target->Name = Name;
 	}
 	return Slot[0];
+}
+
+void target_symb_update(const char *Name) {
+	target_t *Target = target_symb_new(Name);
+	BYTE Previous[SHA256_BLOCK_SIZE];
+	int LastUpdated, LastChecked;
+	time_t FileTime = 0;
+	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
+	FileTime = target_hash(Target, FileTime, Previous);
+	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
+		Target->LastUpdated = CurrentVersion;
+		cache_hash_set(Target, FileTime);
+	} else {
+		Target->LastUpdated = LastUpdated;
+		cache_last_check_set(Target, FileTime);
+	}
 }
 
 static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
@@ -1047,13 +1074,13 @@ void target_update(target_t *Target) {
 			DependsLastUpdated = CurrentVersion;
 		}
 	}
-	targetset_foreach(Target->Depends, 0, (void *)target_queue);
+	targetset_foreach(Target->Depends, Target->Parent, (void *)target_queue);
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
 	if (DependsLastUpdated < CurrentVersion) {
 		targetset_t *Depends = cache_depends_get(Target);
 		if (Depends) {
-			targetset_foreach(Depends, 0, (void *)target_queue);
+			targetset_foreach(Depends, Target->Parent, (void *)target_queue);
 			targetset_foreach(Depends, Target, (void *)target_wait);
 			targetset_foreach(Depends, &DependsLastUpdated, (void *)target_depends_fn);
 		}

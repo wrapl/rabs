@@ -1,7 +1,12 @@
 /rabs
 /test/obj
-/test/_minibuild_.db*
+build.rabs.db*
 /bin/
 *.o
 *.a
 *cppcheck*
+/.README.md.html
+/.cproject
+/.project
+/.settings
+/.vscode
