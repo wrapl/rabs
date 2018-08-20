@@ -42,6 +42,7 @@ static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 
 static ml_value_t *rabs_ml_set(void *Data, const char *Name, ml_value_t *Value) {
 	context_symb_set(CurrentContext, Name, Value);
+	//target_symb_update(Name);
 	return Value;
 }
 

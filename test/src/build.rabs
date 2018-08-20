@@ -36,7 +36,9 @@ var Generated := file("generated")["GENFLAGS"] => fun(Generated) do
 	Generated:open("w"):close
 end
 
-CFLAGS := old + ['-I{file("test.h"):dir(:true)}']
+CFLAGS := old + ['-I{file("test.h"):dirname}', '-O3']
+
+print('CFLAGS = {CFLAGS}\n')
 
 var ScanTest := Generated:scan("ScanTest") => fun() do
 	var Objects := []
