@@ -53,7 +53,6 @@ target_t *target_file_check(const char *Path, int Absolute);
 void target_threads_start(int NumThreads);
 void target_threads_wait(target_t *Target);
 void target_interactive_start(int NumThreads);
-void target_recheck(target_t *Target);
 
 int target_wait(target_t *Target, target_t *Waiter);
 int target_queue(target_t *Target, target_t *Parent);

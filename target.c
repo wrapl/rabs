@@ -74,27 +74,6 @@ static build_thread_t *BuildThreads = 0;
 static __thread build_thread_t *CurrentThread = 0;
 static int RunningThreads = 0, LastThread = 0;
 
-static int affects_refresh_fn(target_t *Affect, target_t *Target) {
-	printf("%s -> %s\n", Target->Id, Affect->Id);
-	if (Affect->LastUpdated != STATE_QUEUED) {
-		Affect->LastUpdated = STATE_QUEUED;
-		++QueuedTargets;
-		targetset_foreach(Affect->Affects, Affect, (void *)affects_refresh_fn);
-	}
-	if (!targetset_insert(Affect->Depends, Target)) ++Affect->WaitCount;
-	return 0;
-}
-
-void target_recheck(target_t *Target) {
-	/*if (Target == (target_t *)-1) restart();
-	printf("Rechecking %s\n", Target->Id);
-	cache_bump_version();
-	++QueuedTargets;
-	targetset_foreach(Target->Affects, Target, (void *)affects_refresh_fn);
-	target_queue_build(Target);
-	pthread_cond_broadcast(TargetAvailable);*/
-}
-
 void target_depends_auto(target_t *Depend) {
 	if (CurrentTarget && CurrentTarget != Depend) {
 		targetset_insert(CurrentTarget->Depends, Depend);
@@ -693,11 +672,6 @@ ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-ml_value_t *target_recheck_value(void *Data, int Count, ml_value_t **Args) {
-	target_recheck((target_t *)Args[0]);
-	return Args[0];
-}
-
 struct target_scan_t {
 	TARGET_FIELDS
 	const char *Name;
@@ -1127,7 +1101,6 @@ void target_update(target_t *Target) {
 				targetset_foreach(Scans, Target, (void *)target_wait);
 			}
 			cache_build_hash_set(Target);
-			cache_depends_set(Target, Target->Depends);
 
 			CurrentDirectory = OldDirectory;
 			CurrentContext = OldContext;
@@ -1146,6 +1119,7 @@ void target_update(target_t *Target) {
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 		Target->LastUpdated = CurrentVersion;
 		cache_hash_set(Target, FileTime);
+		cache_depends_set(Target, Target->Depends);
 	} else {
 		Target->LastUpdated = LastUpdated;
 		cache_last_check_set(Target, FileTime);
@@ -1179,7 +1153,6 @@ static void *target_thread_fn(void *Arg) {
 	for (;;) {
 		while (!NextTarget) {
 			if (DebugThreads) CurrentThread->Status = BUILD_IDLE;
-			//printf("[%d]: No target in build queue, %d threads running\n", Index, RunningThreads);
 			if (--RunningThreads == 0) {
 				pthread_cond_signal(TargetAvailable);
 				pthread_mutex_unlock(GlobalLock);
@@ -1192,34 +1165,6 @@ static void *target_thread_fn(void *Arg) {
 		NextTarget = Target->Next;
 		if (Target->LastUpdated == STATE_QUEUED) target_update(Target);
 	}
-	return 0;
-}
-
-static void *active_mode_thread_fn(void *Arg) {
-	/*CurrentThread = (build_thread_t *)Arg;
-	const char *Path = getcwd(NULL, 0);
-	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
-	CurrentDirectory = strcpy(Path2, Path);
-	printf("Starting build thread #%d\n", (int)Index);
-	pthread_mutex_lock(GlobalLock);
-	++RunningThreads;
-	for (;;) {
-		while (!BuildQueue) {
-			//printf("[%d]: No target in build queue, %d threads running\n", BuildThread->Id, RunningThreads);
-			pthread_cond_wait(TargetAvailable, GlobalLock);
-		}
-		target_t *Target = BuildQueue;
-		BuildQueue = Target->Next;
-		Target->Next = 0;
-		target_do_build(Index, Target);
-		if (SpareThreads) {
-			--RunningThreads;
-			--SpareThreads;
-			pthread_cond_signal(TargetAvailable);
-			pthread_mutex_unlock(GlobalLock);
-			return 0;
-		}
-	}*/
 	return 0;
 }
 
@@ -1247,14 +1192,14 @@ void target_interactive_start(int NumThreads) {
 	RunningThreads = 0;
 	pthread_mutex_init(GlobalLock, NULL);
 	pthread_mutex_lock(GlobalLock);
-	for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
+	/*for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
 		build_thread_t *BuildThread = new(build_thread_t);
 		BuildThread->Id = LastThread;
 		BuildThread->Status = BUILD_IDLE;
 		GC_pthread_create(&BuildThread->Handle, 0, active_mode_thread_fn, BuildThread);
 		BuildThread->Next = BuildThreads;
 		BuildThreads = BuildThread;
-	}
+	}*/
 	pthread_cond_broadcast(TargetAvailable);
 	pthread_mutex_unlock(GlobalLock);
 }
@@ -1267,7 +1212,6 @@ void target_threads_wait(target_t *Target) {
 		GC_pthread_join(BuildThreads->Handle, 0);
 		BuildThreads = BuildThreads->Next;
 	}
-	//stringmap_foreach(TargetCache, 0, (void *)print_unbuilt_target);
 }
 
 #define target_file_methods_is(TYPE) \
@@ -1294,7 +1238,6 @@ void target_init() {
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);
 	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, NULL);
 	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, NULL);
-	ml_method_by_name("refresh", 0, target_recheck_value, TargetT, NULL);
 	ml_method_by_name("source", 0, target_scan_source, ScanTargetT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
