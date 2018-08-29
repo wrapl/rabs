@@ -55,7 +55,7 @@ static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 static target_t *NextTarget = 0;
 
 static void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]);
-static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]);
+static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
 static int target_missing(target_t *Target, int LastChecked);
 
 typedef enum {BUILD_IDLE, BUILD_WAIT, BUILD_EXEC} build_thread_status_t;
@@ -76,7 +76,7 @@ static int RunningThreads = 0, LastThread = 0;
 
 void target_depends_auto(target_t *Depend) {
 	if (CurrentTarget && CurrentTarget != Depend) {
-		targetset_insert(CurrentTarget->Depends, Depend);
+		targetset_insert(CurrentTarget->BuildDepends, Depend);
 		target_queue(Depend, 0);
 		target_wait(Depend, CurrentTarget);
 	}
@@ -574,9 +574,13 @@ struct target_meta_t {
 
 static ml_type_t *MetaTargetT;
 
-static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
-	memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
-	memcpy(Target->Hash, &Target->DependsLastUpdated, sizeof(Target->DependsLastUpdated));
+static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
+	if (DependsLastUpdated == CurrentVersion) {
+		memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
+		memcpy(Target->Hash, &DependsLastUpdated, sizeof(DependsLastUpdated));
+	} else {
+		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
+	}
 	return 0;
 }
 
@@ -685,7 +689,7 @@ static ml_type_t *ScanTargetT;
 
 static int scan_affects_fn(target_t *Target, target_t *Scan) {
 	//targetset_insert(Target->Affects, Scan);
-	targetset_insert(Scan->Depends, Target);
+	targetset_insert(Scan->BuildDepends, Target);
 	return 0;
 }
 
@@ -770,7 +774,7 @@ void target_symb_update(const char *Name) {
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
-	FileTime = target_hash(Target, FileTime, Previous);
+	FileTime = target_hash(Target, FileTime, Previous, 0);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 		Target->LastUpdated = CurrentVersion;
 		cache_hash_set(Target, FileTime);
@@ -881,9 +885,9 @@ void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	}
 }
 
-static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (Target->Type == FileTargetT) return target_file_hash((target_file_t *)Target, PreviousTime, PreviousHash);
-	if (Target->Type == MetaTargetT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == MetaTargetT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash, DependsLastUpdated);
 	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == SymbTargetT) return target_symb_hash((target_symb_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == ExprTargetT) return target_expr_hash((target_expr_t *)Target, PreviousTime, PreviousHash);
@@ -1020,6 +1024,21 @@ static void target_rebuild(target_t *Target) {
 	}
 }
 
+int target_find_leaves(target_t *Target, targetset_t *Leaves) {
+	if (Target->Build || targetset_size(Target->Depends)) {
+		targetset_foreach(Target->Depends, Leaves, (void *)target_find_leaves);
+		targetset_foreach(Target->BuildDepends, Leaves, (void *)target_find_leaves);
+	} else {
+		targetset_insert(Leaves, Target);
+	}
+	return 0;
+}
+
+int targetset_print(target_t *Target, void *Data) {
+	printf("\t%s\n", Target->Id);
+	return 0;
+}
+
 void target_update(target_t *Target) {
 	if (DebugThreads) {
 		for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
@@ -1036,22 +1055,30 @@ void target_update(target_t *Target) {
 			}
 		}
 	}
-	//printf("target_update(%s)\n", Target->Id);
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
-	BYTE PreviousBuild[SHA256_BLOCK_SIZE];
+	BYTE PreviousBuildHash[SHA256_BLOCK_SIZE];
+	BYTE BuildHash[SHA256_BLOCK_SIZE];
 	if (Target->Build && Target->Build->Type == MLClosureT) {
-		ml_closure_sha256(Target->Build, Target->BuildHash);
-		cache_build_hash_get(Target, PreviousBuild);
-		if (memcmp(PreviousBuild, Target->BuildHash, SHA256_BLOCK_SIZE)) {
+		ml_closure_sha256(Target->Build, BuildHash);
+		cache_build_hash_get(Target, PreviousBuildHash);
+		if (memcmp(PreviousBuildHash, BuildHash, SHA256_BLOCK_SIZE)) {
 			//printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
 			DependsLastUpdated = CurrentVersion;
 		}
+	} else {
+		memset(BuildHash, 0, sizeof(SHA256_BLOCK_SIZE));
 	}
 	targetset_foreach(Target->Depends, Target->Parent, (void *)target_queue);
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
-	if (DependsLastUpdated < CurrentVersion) {
+
+	BYTE Previous[SHA256_BLOCK_SIZE];
+	int LastUpdated, LastChecked, Skipped = 0;
+	time_t FileTime = 0;
+	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
+	//printf("\e[34m Update \e[32m%s\e[0m last checked at %d\e[0m\n", Target->Id, LastChecked);
+	if (DependsLastUpdated <= LastChecked) {
 		targetset_t *Depends = cache_depends_get(Target);
 		if (Depends) {
 			targetset_foreach(Depends, Target->Parent, (void *)target_queue);
@@ -1059,10 +1086,7 @@ void target_update(target_t *Target) {
 			targetset_foreach(Depends, &DependsLastUpdated, (void *)target_depends_fn);
 		}
 	}
-	BYTE Previous[SHA256_BLOCK_SIZE];
-	int LastUpdated, LastChecked, Skipped = 0;
-	time_t FileTime = 0;
-	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
+
 	if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
 		//printf("\e[34m rebuilding %s\e[0m\n", Target->Id);
 		//asm("int3");
@@ -1090,17 +1114,23 @@ void target_update(target_t *Target) {
 				((target_expr_t *)Target)->Value = Result;
 				cache_expr_set(Target, Result);
 			} else if (Target->Type == ScanTargetT) {
-				targetset_t *Scans = new(targetset_t);
+				targetset_t Scans[1] = {TARGETSET_INIT};
 				targetset_init(Scans, ml_list_length(Result));
 				ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 				cache_scan_set(Target, Scans);
-				if (((target_scan_t *)Target)->Recursive) {
+				/*if (((target_scan_t *)Target)->Recursive) {
 					targetset_foreach(Scans, Target, (void *)scan_affects_fn);
-				}
+				}*/
 				targetset_foreach(Scans, 0, (void *)target_queue);
 				targetset_foreach(Scans, Target, (void *)target_wait);
+				targetset_foreach(Scans, Target->BuildDepends, (void *)target_find_leaves);
+
+				//printf("scans(%s) = \n", Target->Id);
+				//targetset_foreach(Scans, 0, targetset_print);
+				//printf("leaves(%s) = \n", Target->Id);
+				//targetset_foreach(Target->BuildDepends, 0, targetset_print);
 			}
-			cache_build_hash_set(Target);
+			cache_build_hash_set(Target, BuildHash);
 
 			CurrentDirectory = OldDirectory;
 			CurrentContext = OldContext;
@@ -1113,13 +1143,16 @@ void target_update(target_t *Target) {
 			targetset_t *Scans = cache_scan_get(Target);
 			targetset_foreach(Scans, Target, (void *)target_queue);
 			targetset_foreach(Scans, Target, (void *)target_wait);
+
+			//printf("scans(%s) = \n", Target->Id);
+			//targetset_foreach(Scans, 0, targetset_print);
 		}
 	}
-	FileTime = target_hash(Target, FileTime, Previous);
+	FileTime = target_hash(Target, FileTime, Previous, DependsLastUpdated);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 		Target->LastUpdated = CurrentVersion;
 		cache_hash_set(Target, FileTime);
-		cache_depends_set(Target, Target->Depends);
+		cache_depends_set(Target, Target->BuildDepends);
 	} else {
 		Target->LastUpdated = LastUpdated;
 		cache_last_check_set(Target, FileTime);

@@ -53,3 +53,12 @@ var ScanTest := Generated:scan("ScanTest") => fun() do
 end
 
 DEFAULT[ScanTest]
+
+if defined("TEST2") then
+	var Target := file("test.txt") => fun(Target) do
+		var File := Target:open("w")
+		File:write("Hello")
+		File:close
+	end
+	DEFAULT[Target]
+end
