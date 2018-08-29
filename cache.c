@@ -192,9 +192,9 @@ void cache_build_hash_get(target_t *Target, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	sqlite3_reset(HashBuildGetStatement);
 }
 
-void cache_build_hash_set(target_t *Target) {
+void cache_build_hash_set(target_t *Target, BYTE BuildHash[SHA256_BLOCK_SIZE]) {
 	sqlite3_bind_text(HashBuildSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_bind_blob(HashBuildSetStatement, 2, Target->BuildHash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
+	sqlite3_bind_blob(HashBuildSetStatement, 2, BuildHash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
 	sqlite3_step(HashBuildSetStatement);
 	sqlite3_reset(HashBuildSetStatement);
 }

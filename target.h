@@ -17,12 +17,11 @@ typedef struct target_t target_t;
 	struct context_t *BuildContext; \
 	const char *Id; \
 	targetset_t Depends[1]; \
-	targetset_t Affects[1]; \
-	int WaitCount, DependsLastUpdated, LastUpdated; \
-	int DependsChecked, BuildChecked, IdLength; \
+	targetset_t BuildDepends[1]; \
+	int LastUpdated; \
+	int IdLength; \
 	unsigned long IdHash; \
-	BYTE Hash[SHA256_BLOCK_SIZE]; \
-	BYTE BuildHash[SHA256_BLOCK_SIZE];
+	BYTE Hash[SHA256_BLOCK_SIZE];
 
 struct target_t {
 	TARGET_FIELDS
@@ -53,7 +52,6 @@ target_t *target_file_check(const char *Path, int Absolute);
 void target_threads_start(int NumThreads);
 void target_threads_wait(target_t *Target);
 void target_interactive_start(int NumThreads);
-void target_recheck(target_t *Target);
 
 int target_wait(target_t *Target, target_t *Waiter);
 int target_queue(target_t *Target, target_t *Parent);

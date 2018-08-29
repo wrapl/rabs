@@ -13,7 +13,7 @@ void cache_close();
 void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, BYTE Digest[SHA256_BLOCK_SIZE]);
 void cache_hash_set(target_t *Target, time_t FileTime);
 void cache_build_hash_get(target_t *Target, BYTE Hash[SHA256_BLOCK_SIZE]);
-void cache_build_hash_set(target_t *Target);
+void cache_build_hash_set(target_t *Target, BYTE BuildHash[SHA256_BLOCK_SIZE]);
 void cache_last_check_set(target_t *Target, time_t FileTime);
 
 targetset_t *cache_depends_get(target_t *Target);
