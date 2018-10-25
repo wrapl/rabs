@@ -900,7 +900,6 @@ static int target_missing(target_t *Target, int LastChecked) {
 }
 
 target_t *target_find(const char *Id) {
-	//if (!strcmp(Id, "file:dev/obj/lib/Gir/Gio/Settings.c")) asm("int3");
 	target_t **Slot = targetcache_lookup(Id);
 	if (Slot[0]) return Slot[0];
 	if (!memcmp(Id, "file:", 5)) {
@@ -968,7 +967,6 @@ target_t *target_find(const char *Id) {
 		return (target_t *)Target;
 	}
 	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
-	asm("int3");
 	return 0;
 }
 
@@ -1089,7 +1087,6 @@ void target_update(target_t *Target) {
 
 	if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
 		//printf("\e[34m rebuilding %s\e[0m\n", Target->Id);
-		//asm("int3");
 		if (!Target->Build && Target->Parent) target_rebuild(Target->Parent);
 		if (DebugThreads) {
 			CurrentThread->Status = BUILD_EXEC;
