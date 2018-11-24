@@ -111,7 +111,7 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	load_file(FileName);
 	context_pop();
-	return (ml_value_t*)Context;
+	return (ml_value_t *)Context;
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
