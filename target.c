@@ -22,8 +22,7 @@
 enum {
 	STATE_UNCHECKED = 0,
 	STATE_CHECKING = -1,
-	STATE_QUEUED = -2,
-	STATE_BUILDING = -3
+	STATE_QUEUED = -2
 };
 
 typedef struct target_file_t target_file_t;
@@ -900,7 +899,6 @@ static int target_missing(target_t *Target, int LastChecked) {
 }
 
 target_t *target_find(const char *Id) {
-	//if (!strcmp(Id, "file:dev/obj/lib/Gir/Gio/Settings.c")) asm("int3");
 	target_t **Slot = targetcache_lookup(Id);
 	if (Slot[0]) return Slot[0];
 	if (!memcmp(Id, "file:", 5)) {
@@ -968,7 +966,6 @@ target_t *target_find(const char *Id) {
 		return (target_t *)Target;
 	}
 	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
-	asm("int3");
 	return 0;
 }
 
@@ -976,15 +973,45 @@ target_t *target_get(const char *Id) {
 	return *targetcache_lookup(Id);
 }
 
-int target_print_fn(const char *TargetId, target_t *Target, void *Data) {
+int target_print(target_t *Target, void *Data) {
 	printf("%s\n", Target->Id);
 	return 0;
 }
 
 int target_queue(target_t *Target, target_t *Parent) {
-	if (Target->LastUpdated == STATE_UNCHECKED) {
+	/*if (Target->LastUpdated == STATE_UNCHECKED) {
 		++QueuedTargets;
 		Target->Parent = Parent;
+		Target->LastUpdated = STATE_QUEUED;
+		Target->Next = NextTarget;
+		NextTarget = Target;
+		pthread_cond_broadcast(TargetAvailable);
+	}*/
+
+	if (Target->LastUpdated > 0) return 0;
+	if (Parent) {
+		Parent->WaitCount += targetset_insert(Target->Affects, Parent);
+	}
+	if (Target->LastUpdated == STATE_UNCHECKED) {
+		//Target->Parent = Parent;
+		targetset_foreach(Target->Depends, Target, (void *)target_queue);
+		if (Target->WaitCount == 0) {
+			++QueuedTargets;
+			Target->LastUpdated = STATE_QUEUED;
+			Target->Next = NextTarget;
+			NextTarget = Target;
+			pthread_cond_broadcast(TargetAvailable);
+		}
+	}
+
+	return 0;
+}
+
+int target_affect(target_t *Target, target_t *Depend) {
+	--Target->WaitCount;
+	if (Target->LastUpdated == STATE_UNCHECKED && Target->WaitCount == 0) {
+		//if (!strcmp(Target->Id, "scan*:file:dev/obj/lib/Markdown/Parser.c::INCLUDES")) asm("int3");
+		++QueuedTargets;
 		Target->LastUpdated = STATE_QUEUED;
 		Target->Next = NextTarget;
 		NextTarget = Target;
@@ -1034,6 +1061,10 @@ int target_find_leaves(target_t *Target, targetset_t *Leaves) {
 	return 0;
 }
 
+int target_set_parent(target_t *Target, target_t *Parent) {
+	if (!Target->Parent) Target->Parent = Parent;
+}
+
 int targetset_print(target_t *Target, void *Data) {
 	printf("\t%s\n", Target->Id);
 	return 0;
@@ -1041,7 +1072,9 @@ int targetset_print(target_t *Target, void *Data) {
 
 void target_update(target_t *Target) {
 	if (DebugThreads) {
+		printf("\033[2J\033[H");
 		for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
+			if (Thread == CurrentThread) printf("\e[32m");
 			switch (Thread->Status) {
 			case BUILD_IDLE:
 				printf("Thread %2d IDLE\n", Thread->Id);
@@ -1053,7 +1086,9 @@ void target_update(target_t *Target) {
 				printf("Thread %2d EXEC\t%s\n", Thread->Id, Thread->Target->Id);
 				break;
 			}
+			printf("\e[0m");
 		}
+		printf("\n\n");
 	}
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
@@ -1069,7 +1104,8 @@ void target_update(target_t *Target) {
 	} else {
 		memset(BuildHash, 0, sizeof(SHA256_BLOCK_SIZE));
 	}
-	targetset_foreach(Target->Depends, Target->Parent, (void *)target_queue);
+	targetset_foreach(Target->Depends, Target, (void *)target_queue);
+	targetset_foreach(Target->Depends, Target->Parent, (void *)target_set_parent);
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
 
@@ -1081,7 +1117,8 @@ void target_update(target_t *Target) {
 	if (DependsLastUpdated <= LastChecked) {
 		targetset_t *Depends = cache_depends_get(Target);
 		if (Depends) {
-			targetset_foreach(Depends, Target->Parent, (void *)target_queue);
+			targetset_foreach(Depends, Target, (void *)target_queue);
+			targetset_foreach(Depends, Target->Parent, (void *)target_set_parent);
 			targetset_foreach(Depends, Target, (void *)target_wait);
 			targetset_foreach(Depends, &DependsLastUpdated, (void *)target_depends_fn);
 		}
@@ -1089,7 +1126,6 @@ void target_update(target_t *Target) {
 
 	if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
 		//printf("\e[34m rebuilding %s\e[0m\n", Target->Id);
-		//asm("int3");
 		if (!Target->Build && Target->Parent) target_rebuild(Target->Parent);
 		if (DebugThreads) {
 			CurrentThread->Status = BUILD_EXEC;
@@ -1142,6 +1178,7 @@ void target_update(target_t *Target) {
 		} else if (Target->Type == ScanTargetT) {
 			targetset_t *Scans = cache_scan_get(Target);
 			targetset_foreach(Scans, Target, (void *)target_queue);
+			targetset_foreach(Scans, Target, (void *)target_set_parent);
 			targetset_foreach(Scans, Target, (void *)target_wait);
 
 			//printf("scans(%s) = \n", Target->Id);
@@ -1160,9 +1197,15 @@ void target_update(target_t *Target) {
 	++BuiltTargets;
 	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to version %d\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id, Target->LastUpdated);
 	pthread_cond_broadcast(TargetUpdated);
+
+	targetset_foreach(Target->Affects, Target, (void *)target_affect);
 }
 
 int target_wait(target_t *Target, target_t *Waiter) {
+	if (Target->LastUpdated == STATE_UNCHECKED) {
+		++QueuedTargets;
+		Target->LastUpdated = STATE_QUEUED;
+	}
 	if (Target->LastUpdated == STATE_QUEUED) {
 		target_update(Target);
 	} else while (Target->LastUpdated == STATE_CHECKING) {
@@ -1172,6 +1215,10 @@ int target_wait(target_t *Target, target_t *Waiter) {
 		}
 		//fprintf(stderr, "\e[31m%s waiting on %s\n\e[0m", Waiter->Id, Target->Id);
 		pthread_cond_wait(TargetUpdated, GlobalLock);
+	}
+	if (DebugThreads) {
+		CurrentThread->Status = BUILD_EXEC;
+		CurrentThread->Target = Waiter;
 	}
 	return 0;
 }

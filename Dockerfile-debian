@@ -1,0 +1,22 @@
+FROM i386/debian:sid-slim AS build
+
+RUN apt-get update && apt-get install -y \
+	build-essential \
+	libsqlite3-dev \
+	libgc-dev
+
+RUN apt-get clean
+
+ADD . /tmp/rabs
+
+WORKDIR /tmp/rabs
+
+RUN git submodule init
+
+RUN make
+
+RUN make install
+
+WORKDIR /
+
+RUN rm -rf /tmp/rabs

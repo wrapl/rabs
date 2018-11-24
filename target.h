@@ -16,8 +16,10 @@ typedef struct target_t target_t;
 	ml_value_t *Build; \
 	struct context_t *BuildContext; \
 	const char *Id; \
+	targetset_t Affects[1]; \
 	targetset_t Depends[1]; \
 	targetset_t BuildDepends[1]; \
+	int WaitCount; \
 	int LastUpdated; \
 	int IdLength; \
 	unsigned long IdHash; \

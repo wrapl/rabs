@@ -46,12 +46,12 @@ int targetset_insert(targetset_t *Set, target_t *Target) {
 		Set->Size = INITIAL_SIZE;
 		Set->Space = INITIAL_SIZE - 1;
 		Targets[Hash & (INITIAL_SIZE - 1)] = Target;
-		return 0;
+		return 1;
 	}
 	int Mask = Set->Size - 1;
 	int Index = Hash & Mask;
 	for (;;) {
-		if (Targets[Index] == Target) return 1;
+		if (Targets[Index] == Target) return 0;
 		if (Targets[Index] < Target) break;
 		Index += Incr;
 		Index &= Mask;
@@ -74,7 +74,7 @@ int targetset_insert(targetset_t *Set, target_t *Target) {
 				Index &= Mask;
 			}
 		}
-		return 0;
+		return 1;
 	}
 	int NewSize = Set->Size * 2;
 	target_t **NewTargets = anew(target_t *, NewSize + 1);
@@ -95,7 +95,7 @@ int targetset_insert(targetset_t *Set, target_t *Target) {
 	Set->Space += Set->Size;
 	Set->Size = NewSize;
 	Set->Targets = NewTargets;
-	return 0;
+	return 1;
 }
 
 int targetset_foreach(targetset_t *Set, void *Data, int (*callback)(target_t *, void *)) {

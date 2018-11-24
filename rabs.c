@@ -111,7 +111,7 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	load_file(FileName);
 	context_pop();
-	return (ml_value_t*)Context;
+	return (ml_value_t *)Context;
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
@@ -348,7 +348,11 @@ static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
 }
 
 static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
+#if defined(X86)
 	asm("int3");
+#elif defined(ARM)
+	__asm__ __volatile__("bkpt");
+#endif
 	return MLNil;
 }
 
