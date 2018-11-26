@@ -31,6 +31,7 @@ rabs: Makefile $(objects) *.h minilang/libminilang.a
 	gcc $(objects) $(LDFLAGS) -o $@
 
 clean:
+	make -C minilang clean
 	rm -f rabs
 	rm -f *.o
 
