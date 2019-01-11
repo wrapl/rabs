@@ -133,4 +133,5 @@ target_t **targetcache_lookup(const char *Id) {
 		SpaceA += SizeA;
 		SizeA = NewSize;
 	}
+	return 0;
 }

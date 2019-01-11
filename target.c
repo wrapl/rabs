@@ -681,16 +681,9 @@ struct target_scan_t {
 	target_t *Source;
 	targetset_t *Scans;
 	ml_value_t *Rebuild;
-	int Recursive;
 };
 
 static ml_type_t *ScanTargetT;
-
-static int scan_affects_fn(target_t *Target, target_t *Scan) {
-	//targetset_insert(Target->Affects, Scan);
-	targetset_insert(Scan->BuildDepends, Target);
-	return 0;
-}
 
 static int depends_hash_fn(target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
@@ -716,14 +709,12 @@ static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	target_t *Source = (target_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
-	int Recursive = (Count > 2) && Args[2] != MLNil;
-	const char *Id = concat(Recursive ? "scan*:" : "scan:", Source->Id, "::", Name, NULL);
+	const char *Id = concat("scan:", Source->Id, "::", Name, NULL);
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
 		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Slot);
 		Target->Source = Source;
 		Target->Name = Name;
-		Target->Recursive = Recursive;
 		targetset_insert(Target->Depends, Source);
 	}
 	return (ml_value_t *)Slot[0];
@@ -938,7 +929,6 @@ target_t *target_find(const char *Id) {
 		memcpy(ParentId, Id + 6, ParentIdLength);
 		ParentId[ParentIdLength] = 0;
 		Target->Source = target_find(ParentId);
-		Target->Recursive = 1;
 		Target->Name = Name + 2;
 		return (target_t *)Target;
 	}
@@ -1063,6 +1053,7 @@ int target_find_leaves(target_t *Target, targetset_t *Leaves) {
 
 int target_set_parent(target_t *Target, target_t *Parent) {
 	if (!Target->Parent) Target->Parent = Parent;
+	return 0;
 }
 
 int targetset_print(target_t *Target, void *Data) {
@@ -1154,9 +1145,6 @@ void target_update(target_t *Target) {
 				targetset_init(Scans, ml_list_length(Result));
 				ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 				cache_scan_set(Target, Scans);
-				/*if (((target_scan_t *)Target)->Recursive) {
-					targetset_foreach(Scans, Target, (void *)scan_affects_fn);
-				}*/
 				targetset_foreach(Scans, 0, (void *)target_queue);
 				targetset_foreach(Scans, Target, (void *)target_wait);
 				targetset_foreach(Scans, Target->BuildDepends, (void *)target_find_leaves);
@@ -1318,6 +1306,7 @@ void target_init() {
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);
 	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, NULL);
 	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, NULL);
+	ml_method_by_name("build", 0, target_set_build, TargetT, MLAnyT, NULL);
 	ml_method_by_name("source", 0, target_scan_source, ScanTargetT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
