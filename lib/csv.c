@@ -62,13 +62,13 @@ static ml_value_t *csv_write_fn(void *Data, int Count, ml_value_t **Args) {
 	csv_t *Csv = (csv_t *)Args[0];
 	ml_list_t *Values = (ml_list_t *)Args[1];
 	for (ml_list_node_t *Node = Values->Head; Node; Node = Node->Next) {
-		ml_value_t *Result = Node->Value;
-		if (Result->Type != MLStringT) {
-			Result = ml_call(StringMethod, 1, &Result);
-			if (Result->Type == MLErrorT) return Result;
-			if (Result->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
+		ml_value_t *Field = Node->Value;
+		if (Field->Type != MLStringT) {
+			Field = ml_call(StringMethod, 1, &Field);
+			if (Field->Type == MLErrorT) return Field;
+			if (Field->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 		}
-		csv_fwrite(Csv->File, ml_string_value(Result), ml_string_length(Result));
+		csv_fwrite(Csv->File, ml_string_value(Field), ml_string_length(Field));
 		if (Node->Next) fputc(',', Csv->File);
 	}
 	fputc('\n', Csv->File);
@@ -93,9 +93,14 @@ static void csv_finalize(csv_t *Csv, void *Data) {
 
 ml_value_t *open(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(2);
-	ML_CHECK_ARG_TYPE(0, MLStringT);
+	ml_value_t *FileName = Args[0];
+	if (FileName->Type != MLStringT) {
+		FileName = ml_call(StringMethod, 1, &FileName);
+		if (FileName->Type == MLErrorT) return FileName;
+		if (FileName->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
+	}
 	ML_CHECK_ARG_TYPE(1, MLStringT);
-	const char *Path = ml_string_value(Args[0]);
+	const char *Path = ml_string_value(FileName);
 	const char *Mode = ml_string_value(Args[1]);
 	FILE *File = fopen(Path, Mode);
 	if (!File) return ml_error("FileError", "failed to open %s in mode %s", Path, Mode);
