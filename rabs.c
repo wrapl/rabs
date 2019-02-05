@@ -16,6 +16,7 @@
 #include "ml_console.h"
 #include "rabs.h"
 #include "minilang/stringmap.h"
+#include "library.h"
 
 #define VERSION_STRING "1.5.1"
 
@@ -56,7 +57,7 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	return Value;
 }
 
-static void load_file(const char *FileName) {
+static ml_value_t *load_file(const char *FileName) {
 	//if (MonitorFiles) targetwatch_add(FileName, (target_t *)-1);
 	ml_value_t *Closure = ml_load(rabs_ml_global, NULL, FileName);
 	if (Closure->Type == MLErrorT) {
@@ -74,6 +75,7 @@ static void load_file(const char *FileName) {
 		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
 		exit(1);
 	}
+	return Result;
 }
 
 static int mkdir_p(char *Path) {
@@ -139,12 +141,15 @@ ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 		if (Result->Type == MLErrorT) return Result;
 	}
 	char *FileName = ml_stringbuffer_get(Buffer);
-	/*if (FileName[0] != '/') {
-		FileName = concat(RootPath, CurrentContext->Path, "/", FileName, NULL);
-		FileName = vfs_resolve(CurrentContext->Mounts, FileName);
-	}*/
-	load_file(FileName);
-	return MLNil;
+	char *Extension = FileName + strlen(FileName);
+	while ((Extension > FileName) && (Extension[-1] != '.')) --Extension;
+	if (!strcmp(Extension, "rabs")) {
+		return load_file(FileName);
+	} else if (!strcmp(Extension, "so")) {
+		return library_load(FileName, Globals);
+	} else {
+		return ml_error("IncludeError", "Unknown include type: %s", FileName);
+	}
 }
 
 ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
@@ -390,6 +395,7 @@ int main(int Argc, char **Argv) {
 	target_init();
 	context_init();
 	ml_file_init();
+	library_init();
 
 	const char *TargetName = 0;
 	int QueryOnly = 0;

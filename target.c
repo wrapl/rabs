@@ -872,6 +872,8 @@ void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
 		sha256_init(Ctx);
 		sha256_update(Ctx, Target->Id, strlen(Target->Id));
 		sha256_final(Ctx, Hash);
+	} else {
+		memset(Hash, -1, SHA256_BLOCK_SIZE);
 	}
 }
 
