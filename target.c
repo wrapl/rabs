@@ -1089,6 +1089,12 @@ void target_update(target_t *Target) {
 	BYTE BuildHash[SHA256_BLOCK_SIZE];
 	if (Target->Build && Target->Build->Type == MLClosureT) {
 		ml_closure_sha256(Target->Build, BuildHash);
+		int I = 0;
+		for (const unsigned char *P = Target->BuildContext->Path; *P; ++P) {
+			BuildHash[I] ^= *P;
+			I = (I + 1) % SHA256_BLOCK_SIZE;
+		}
+		Target->BuildContext->Path;
 		cache_build_hash_get(Target, PreviousBuildHash);
 		if (memcmp(PreviousBuildHash, BuildHash, SHA256_BLOCK_SIZE)) {
 			//printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);

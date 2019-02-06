@@ -17,6 +17,7 @@ endif
 
 csv.so: Makefile csv.o libcsv.o *.h
 	gcc -shared csv.o libcsv.o $(LDFLAGS) -o $@
+	strip $@
 
 clean:
 	rm -f *.so
