@@ -11,7 +11,7 @@ typedef struct library_t {
 } library_t;
 
 ml_value_t *library_load(const char *Path, stringmap_t *Globals) {
-	void *Handle = GC_dlopen(Path, RTLD_NOW);
+	void *Handle = dlopen(Path, RTLD_NOW);
 	if (Handle) {
 		void *(*init)(stringmap_t *) = dlsym(Handle, "init");
 		library_t *Library = new(library_t);
