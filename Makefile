@@ -18,9 +18,13 @@ objects = \
 	vfs.o \
 	library.o
 
+ifeq ($(shell uname), Linux)
+	LDFLAGS += -Wl,--export-dynamic
+endif
+
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing \
 	-I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE
-LDFLAGS += -Wl,--export-dynamic -lm -ldl -lgc -lsqlite3 minilang/libminilang.a
+LDFLAGS += -lm -ldl -lgc -lsqlite3 minilang/libminilang.a
 
 ifdef DEBUG
 	CFLAGS += -g
