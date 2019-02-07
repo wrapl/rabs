@@ -15,9 +15,15 @@ objects = \
 	targetcache.o \
 	targetset.o \
 	util.o \
-	vfs.o
+	vfs.o \
+	library.o
 
-CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE
+ifeq ($(shell uname), Linux)
+	LDFLAGS += -Wl,--export-dynamic
+endif
+
+CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing \
+	-I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE
 LDFLAGS += -lm -ldl -lgc -lsqlite3 minilang/libminilang.a
 
 ifdef DEBUG
@@ -29,6 +35,7 @@ endif
 
 rabs: Makefile $(objects) *.h minilang/libminilang.a
 	gcc $(objects) $(LDFLAGS) -o $@
+	strip $@
 
 clean:
 	make -C minilang clean

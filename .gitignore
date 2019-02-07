@@ -3,6 +3,7 @@
 build.rabs.db*
 /bin/
 *.o
+*.so
 *.a
 *cppcheck*
 /.README.md.html
