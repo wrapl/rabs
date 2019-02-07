@@ -18,7 +18,7 @@
 #include "minilang/stringmap.h"
 #include "library.h"
 
-#define VERSION_STRING "1.5.1"
+#define VERSION_STRING "1.6.0"
 
 const char *SystemName = "build.rabs";
 const char *RootPath = 0;
