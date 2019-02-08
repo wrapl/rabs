@@ -352,6 +352,18 @@ static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
 	return stringmap_search(Defines, Key) ?: MLNil;
 }
 
+static ml_value_t *type(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	return ml_string(Args[0]->Type->Name, -1);
+}
+
+static ml_value_t *error(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(2);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	ML_CHECK_ARG_TYPE(1, MLStringT);
+	return ml_error(ml_string_value(Args[0]), "%s", ml_string_value(Args[1]));
+}
+
 static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
 #if defined(X86)
 	asm("int3");
@@ -391,6 +403,8 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "defined", ml_function(0, defined));
 	stringmap_insert(Globals, "check", ml_function(0, target_depends_auto_value));
 	stringmap_insert(Globals, "debug", ml_function(0, debug));
+	stringmap_insert(Globals, "type", ml_function(0, type));
+	stringmap_insert(Globals, "error", ml_function(0, error));
 
 	target_init();
 	context_init();
