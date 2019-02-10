@@ -35,7 +35,7 @@ int StatusUpdates = 0;
 int MonitorFiles = 0;
 int DebugThreads = 0;
 
-pthread_mutex_t GlobalLock[1] = {PTHREAD_MUTEX_INITIALIZER};
+pthread_mutex_t InterpreterLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
 static pthread_cond_t TargetUpdated[1] = {PTHREAD_COND_INITIALIZER};
 
@@ -53,8 +53,8 @@ __thread const char *CurrentDirectory = 0;
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 static target_t *NextTarget = 0;
 
-static void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]);
-static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
+static void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]);
+static time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
 static int target_missing(target_t *Target, int LastChecked);
 
 typedef enum {BUILD_IDLE, BUILD_WAIT, BUILD_EXEC} build_thread_status_t;
@@ -130,26 +130,28 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 	}
 }
 
-static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
 	} else {
 		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	}
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
 		printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
-		pthread_mutex_lock(GlobalLock);
+		pthread_mutex_lock(InterpreterLock);
 		return 0;
 	}
 	if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
 	} else if (S_ISDIR(Stat->st_mode)) {
 		memset(Target->Hash, 0xD0, SHA256_BLOCK_SIZE);
-#ifdef __APPLE__
+#if defined(__APPLE__)
 		memcpy(Target->Hash, &Stat->st_mtimespec, sizeof(Stat->st_mtimespec));
+#elif defined(__MINGW32__)
+		memcpy(Target->Hash, &Stat->st_mtime, sizeof(Stat->st_mtime));
 #else
 		memcpy(Target->Hash, &Stat->st_mtim, sizeof(Stat->st_mtim));
 #endif
@@ -170,7 +172,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 		close(File);
 		sha256_final(Ctx, Target->Hash);
 	}
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_lock(InterpreterLock);
 	/*if (MonitorFiles && !Target->Build) {
 		targetwatch_add(FileName, (target_t *)Target);
 	}*/
@@ -472,28 +474,11 @@ TARGET_FILE_IS(chr, S_ISCHR);
 TARGET_FILE_IS(blk, S_ISBLK);
 TARGET_FILE_IS(reg, S_ISREG);
 TARGET_FILE_IS(fifo, S_ISFIFO);
+#ifdef __MINGW32__
+#else
 TARGET_FILE_IS(lnk, S_ISLNK);
 TARGET_FILE_IS(sock, S_ISSOCK);
-
-static int mkdir_p(char *Path) {
-	if (!Path[0]) return -1;
-	struct stat Stat[1];
-	for (char *P = Path + 1; P[0]; ++P) {
-		if (P[0] == '/') {
-			P[0] = 0;
-			if (lstat(Path, Stat) < 0) {
-				int Result = mkdir(Path, 0777);
-				if (Result < 0) return Result;
-			}
-			P[0] = '/';
-		}
-	}
-	if (lstat(Path, Stat) < 0) {
-		int Result = mkdir(Path, 0777);
-		if (Result < 0) return Result;
-	}
-	return 0;
-}
+#endif
 
 ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
@@ -512,7 +497,11 @@ ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 static int rmdir_p(char *Buffer, char *End) {
 	if (!Buffer[0]) return -1;
 	struct stat Stat[1];
+#ifdef __MINGW32__
+	if (stat(Buffer, Stat)) return 0;
+#else
 	if (lstat(Buffer, Stat)) return 0;
+#endif
 	if (S_ISDIR(Stat->st_mode)) {
 		DIR *Dir = opendir(Buffer);
 		if (!Dir) return 1;
@@ -573,7 +562,7 @@ struct target_meta_t {
 
 static ml_type_t *MetaTargetT;
 
-static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
+static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (DependsLastUpdated == CurrentVersion) {
 		memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 		memcpy(Target->Hash, &DependsLastUpdated, sizeof(DependsLastUpdated));
@@ -620,7 +609,7 @@ static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Arg
 	return ml_inline(StringMethod, 1, Target->Value);
 }
 
-static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	//target_queue((target_t *)Target, 0);
 	//target_wait((target_t *)Target, CurrentTarget);
 	target_value_hash(Target->Value, Target->Hash);
@@ -685,12 +674,12 @@ struct target_scan_t {
 
 static ml_type_t *ScanTargetT;
 
-static int depends_hash_fn(target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZE]) {
+static int depends_hash_fn(target_t *Depend, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
 	return 0;
 }
 
-static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	targetset_t *Scans = cache_scan_get((target_t *)Target);
 	if (Scans) targetset_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
 	return 0;
@@ -740,7 +729,7 @@ static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 	return Value;
 }
 
-static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	context_t *Context = context_find(Target->Context);
 	ml_value_t *Value = context_symb_get(Context, Target->Name) ?: MLNil;
 	target_value_hash(Value, Target->Hash);
@@ -760,7 +749,7 @@ target_t *target_symb_new(const char *Name) {
 
 void target_symb_update(const char *Name) {
 	target_t *Target = target_symb_new(Name);
-	BYTE Previous[SHA256_BLOCK_SIZE];
+	unsigned char Previous[SHA256_BLOCK_SIZE];
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
@@ -797,14 +786,14 @@ ml_value_t *target_depends_auto_value(void *Data, int Count, ml_value_t **Args) 
 }
 
 static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
-	BYTE ChildHash[SHA256_BLOCK_SIZE];
+	unsigned char ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Value, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	return 0;
 }
 
 static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
-	BYTE ChildHash[SHA256_BLOCK_SIZE];
+	unsigned char ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Key, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	target_value_hash(Value, ChildHash);
@@ -812,7 +801,7 @@ static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx)
 	return 0;
 }
 
-void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
+void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	if (Value->Type == MLNilT) {
 		memset(Hash, -1, SHA256_BLOCK_SIZE);
 	} else if (Value->Type == MLIntegerT) {
@@ -877,7 +866,7 @@ void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	}
 }
 
-static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
+static time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (Target->Type == FileTargetT) return target_file_hash((target_file_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == MetaTargetT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash, DependsLastUpdated);
 	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
@@ -1085,8 +1074,8 @@ void target_update(target_t *Target) {
 	}
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
-	BYTE PreviousBuildHash[SHA256_BLOCK_SIZE];
-	BYTE BuildHash[SHA256_BLOCK_SIZE];
+	unsigned char PreviousBuildHash[SHA256_BLOCK_SIZE];
+	unsigned char BuildHash[SHA256_BLOCK_SIZE];
 	if (Target->Build && Target->Build->Type == MLClosureT) {
 		ml_closure_sha256(Target->Build, BuildHash);
 		int I = 0;
@@ -1108,7 +1097,7 @@ void target_update(target_t *Target) {
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
 
-	BYTE Previous[SHA256_BLOCK_SIZE];
+	unsigned char Previous[SHA256_BLOCK_SIZE];
 	int LastUpdated, LastChecked, Skipped = 0;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
@@ -1210,7 +1199,7 @@ int target_wait(target_t *Target, target_t *Waiter) {
 			CurrentThread->Target = Target;
 		}
 		//fprintf(stderr, "\e[31m%s waiting on %s\n\e[0m", Waiter->Id, Target->Id);
-		pthread_cond_wait(TargetUpdated, GlobalLock);
+		pthread_cond_wait(TargetUpdated, InterpreterLock);
 	}
 	if (DebugThreads) {
 		CurrentThread->Status = BUILD_EXEC;
@@ -1224,17 +1213,17 @@ static void *target_thread_fn(void *Arg) {
 	const char *Path = getcwd(NULL, 0);
 	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
 	CurrentDirectory = strcpy(Path2, Path);
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_lock(InterpreterLock);
 	++RunningThreads;
 	for (;;) {
 		while (!NextTarget) {
 			if (DebugThreads) CurrentThread->Status = BUILD_IDLE;
 			if (--RunningThreads == 0) {
 				pthread_cond_signal(TargetAvailable);
-				pthread_mutex_unlock(GlobalLock);
+				pthread_mutex_unlock(InterpreterLock);
 				return 0;
 			}
-			pthread_cond_wait(TargetAvailable, GlobalLock);
+			pthread_cond_wait(TargetAvailable, InterpreterLock);
 			++RunningThreads;
 		}
 		target_t *Target = NextTarget;
@@ -1249,13 +1238,13 @@ void target_threads_start(int NumThreads) {
 	CurrentThread->Id = 0;
 	CurrentThread->Status = BUILD_IDLE;
 	RunningThreads = 1;
-	pthread_mutex_init(GlobalLock, NULL);
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_init(InterpreterLock, NULL);
+	pthread_mutex_lock(InterpreterLock);
 	for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
 		build_thread_t *BuildThread = new(build_thread_t);
 		BuildThread->Id = LastThread;
 		BuildThread->Status = BUILD_IDLE;
-		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, BuildThread);
+		pthread_create(&BuildThread->Handle, 0, target_thread_fn, BuildThread);
 		BuildThread->Next = BuildThreads;
 		BuildThreads = BuildThread;
 	}
@@ -1266,26 +1255,26 @@ void target_interactive_start(int NumThreads) {
 	CurrentThread->Id = 0;
 	CurrentThread->Status = BUILD_IDLE;
 	RunningThreads = 0;
-	pthread_mutex_init(GlobalLock, NULL);
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_init(InterpreterLock, NULL);
+	pthread_mutex_lock(InterpreterLock);
 	/*for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
 		build_thread_t *BuildThread = new(build_thread_t);
 		BuildThread->Id = LastThread;
 		BuildThread->Status = BUILD_IDLE;
-		GC_pthread_create(&BuildThread->Handle, 0, active_mode_thread_fn, BuildThread);
+		pthread_create(&BuildThread->Handle, 0, active_mode_thread_fn, BuildThread);
 		BuildThread->Next = BuildThreads;
 		BuildThreads = BuildThread;
 	}*/
 	pthread_cond_broadcast(TargetAvailable);
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 }
 
 void target_threads_wait(target_t *Target) {
 	--RunningThreads;
 	target_queue(Target, 0);
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 	while (BuildThreads) {
-		GC_pthread_join(BuildThreads->Handle, 0);
+		pthread_join(BuildThreads->Handle, 0);
 		BuildThreads = BuildThreads->Next;
 	}
 }
@@ -1335,6 +1324,9 @@ void target_init() {
 	target_file_methods_is(blk);
 	target_file_methods_is(reg);
 	target_file_methods_is(fifo);
+#ifdef __MINGW32__
+#else
 	target_file_methods_is(lnk);
 	target_file_methods_is(sock);
+#endif
 }

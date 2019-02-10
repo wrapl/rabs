@@ -156,7 +156,7 @@ void cache_bump_version() {
 	}
 }
 
-void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, BYTE Hash[SHA256_BLOCK_SIZE]) {
+void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	sqlite3_bind_text(HashGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	if (sqlite3_step(HashGetStatement) == SQLITE_ROW) {
 		memcpy(Hash, sqlite3_column_blob(HashGetStatement, 0), SHA256_BLOCK_SIZE);
@@ -182,7 +182,7 @@ void cache_hash_set(target_t *Target, time_t FileTime) {
 	sqlite3_reset(HashSetStatement);
 }
 
-void cache_build_hash_get(target_t *Target, BYTE Hash[SHA256_BLOCK_SIZE]) {
+void cache_build_hash_get(target_t *Target, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	sqlite3_bind_text(HashBuildGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	if (sqlite3_step(HashBuildGetStatement) == SQLITE_ROW) {
 		memcpy(Hash, sqlite3_column_blob(HashBuildGetStatement, 0), SHA256_BLOCK_SIZE);
@@ -192,7 +192,7 @@ void cache_build_hash_get(target_t *Target, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	sqlite3_reset(HashBuildGetStatement);
 }
 
-void cache_build_hash_set(target_t *Target, BYTE BuildHash[SHA256_BLOCK_SIZE]) {
+void cache_build_hash_set(target_t *Target, unsigned char BuildHash[SHA256_BLOCK_SIZE]) {
 	sqlite3_bind_text(HashBuildSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	sqlite3_bind_blob(HashBuildSetStatement, 2, BuildHash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
 	sqlite3_step(HashBuildSetStatement);

@@ -80,7 +80,7 @@ void targetwatch_wait() {
 	for (;;) {
 		ssize_t Bytes = read(WatchHandle, Buffer, BUFFER_SIZE);
 		char *Next = Buffer, *Limit = Buffer + Bytes;
-		pthread_mutex_lock(GlobalLock);
+		pthread_mutex_lock(InterpreterLock);
 		do {
 			struct inotify_event *Event = (struct inotify_event *)Next;
 			directory_t *Directory = DirectoriesByHandle[Event->wd];
@@ -95,7 +95,7 @@ void targetwatch_wait() {
 			}
 			Next += sizeof(struct inotify_event) + Event->len;
 		} while (Next < Limit);
-		pthread_mutex_unlock(GlobalLock);
+		pthread_mutex_unlock(InterpreterLock);
 	}
 
 }
