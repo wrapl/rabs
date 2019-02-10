@@ -13,10 +13,10 @@
 #include "cache.h"
 #include "minilang.h"
 #include "ml_file.h"
-#include "ml_console.h"
 #include "rabs.h"
 #include "minilang/stringmap.h"
 #include "library.h"
+#include "ml_console.h"
 
 #define VERSION_STRING "1.6.1"
 
@@ -76,26 +76,6 @@ static ml_value_t *load_file(const char *FileName) {
 		exit(1);
 	}
 	return Result;
-}
-
-static int mkdir_p(char *Path) {
-	if (!Path[0]) return -1;
-	struct stat Stat[1];
-	for (char *P = Path + 1; P[0]; ++P) {
-		if (P[0] == '/') {
-			P[0] = 0;
-			if (lstat(Path, Stat) < 0) {
-				int Result = mkdir(Path, 0777);
-				if (Result < 0) return Result;
-			}
-			P[0] = '/';
-		}
-	}
-	if (lstat(Path, Stat) < 0) {
-		int Result = mkdir(Path, 0777);
-		if (Result < 0) return Result;
-	}
-	return 0;
 }
 
 ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
@@ -170,6 +150,11 @@ ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
 	return ml_string(CurrentContext->Path, -1);
 }
 
+#ifdef __MINGW32__
+#define WIFEXITED(Status) (((Status) & 0x7f) == 0)
+#define WEXITSTATUS(Status) (((Status) & 0xff00) >> 8)
+#endif
+
 ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
@@ -183,7 +168,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	clock_t Start = clock();
 	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 	char Chars[120];
 	while (!feof(File)) {
 		ssize_t Size = fread(Chars, 1, 120, File);
@@ -192,7 +177,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	}
 	int Result = pclose(File);
 	clock_t End = clock();
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_lock(InterpreterLock);
 	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Result)) {
 		if (WEXITSTATUS(Result) != 0) {
@@ -218,7 +203,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	clock_t Start = clock();
 	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 	char Chars[ML_STRINGBUFFER_NODE_SIZE];
 	while (!feof(File)) {
 		ssize_t Size = fread(Chars, 1, ML_STRINGBUFFER_NODE_SIZE, File);
@@ -229,7 +214,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	}
 	int Result = pclose(File);
 	clock_t End = clock();
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_lock(InterpreterLock);
 	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Result)) {
 		if (WEXITSTATUS(Result) != 0) {
@@ -341,7 +326,13 @@ static ml_value_t *ml_setenv(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_TYPE(1, MLStringT);
 	const char *Key = ml_string_value(Args[0]);
 	const char *Value = ml_string_value(Args[1]);
+#ifdef __MINGW32__
+	char *Buffer;
+	asprintf(&Buffer, "%s=%s", Key, Value);
+	putenv(Buffer);
+#else
 	setenv(Key, Value, 1);
+#endif
 	return MLNil;
 }
 

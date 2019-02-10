@@ -1,9 +1,17 @@
 .PHONY: clean all install
 
-all: rabs
+PLATFORM = $(shell uname)
+
+ifeq ($(PLATFORM), Mingw)
+	RABS = rabs.exe
+else
+	RABS = rabs
+endif
+
+all: $(RABS)
 
 minilang/libminilang.a: minilang/Makefile
-	make -C minilang libminilang.a
+	make -C minilang PLATFORM=$(PLATFORM) libminilang.a
 
 *.o: *.h minilang/*.h
 
@@ -18,13 +26,22 @@ objects = \
 	vfs.o \
 	library.o
 
-ifeq ($(shell uname), Linux)
-	LDFLAGS += -Wl,--export-dynamic
-endif
+ml_libs = \
+	
 
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing \
 	-I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE
-LDFLAGS += -lm -ldl -lgc -lsqlite3 minilang/libminilang.a
+LDFLAGS += minilang/libminilang.a -lm -lgc -lsqlite3
+
+ifeq ($(PLATFORM), Linux)
+	LDFLAGS += -Wl,--export-dynamic -ldl
+endif
+
+ifeq ($(PLATFORM), Mingw)
+	CFLAGS += -include ansicolor-w32.h
+	LDFLAGS += -lregex
+	objects += ansicolor-w32.o
+endif
 
 ifdef DEBUG
 	CFLAGS += -g
@@ -33,8 +50,8 @@ else
 	CFLAGS += -O2
 endif
 
-rabs: Makefile $(objects) *.h minilang/libminilang.a
-	gcc $(objects) $(LDFLAGS) -o $@
+$(RABS): Makefile $(objects) *.h minilang/libminilang.a
+	$(CC) $(objects) -o $@ $(LDFLAGS)
 	strip $@
 
 clean:
