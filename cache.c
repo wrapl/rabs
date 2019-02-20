@@ -87,7 +87,7 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_prepare_v2(Cache, "UPDATE hashes SET last_checked = ? WHERE id = ?", -1, &LastCheckSetStatement, 0) != SQLITE_OK) {
+	if (sqlite3_prepare_v2(Cache, "UPDATE hashes SET last_checked = ?, file_time = ? WHERE id = ?", -1, &LastCheckSetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
@@ -201,7 +201,8 @@ void cache_build_hash_set(target_t *Target, unsigned char BuildHash[SHA256_BLOCK
 
 void cache_last_check_set(target_t *Target, time_t FileTime) {
 	sqlite3_bind_int(LastCheckSetStatement, 1, CurrentVersion);
-	sqlite3_bind_text(LastCheckSetStatement, 2, Target->Id, Target->IdLength, SQLITE_STATIC);
+	sqlite3_bind_int(LastCheckSetStatement, 2, FileTime);
+	sqlite3_bind_text(LastCheckSetStatement, 3, Target->Id, Target->IdLength, SQLITE_STATIC);
 	sqlite3_step(LastCheckSetStatement);
 	sqlite3_reset(LastCheckSetStatement);
 }
