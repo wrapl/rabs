@@ -1,9 +1,11 @@
 #include <gc/gc.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <errno.h>
 #include <time.h>
 #include <stdio.h>
@@ -23,6 +25,7 @@
 const char *SystemName = "build.rabs";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
+ml_value_t *StringMethod;
 static int EchoCommands = 0;
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
@@ -229,6 +232,113 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
+ml_value_t *rabs_execv(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	const char *Argv[Count + 1];
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Arg = Args[I];
+		if (Arg->Type != MLStringT) {
+			Arg = ml_inline(StringMethod, 1, Arg);
+			if (Arg->Type == MLErrorT) return Arg;
+			if (Arg->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
+		}
+		Argv[I] = ml_string_value(Arg);
+	}
+	Argv[Count] = 0;
+	const char *WorkingDirectory = CurrentDirectory;
+	if (EchoCommands) {
+		printf("\e[34m%s:", WorkingDirectory);
+		for (int I = 0; I < Count; ++I) printf(" %s", Argv[I]);
+		printf("\e[0m\n");
+	}
+	clock_t Start = clock();
+	pid_t Child = fork();
+	if (!Child) {
+		chdir(WorkingDirectory);
+		int DevNull = open("/dev/null", O_WRONLY | O_CREAT, 0666);
+		dup2(DevNull, STDOUT_FILENO);
+		close(DevNull);
+		if (execvp(Argv[0], (char * const *)Argv) == -1) exit(-1);
+	}
+	pthread_mutex_unlock(InterpreterLock);
+	int Status;
+	if (waitpid(Child, &Status, 0) == -1) return ml_error("WaitError", "error waiting for child process");
+	pthread_mutex_lock(InterpreterLock);
+	if (EchoCommands) {
+		clock_t End = clock();
+		printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
+	}
+	if (WIFEXITED(Status)) {
+		if (WEXITSTATUS(Status) != 0) {
+			return ml_error("ExecuteError", "process returned non-zero exit code");
+		} else {
+			return MLNil;
+		}
+	} else {
+		return ml_error("ExecuteError", "process exited abnormally");
+	}
+}
+
+ml_value_t *rabs_shellv(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	const char *Argv[Count + 1];
+	for (int I = 0; I < Count; ++I) {
+		ml_value_t *Arg = Args[I];
+		if (Arg->Type != MLStringT) {
+			Arg = ml_inline(StringMethod, 1, Arg);
+			if (Arg->Type == MLErrorT) return Arg;
+			if (Arg->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
+		}
+		Argv[I] = ml_string_value(Arg);
+	}
+	Argv[Count] = 0;
+	const char *WorkingDirectory = CurrentDirectory;
+	if (EchoCommands) {
+		printf("\e[34m%s:", WorkingDirectory);
+		for (int I = 0; I < Count; ++I) printf(" %s", Argv[I]);
+		printf("\e[0m\n");
+	}
+	clock_t Start = clock();
+	int Pipe[2];
+	if (pipe(Pipe) == -1) return ml_error("PipeError", "failed to create pipe");
+	pid_t Child = fork();
+	if (!Child) {
+		chdir(WorkingDirectory);
+		close(Pipe[0]);
+		dup2(Pipe[1], STDOUT_FILENO);
+		if (execvp(Argv[0], (char * const *)Argv) == -1) exit(-1);
+	}
+	close(Pipe[1]);
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	pthread_mutex_unlock(InterpreterLock);
+	char Chars[ML_STRINGBUFFER_NODE_SIZE];
+	for (;;) {
+		ssize_t Size = read(Pipe[0], Chars, ML_STRINGBUFFER_NODE_SIZE);
+		if (Size <= 0) break;
+		//pthread_mutex_lock(GlobalLock);
+		if (Size > 0) ml_stringbuffer_add(Buffer, Chars, Size);
+		//pthread_mutex_unlock(GlobalLock);
+	}
+	int Status;
+	if (waitpid(Child, &Status, 0) == -1) return ml_error("WaitError", "error waiting for child process");
+	pthread_mutex_lock(InterpreterLock);
+	if (EchoCommands) {
+		clock_t End = clock();
+		printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
+	}
+	if (WIFEXITED(Status)) {
+		if (WEXITSTATUS(Status) != 0) {
+			return ml_error("ExecuteError", "process returned non-zero exit code");
+		} else {
+			size_t Length = Buffer->Length;
+			ml_value_t *Result = ml_string(ml_stringbuffer_get(Buffer), Length);
+			return Result;
+		}
+	} else {
+		return ml_error("ExecuteError", "process exited abnormally");
+	}
+}
+
 ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
@@ -294,7 +404,6 @@ loop:
 }
 
 static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
-	ml_value_t *StringMethod = ml_method("string");
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = Args[I];
 		if (Result->Type != MLStringT) {
@@ -375,6 +484,7 @@ int main(int Argc, char **Argv) {
 	GC_INIT();
 	ml_init();
 	AppendMethod = ml_method("append");
+	StringMethod = ml_method("string");
 	stringmap_insert(Globals, "vmount", ml_function(0, vmount));
 	stringmap_insert(Globals, "subdir", ml_function(0, subdir));
 	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
@@ -384,6 +494,8 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "context", ml_function(0, context));
 	stringmap_insert(Globals, "execute", ml_function(0, execute));
 	stringmap_insert(Globals, "shell", ml_function(0, shell));
+	stringmap_insert(Globals, "execv", ml_function(0, rabs_execv));
+	stringmap_insert(Globals, "shellv", ml_function(0, rabs_shellv));
 	stringmap_insert(Globals, "mkdir", ml_function(0, rabs_mkdir));
 	stringmap_insert(Globals, "chdir", ml_function(0, rabs_chdir));
 	stringmap_insert(Globals, "scope", ml_function(0, scope));
