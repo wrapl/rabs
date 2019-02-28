@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <sys/wait.h>
 #include <errno.h>
 #include <time.h>
 #include <stdio.h>
@@ -20,7 +19,11 @@
 #include "library.h"
 #include "ml_console.h"
 
-#define VERSION_STRING "1.7.0"
+#ifndef Mingw
+#include <sys/wait.h>
+#endif
+
+#define VERSION_STRING "1.7.1"
 
 const char *SystemName = "build.rabs";
 const char *RootPath = 0;
@@ -299,6 +302,10 @@ ml_value_t *argify_tree(void *Data, int Count, ml_value_t **Args) {
 	return Context.Result;
 }
 
+#ifdef Mingw
+#define rabs_execv execute
+#define rabs_shellv shell
+#else
 ml_value_t *rabs_execv(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_value_t *ArgList = ml_list();
@@ -409,6 +416,7 @@ ml_value_t *rabs_shellv(void *Data, int Count, ml_value_t **Args) {
 		return ml_error("ExecuteError", "process exited abnormally");
 	}
 }
+#endif
 
 ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
