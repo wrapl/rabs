@@ -33,6 +33,7 @@ extern int StatusUpdates;
 extern int MonitorFiles;
 extern int DebugThreads;
 extern pthread_mutex_t InterpreterLock[1];
+extern ml_type_t *TargetT;
 
 void target_init();
 
