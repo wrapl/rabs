@@ -41,10 +41,11 @@ static pthread_cond_t TargetUpdated[1] = {PTHREAD_COND_INITIALIZER};
 
 static ml_value_t *SHA256Method;
 static ml_value_t *MissingMethod;
-static ml_value_t *StringMethod;
-static ml_value_t *AppendMethod;
+extern ml_value_t *StringMethod;
+extern ml_value_t *AppendMethod;
+extern ml_value_t *ArgifyMethod;
 
-static ml_type_t *TargetT;
+ml_type_t *TargetT;
 
 __thread target_t *CurrentTarget = 0;
 __thread context_t *CurrentContext = 0;
@@ -114,6 +115,19 @@ static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Arg
 		ml_stringbuffer_add(Buffer, Path, strlen(Path));
 	} else {
 		ml_stringbuffer_add(Buffer, RootPath, strlen(RootPath));
+	}
+	return MLSome;
+}
+
+static ml_value_t *target_file_argify(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[1];
+	if (Target->Absolute) {
+		ml_list_append(Args[0], ml_string(Target->Path, strlen(Target->Path)));
+	} else if (Target->Path[0]) {
+		const char *Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
+		ml_list_append(Args[0], ml_string(Path, strlen(Path)));
+	} else {
+		ml_list_append(Args[0], ml_string(RootPath, strlen(RootPath)));
 	}
 	return MLSome;
 }
@@ -599,6 +613,14 @@ static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Arg
 	target_queue((target_t *)Target, 0);
 	target_wait((target_t *)Target, CurrentTarget);
 	return ml_inline(AppendMethod, 2, Buffer, Target->Value);
+}
+
+static ml_value_t *target_expr_argify(void *Data, int Count, ml_value_t **Args) {
+	target_expr_t *Target = (target_expr_t *)Args[1];
+	target_depends_auto((target_t *)Target);
+	target_queue((target_t *)Target, 0);
+	target_wait((target_t *)Target, CurrentTarget);
+	return ml_inline(ArgifyMethod, 2, Args[0], Target->Value);
 }
 
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
@@ -1294,10 +1316,10 @@ void target_init() {
 	SymbTargetT->assign = symb_target_assign;
 	SHA256Method = ml_method("sha256");
 	MissingMethod = ml_method("missing");
-	StringMethod = ml_method("string");
-	AppendMethod = ml_method("append");
-	ml_method_by_name("append", 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
-	ml_method_by_name("append", 0, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
+	ml_method_by_value(AppendMethod, 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
+	ml_method_by_value(AppendMethod, 0, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
+	ml_method_by_value(ArgifyMethod, 0, target_file_argify, MLListT, FileTargetT, NULL);
+	ml_method_by_value(ArgifyMethod, 0, target_expr_argify, MLListT, ExprTargetT, NULL);
 	ml_method_by_name("[]", 0, target_depend, TargetT, MLAnyT, NULL);
 	ml_method_by_name("scan", 0, target_scan_new, TargetT, NULL);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);
