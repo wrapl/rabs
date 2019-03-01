@@ -10,7 +10,7 @@ endif
 
 all: $(RABS)
 
-minilang/libminilang.a: minilang/Makefile
+minilang/libminilang.a: minilang/Makefile minilang/*.c minilang/*.h
 	make -C minilang PLATFORM=$(PLATFORM) libminilang.a
 
 *.o: *.h minilang/*.h
