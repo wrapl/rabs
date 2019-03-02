@@ -13,6 +13,7 @@
 #include "util.h"
 #include "cache.h"
 #include "minilang.h"
+#include "ml_compiler.h"
 #include "ml_file.h"
 #include "rabs.h"
 #include "minilang/stringmap.h"
@@ -765,6 +766,11 @@ int main(int Argc, char **Argv) {
 			case 't': {
 				GC_disable();
 				break;
+			}
+			case '-': {
+				if (!strcmp(Argv[I] + 2, "debug-compiler")) {
+					MLDebugClosures = 1;
+				}
 			}
 			}
 		} else {
