@@ -209,28 +209,34 @@ ml_value_t *cmdify_list(void *Data, int Count, ml_value_t **Args) {
 typedef struct cmdify_context_t {
 	ml_value_t *Argv;
 	ml_value_t *Result;
+	int First;
 } cmdify_context_t;
 
 static int cmdify_tree_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t *Context) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Context->Argv;
+	if (Context->First) {
+		Context->First = 0;
+	} else {
+		ml_stringbuffer_add(Buffer, " ", 1);
+	}
 	ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Key);
 	if (Result->Type == MLErrorT) {
 		Context->Result = Result;
 		return 1;
 	}
-	ml_stringbuffer_add(Buffer, "=", 1);
-	Result = ml_inline(AppendMethod, 2, Buffer, Value);
-	if (Result->Type == MLErrorT) {
-		Context->Result = Result;
-		return 1;
+	if (Value != MLNil) {
+		ml_stringbuffer_add(Buffer, "=", 1);
+		Result = ml_inline(AppendMethod, 2, Buffer, Value);
+		if (Result->Type == MLErrorT) {
+			Context->Result = Result;
+			return 1;
+		}
 	}
-	size_t Length = Buffer->Length;
-	Result = ml_string(ml_stringbuffer_get(Buffer), Length);
 	return 0;
 }
 
 ml_value_t *cmdify_tree(void *Data, int Count, ml_value_t **Args) {
-	cmdify_context_t Context = {Args[0], MLSome};
+	cmdify_context_t Context = {Args[0], MLSome, 1};
 	ml_tree_foreach(Args[1], &Context, (void *)cmdify_tree_node);
 	return Context.Result;
 }
@@ -357,11 +363,13 @@ static int argify_tree_node(ml_value_t *Key, ml_value_t *Value, argify_context_t
 		Context->Result = Result;
 		return 1;
 	}
-	ml_stringbuffer_add(Buffer, "=", 1);
-	Result = ml_inline(AppendMethod, 2, Buffer, Value);
-	if (Result->Type == MLErrorT) {
-		Context->Result = Result;
-		return 1;
+	if (Value != MLNil) {
+		ml_stringbuffer_add(Buffer, "=", 1);
+		Result = ml_inline(AppendMethod, 2, Buffer, Value);
+		if (Result->Type == MLErrorT) {
+			Context->Result = Result;
+			return 1;
+		}
 	}
 	size_t Length = Buffer->Length;
 	Result = ml_string(ml_stringbuffer_get(Buffer), Length);
