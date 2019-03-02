@@ -749,6 +749,12 @@ int main(int Argc, char **Argv) {
 				}
 				break;
 			}
+			case 'G': {
+				DependencyGraph = fopen("dependencies.dot", "w");
+				fprintf(DependencyGraph, "digraph Dependencies {\n");
+				fprintf(DependencyGraph, "\tnode [shape=box];\n");
+				break;
+			}
 			case 'i': {
 				InteractiveMode = 1;
 				break;
@@ -823,6 +829,10 @@ int main(int Argc, char **Argv) {
 		Target = Context->Default;
 	}
 	target_threads_wait(Target);
+	if (DependencyGraph) {
+		fprintf(DependencyGraph, "}");
+		fclose(DependencyGraph);
+	}
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
 		ml_console(rabs_ml_global, Globals);
