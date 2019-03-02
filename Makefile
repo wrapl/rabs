@@ -50,9 +50,15 @@ else
 	CFLAGS += -O2
 endif
 
+ifdef DEBUG
+$(RABS): Makefile $(objects) *.h minilang/libminilang.a
+	$(CC) $(objects) -o $@ $(LDFLAGS)
+else
 $(RABS): Makefile $(objects) *.h minilang/libminilang.a
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 	strip $@
+endif
+	
 
 clean:
 	make -C minilang clean
