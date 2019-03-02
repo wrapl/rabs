@@ -212,7 +212,7 @@ typedef struct cmdify_context_t {
 } cmdify_context_t;
 
 static int cmdify_tree_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t *Context) {
-	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Context->Argv;
 	ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Key);
 	if (Result->Type == MLErrorT) {
 		Context->Result = Result;
@@ -226,7 +226,6 @@ static int cmdify_tree_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t
 	}
 	size_t Length = Buffer->Length;
 	Result = ml_string(ml_stringbuffer_get(Buffer), Length);
-	ml_list_append(Context->Argv, Result);
 	return 0;
 }
 
