@@ -183,7 +183,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	clock_t Start = clock();
 	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 	char Chars[120];
 	while (!feof(File)) {
 		ssize_t Size = fread(Chars, 1, 120, File);
@@ -192,7 +192,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	}
 	int Result = pclose(File);
 	clock_t End = clock();
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_lock(InterpreterLock);
 	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Result)) {
 		if (WEXITSTATUS(Result) != 0) {
@@ -218,7 +218,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	clock_t Start = clock();
 	chdir(CurrentDirectory);
 	FILE *File = popen(Command, "r");
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 	char Chars[ML_STRINGBUFFER_NODE_SIZE];
 	while (!feof(File)) {
 		ssize_t Size = fread(Chars, 1, ML_STRINGBUFFER_NODE_SIZE, File);
@@ -229,7 +229,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	}
 	int Result = pclose(File);
 	clock_t End = clock();
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_lock(InterpreterLock);
 	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Result)) {
 		if (WEXITSTATUS(Result) != 0) {

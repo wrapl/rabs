@@ -35,7 +35,7 @@ int StatusUpdates = 0;
 int MonitorFiles = 0;
 int DebugThreads = 0;
 
-pthread_mutex_t GlobalLock[1] = {PTHREAD_MUTEX_INITIALIZER};
+pthread_mutex_t InterpreterLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
 static pthread_cond_t TargetUpdated[1] = {PTHREAD_COND_INITIALIZER};
 
@@ -137,11 +137,11 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 	} else {
 		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	}
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
 		printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
-		pthread_mutex_lock(GlobalLock);
+		pthread_mutex_lock(InterpreterLock);
 		return 0;
 	}
 	if (Stat->st_mtime == PreviousTime) {
@@ -170,7 +170,7 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 		close(File);
 		sha256_final(Ctx, Target->Hash);
 	}
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_lock(InterpreterLock);
 	/*if (MonitorFiles && !Target->Build) {
 		targetwatch_add(FileName, (target_t *)Target);
 	}*/
@@ -1210,7 +1210,7 @@ int target_wait(target_t *Target, target_t *Waiter) {
 			CurrentThread->Target = Target;
 		}
 		//fprintf(stderr, "\e[31m%s waiting on %s\n\e[0m", Waiter->Id, Target->Id);
-		pthread_cond_wait(TargetUpdated, GlobalLock);
+		pthread_cond_wait(TargetUpdated, InterpreterLock);
 	}
 	if (DebugThreads) {
 		CurrentThread->Status = BUILD_EXEC;
@@ -1224,17 +1224,17 @@ static void *target_thread_fn(void *Arg) {
 	const char *Path = getcwd(NULL, 0);
 	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
 	CurrentDirectory = strcpy(Path2, Path);
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_lock(InterpreterLock);
 	++RunningThreads;
 	for (;;) {
 		while (!NextTarget) {
 			if (DebugThreads) CurrentThread->Status = BUILD_IDLE;
 			if (--RunningThreads == 0) {
 				pthread_cond_signal(TargetAvailable);
-				pthread_mutex_unlock(GlobalLock);
+				pthread_mutex_unlock(InterpreterLock);
 				return 0;
 			}
-			pthread_cond_wait(TargetAvailable, GlobalLock);
+			pthread_cond_wait(TargetAvailable, InterpreterLock);
 			++RunningThreads;
 		}
 		target_t *Target = NextTarget;
@@ -1249,8 +1249,8 @@ void target_threads_start(int NumThreads) {
 	CurrentThread->Id = 0;
 	CurrentThread->Status = BUILD_IDLE;
 	RunningThreads = 1;
-	pthread_mutex_init(GlobalLock, NULL);
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_init(InterpreterLock, NULL);
+	pthread_mutex_lock(InterpreterLock);
 	for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
 		build_thread_t *BuildThread = new(build_thread_t);
 		BuildThread->Id = LastThread;
@@ -1266,8 +1266,8 @@ void target_interactive_start(int NumThreads) {
 	CurrentThread->Id = 0;
 	CurrentThread->Status = BUILD_IDLE;
 	RunningThreads = 0;
-	pthread_mutex_init(GlobalLock, NULL);
-	pthread_mutex_lock(GlobalLock);
+	pthread_mutex_init(InterpreterLock, NULL);
+	pthread_mutex_lock(InterpreterLock);
 	/*for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
 		build_thread_t *BuildThread = new(build_thread_t);
 		BuildThread->Id = LastThread;
@@ -1277,13 +1277,13 @@ void target_interactive_start(int NumThreads) {
 		BuildThreads = BuildThread;
 	}*/
 	pthread_cond_broadcast(TargetAvailable);
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 }
 
 void target_threads_wait(target_t *Target) {
 	--RunningThreads;
 	target_queue(Target, 0);
-	pthread_mutex_unlock(GlobalLock);
+	pthread_mutex_unlock(InterpreterLock);
 	while (BuildThreads) {
 		GC_pthread_join(BuildThreads->Handle, 0);
 		BuildThreads = BuildThreads->Next;
