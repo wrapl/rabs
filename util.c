@@ -2,8 +2,20 @@
 #include <gc/gc.h>
 #include <string.h>
 #include <stdarg.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #define snew(N) ((char *)GC_MALLOC_ATOMIC(N + 1))
+
+#ifdef __MINGW32__
+extern char *stpcpy (char *__restrict Dest, const char *__restrict Src) {
+	int Length = strlen(Src);
+	strcpy(Dest, Src);
+	return Dest + Length;
+}
+#endif
 
 char *concat(const char *S, ...) {
 	size_t L = strlen(S);
@@ -34,4 +46,36 @@ const char *match_prefix(const char *Subject, const char *Prefix) {
 		++Subject;
 	}
 	return Subject;
+}
+
+int mkdir_p(char *Path) {
+	if (!Path[0]) return -1;
+	struct stat Stat[1];
+	for (char *P = Path + 1; P[0]; ++P) {
+		if (P[0] == '/') {
+			P[0] = 0;
+
+#ifdef __MINGW32__
+			if (stat(Path, Stat) < 0) {
+				int Result = mkdir(Path);
+#else
+			if (lstat(Path, Stat) < 0) {
+				int Result = mkdir(Path, 0777);
+#endif
+				if (Result < 0) return Result;
+			}
+			P[0] = '/';
+		}
+	}
+
+#ifdef __MINGW32__
+	if (stat(Path, Stat) < 0) {
+		int Result = mkdir(Path);
+#else
+	if (lstat(Path, Stat) < 0) {
+		int Result = mkdir(Path, 0777);
+#endif
+		if (Result < 0) return Result;
+	}
+	return 0;
 }

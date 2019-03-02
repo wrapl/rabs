@@ -2,19 +2,31 @@
 
 include("common.rabs")
 
-csv := include("../lib/csv.so")
+print(type(1), "\n")
+print(type("hello"), "\n")
+print(type([1, 2, 3]), "\n")
+print(type({"a" is 100}), "\n")
+print(type(file("test")), "\n")
 
-var Csv := (csv."open")("test.csv", "w")
+if defined("TEST_ERROR") then
+	error("TestError", "Testing error()")
+end
 
-Csv:write(["a", 1, "b", 2])
-Csv:write(["c", 3, "d", 4])
-Csv:close
+if PLATFORM = "Linux" then
+	csv := include("../lib/csv.so")
 
-Csv := (csv."open")("test.csv", "r")
-print(Csv:read)
-print(Csv:read)
-print(Csv:read)
-Csv:close
+	var Csv := (csv."open")("test.csv", "w")
+	
+	Csv:write(["a", 1, "b", 2])
+	Csv:write(["c", 3, "d", 4])
+	Csv:close
+	
+	Csv := (csv."open")("test.csv", "r")
+	print(Csv:read, "\n")
+	print(Csv:read, "\n")
+	print(Csv:read, "\n")
+	Csv:close
+end
 
 CFLAGS := old + ["-O3"]
 

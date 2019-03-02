@@ -7,12 +7,20 @@ if TEST then
 	setenv("TEST_CFLAGS", "-pipe")
 end
 
-var Config := file("config") => fun(Target) do
-	var File := Target:open("w")
-	File:write("#!/bin/sh\n")
-	File:write("echo \"-g -O1 $TEST_CFLAGS\"\n")
-	File:close
-	execute("chmod +x", Target)
+var Config := if PLATFORM != "Mingw" then
+	file("config") => fun(Target) do
+		var File := Target:open("w")
+		File:write("#!/bin/sh\n")
+		File:write("echo \"-g -O1 $TEST_CFLAGS\"\n")
+		File:close
+		execute("chmod +x", Target)
+	end
+else
+	file("config.bat") => fun(Target) do
+		var File := Target:open("w")
+		File:write("echo \"-g -O1 %TEST_CFLAGS%\"\n")
+		File:close
+	end
 end
 
 var TestCflags := expr("TestCflags")[Config, "TEST"] => fun() shell(Config):trim

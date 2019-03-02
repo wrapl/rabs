@@ -41,10 +41,12 @@ static pthread_cond_t TargetUpdated[1] = {PTHREAD_COND_INITIALIZER};
 
 static ml_value_t *SHA256Method;
 static ml_value_t *MissingMethod;
-static ml_value_t *StringMethod;
-static ml_value_t *AppendMethod;
+extern ml_value_t *StringMethod;
+extern ml_value_t *AppendMethod;
+extern ml_value_t *ArgifyMethod;
+extern ml_value_t *CmdifyMethod;
 
-static ml_type_t *TargetT;
+ml_type_t *TargetT;
 
 __thread target_t *CurrentTarget = 0;
 __thread context_t *CurrentContext = 0;
@@ -53,8 +55,8 @@ __thread const char *CurrentDirectory = 0;
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 static target_t *NextTarget = 0;
 
-static void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]);
-static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
+static void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]);
+static time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
 static int target_missing(target_t *Target, int LastChecked);
 
 typedef enum {BUILD_IDLE, BUILD_WAIT, BUILD_EXEC} build_thread_status_t;
@@ -107,14 +109,83 @@ static ml_type_t *FileTargetT;
 static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_file_t *Target = (target_file_t *)Args[1];
+	const char *Path;
 	if (Target->Absolute) {
-		ml_stringbuffer_add(Buffer, Target->Path, strlen(Target->Path));
+		Path = Target->Path;
+	} else if (Target->Path[0]) {
+		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
+	} else {
+		Path = RootPath;
+	}
+	const char *I = Path, *J = Path;
+	for (;; ++J) switch (*J) {
+	case 0: goto done;
+	case ' ':
+	case '#':
+	case '\"':
+	case '\'':
+	case '&':
+	case '(':
+	case ')':
+	case '\\':
+	case '\t':
+	case '\r':
+	case '\n':
+		if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
+		ml_stringbuffer_add(Buffer, "\\", 1);
+		I = J;
+		break;
+	}
+done:
+	if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
+	return MLSome;
+}
+
+static ml_value_t *target_file_argify(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[1];
+	if (Target->Absolute) {
+		ml_list_append(Args[0], ml_string(Target->Path, strlen(Target->Path)));
 	} else if (Target->Path[0]) {
 		const char *Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
-		ml_stringbuffer_add(Buffer, Path, strlen(Path));
+		ml_list_append(Args[0], ml_string(Path, strlen(Path)));
 	} else {
-		ml_stringbuffer_add(Buffer, RootPath, strlen(RootPath));
+		ml_list_append(Args[0], ml_string(RootPath, strlen(RootPath)));
 	}
+	return MLSome;
+}
+
+static ml_value_t *target_file_cmdify(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
+	target_file_t *Target = (target_file_t *)Args[1];
+	const char *Path;
+	if (Target->Absolute) {
+		Path = Target->Path;
+	} else if (Target->Path[0]) {
+		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
+	} else {
+		Path = RootPath;
+	}
+	const char *I = Path, *J = Path;
+	for (;; ++J) switch (*J) {
+	case 0: goto done;
+	case ' ':
+	case '#':
+	case '\"':
+	case '\'':
+	case '&':
+	case '(':
+	case ')':
+	case '\\':
+	case '\t':
+	case '\r':
+	case '\n':
+		if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
+		ml_stringbuffer_add(Buffer, "\\", 1);
+		I = J;
+		break;
+	}
+done:
+	if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
 	return MLSome;
 }
 
@@ -130,7 +201,7 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 	}
 }
 
-static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;
@@ -148,8 +219,10 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, BYTE 
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
 	} else if (S_ISDIR(Stat->st_mode)) {
 		memset(Target->Hash, 0xD0, SHA256_BLOCK_SIZE);
-#ifdef __APPLE__
+#if defined(__APPLE__)
 		memcpy(Target->Hash, &Stat->st_mtimespec, sizeof(Stat->st_mtimespec));
+#elif defined(__MINGW32__)
+		memcpy(Target->Hash, &Stat->st_mtime, sizeof(Stat->st_mtime));
 #else
 		memcpy(Target->Hash, &Stat->st_mtim, sizeof(Stat->st_mtim));
 #endif
@@ -472,28 +545,11 @@ TARGET_FILE_IS(chr, S_ISCHR);
 TARGET_FILE_IS(blk, S_ISBLK);
 TARGET_FILE_IS(reg, S_ISREG);
 TARGET_FILE_IS(fifo, S_ISFIFO);
+#ifdef __MINGW32__
+#else
 TARGET_FILE_IS(lnk, S_ISLNK);
 TARGET_FILE_IS(sock, S_ISSOCK);
-
-static int mkdir_p(char *Path) {
-	if (!Path[0]) return -1;
-	struct stat Stat[1];
-	for (char *P = Path + 1; P[0]; ++P) {
-		if (P[0] == '/') {
-			P[0] = 0;
-			if (lstat(Path, Stat) < 0) {
-				int Result = mkdir(Path, 0777);
-				if (Result < 0) return Result;
-			}
-			P[0] = '/';
-		}
-	}
-	if (lstat(Path, Stat) < 0) {
-		int Result = mkdir(Path, 0777);
-		if (Result < 0) return Result;
-	}
-	return 0;
-}
+#endif
 
 ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
@@ -512,7 +568,11 @@ ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 static int rmdir_p(char *Buffer, char *End) {
 	if (!Buffer[0]) return -1;
 	struct stat Stat[1];
+#ifdef __MINGW32__
+	if (stat(Buffer, Stat)) return 0;
+#else
 	if (lstat(Buffer, Stat)) return 0;
+#endif
 	if (S_ISDIR(Stat->st_mode)) {
 		DIR *Dir = opendir(Buffer);
 		if (!Dir) return 1;
@@ -566,6 +626,11 @@ ml_value_t *target_file_chdir(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
+ml_value_t *target_file_path(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Target = (target_file_t *)Args[0];
+	return ml_string(Target->Path, -1);
+}
+
 struct target_meta_t {
 	TARGET_FIELDS
 	const char *Name;
@@ -573,7 +638,7 @@ struct target_meta_t {
 
 static ml_type_t *MetaTargetT;
 
-static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
+static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (DependsLastUpdated == CurrentVersion) {
 		memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 		memcpy(Target->Hash, &DependsLastUpdated, sizeof(DependsLastUpdated));
@@ -612,6 +677,23 @@ static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Arg
 	return ml_inline(AppendMethod, 2, Buffer, Target->Value);
 }
 
+static ml_value_t *target_expr_argify(void *Data, int Count, ml_value_t **Args) {
+	target_expr_t *Target = (target_expr_t *)Args[1];
+	target_depends_auto((target_t *)Target);
+	target_queue((target_t *)Target, 0);
+	target_wait((target_t *)Target, CurrentTarget);
+	return ml_inline(ArgifyMethod, 2, Args[0], Target->Value);
+}
+
+static ml_value_t *target_expr_cmdify(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
+	target_expr_t *Target = (target_expr_t *)Args[1];
+	target_depends_auto((target_t *)Target);
+	target_queue((target_t *)Target, 0);
+	target_wait((target_t *)Target, CurrentTarget);
+	return ml_inline(AppendMethod, 2, Buffer, Target->Value);
+}
+
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
 	target_expr_t *Target = (target_expr_t *)Args[0];
 	target_depends_auto((target_t *)Target);
@@ -620,7 +702,7 @@ static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Arg
 	return ml_inline(StringMethod, 1, Target->Value);
 }
 
-static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	//target_queue((target_t *)Target, 0);
 	//target_wait((target_t *)Target, CurrentTarget);
 	target_value_hash(Target->Value, Target->Hash);
@@ -685,12 +767,12 @@ struct target_scan_t {
 
 static ml_type_t *ScanTargetT;
 
-static int depends_hash_fn(target_t *Depend, BYTE Hash[SHA256_BLOCK_SIZE]) {
+static int depends_hash_fn(target_t *Depend, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
 	return 0;
 }
 
-static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	targetset_t *Scans = cache_scan_get((target_t *)Target);
 	if (Scans) targetset_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
 	return 0;
@@ -740,7 +822,7 @@ static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 	return Value;
 }
 
-static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE]) {
+static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	context_t *Context = context_find(Target->Context);
 	ml_value_t *Value = context_symb_get(Context, Target->Name) ?: MLNil;
 	target_value_hash(Value, Target->Hash);
@@ -760,7 +842,7 @@ target_t *target_symb_new(const char *Name) {
 
 void target_symb_update(const char *Name) {
 	target_t *Target = target_symb_new(Name);
-	BYTE Previous[SHA256_BLOCK_SIZE];
+	unsigned char Previous[SHA256_BLOCK_SIZE];
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
@@ -797,14 +879,14 @@ ml_value_t *target_depends_auto_value(void *Data, int Count, ml_value_t **Args) 
 }
 
 static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
-	BYTE ChildHash[SHA256_BLOCK_SIZE];
+	unsigned char ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Value, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	return 0;
 }
 
 static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
-	BYTE ChildHash[SHA256_BLOCK_SIZE];
+	unsigned char ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Key, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	target_value_hash(Value, ChildHash);
@@ -812,7 +894,7 @@ static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx)
 	return 0;
 }
 
-void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
+void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	if (Value->Type == MLNilT) {
 		memset(Hash, -1, SHA256_BLOCK_SIZE);
 	} else if (Value->Type == MLIntegerT) {
@@ -877,7 +959,7 @@ void target_value_hash(ml_value_t *Value, BYTE Hash[SHA256_BLOCK_SIZE]) {
 	}
 }
 
-static time_t target_hash(target_t *Target, time_t PreviousTime, BYTE PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
+static time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (Target->Type == FileTargetT) return target_file_hash((target_file_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == MetaTargetT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash, DependsLastUpdated);
 	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
@@ -1085,8 +1167,8 @@ void target_update(target_t *Target) {
 	}
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
-	BYTE PreviousBuildHash[SHA256_BLOCK_SIZE];
-	BYTE BuildHash[SHA256_BLOCK_SIZE];
+	unsigned char PreviousBuildHash[SHA256_BLOCK_SIZE];
+	unsigned char BuildHash[SHA256_BLOCK_SIZE];
 	if (Target->Build && Target->Build->Type == MLClosureT) {
 		ml_closure_sha256(Target->Build, BuildHash);
 		int I = 0;
@@ -1108,7 +1190,7 @@ void target_update(target_t *Target) {
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
 
-	BYTE Previous[SHA256_BLOCK_SIZE];
+	unsigned char Previous[SHA256_BLOCK_SIZE];
 	int LastUpdated, LastChecked, Skipped = 0;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
@@ -1255,7 +1337,7 @@ void target_threads_start(int NumThreads) {
 		build_thread_t *BuildThread = new(build_thread_t);
 		BuildThread->Id = LastThread;
 		BuildThread->Status = BUILD_IDLE;
-		GC_pthread_create(&BuildThread->Handle, 0, target_thread_fn, BuildThread);
+		pthread_create(&BuildThread->Handle, 0, target_thread_fn, BuildThread);
 		BuildThread->Next = BuildThreads;
 		BuildThreads = BuildThread;
 	}
@@ -1272,7 +1354,7 @@ void target_interactive_start(int NumThreads) {
 		build_thread_t *BuildThread = new(build_thread_t);
 		BuildThread->Id = LastThread;
 		BuildThread->Status = BUILD_IDLE;
-		GC_pthread_create(&BuildThread->Handle, 0, active_mode_thread_fn, BuildThread);
+		pthread_create(&BuildThread->Handle, 0, active_mode_thread_fn, BuildThread);
 		BuildThread->Next = BuildThreads;
 		BuildThreads = BuildThread;
 	}*/
@@ -1285,7 +1367,7 @@ void target_threads_wait(target_t *Target) {
 	target_queue(Target, 0);
 	pthread_mutex_unlock(InterpreterLock);
 	while (BuildThreads) {
-		GC_pthread_join(BuildThreads->Handle, 0);
+		pthread_join(BuildThreads->Handle, 0);
 		BuildThreads = BuildThreads->Next;
 	}
 }
@@ -1305,10 +1387,12 @@ void target_init() {
 	SymbTargetT->assign = symb_target_assign;
 	SHA256Method = ml_method("sha256");
 	MissingMethod = ml_method("missing");
-	StringMethod = ml_method("string");
-	AppendMethod = ml_method("append");
-	ml_method_by_name("append", 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
-	ml_method_by_name("append", 0, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
+	ml_method_by_value(AppendMethod, 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
+	ml_method_by_value(AppendMethod, 0, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
+	ml_method_by_value(ArgifyMethod, 0, target_file_argify, MLListT, FileTargetT, NULL);
+	ml_method_by_value(ArgifyMethod, 0, target_expr_argify, MLListT, ExprTargetT, NULL);
+	ml_method_by_value(CmdifyMethod, 0, target_file_cmdify, MLStringBufferT, FileTargetT, NULL);
+	ml_method_by_value(CmdifyMethod, 0, target_expr_cmdify, MLStringBufferT, ExprTargetT, NULL);
 	ml_method_by_name("[]", 0, target_depend, TargetT, MLAnyT, NULL);
 	ml_method_by_name("scan", 0, target_scan_new, TargetT, NULL);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);
@@ -1330,11 +1414,15 @@ void target_init() {
 	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, NULL);
 	ml_method_by_name("rmdir", 0, target_file_rmdir, FileTargetT, NULL);
 	ml_method_by_name("chdir", 0, target_file_chdir, FileTargetT, NULL);
+	ml_method_by_name("path", 0, target_file_path, FileTargetT, NULL);
 	target_file_methods_is(dir);
 	target_file_methods_is(chr);
 	target_file_methods_is(blk);
 	target_file_methods_is(reg);
 	target_file_methods_is(fifo);
+#ifdef __MINGW32__
+#else
 	target_file_methods_is(lnk);
 	target_file_methods_is(sock);
+#endif
 }

@@ -23,7 +23,7 @@ typedef struct target_t target_t;
 	int LastUpdated; \
 	int IdLength; \
 	unsigned long IdHash; \
-	BYTE Hash[SHA256_BLOCK_SIZE];
+	unsigned char Hash[SHA256_BLOCK_SIZE];
 
 struct target_t {
 	TARGET_FIELDS
@@ -33,6 +33,7 @@ extern int StatusUpdates;
 extern int MonitorFiles;
 extern int DebugThreads;
 extern pthread_mutex_t InterpreterLock[1];
+extern ml_type_t *TargetT;
 
 void target_init();
 
