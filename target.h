@@ -3,6 +3,7 @@
 
 #include <time.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <pthread.h>
 #include "targetset.h"
 #include "sha256.h"
@@ -32,6 +33,7 @@ struct target_t {
 extern int StatusUpdates;
 extern int MonitorFiles;
 extern int DebugThreads;
+extern FILE *DependencyGraph;
 extern pthread_mutex_t InterpreterLock[1];
 extern ml_type_t *TargetT;
 

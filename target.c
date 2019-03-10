@@ -34,6 +34,7 @@ typedef struct target_symb_t target_symb_t;
 int StatusUpdates = 0;
 int MonitorFiles = 0;
 int DebugThreads = 0;
+FILE *DependencyGraph = 0;
 
 pthread_mutex_t InterpreterLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
@@ -1145,6 +1146,11 @@ int targetset_print(target_t *Target, void *Data) {
 	return 0;
 }
 
+static int target_graph_dependencies(target_t *Depend, target_t *Target) {
+	fprintf(DependencyGraph, "\tT%x -> T%x;\n", Depend, Target);
+	return 0;
+}
+
 void target_update(target_t *Target) {
 	if (DebugThreads) {
 		printf("\033[2J\033[H");
@@ -1164,6 +1170,10 @@ void target_update(target_t *Target) {
 			printf("\e[0m");
 		}
 		printf("\n\n");
+	}
+	if (DependencyGraph) {
+		fprintf(DependencyGraph, "\tT%x [label=\"%s\"];\n", Target, Target->Id);
+		targetset_foreach(Target->Depends, Target, (void *)target_graph_dependencies);
 	}
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
@@ -1198,6 +1208,9 @@ void target_update(target_t *Target) {
 	if (DependsLastUpdated <= LastChecked) {
 		targetset_t *Depends = cache_depends_get(Target);
 		if (Depends) {
+			if (DependencyGraph) {
+				targetset_foreach(Depends, Target, (void *)target_graph_dependencies);
+			}
 			targetset_foreach(Depends, Target, (void *)target_queue);
 			targetset_foreach(Depends, Target->Parent, (void *)target_set_parent);
 			targetset_foreach(Depends, Target, (void *)target_wait);
@@ -1235,6 +1248,9 @@ void target_update(target_t *Target) {
 				targetset_init(Scans, ml_list_length(Result));
 				ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
 				cache_scan_set(Target, Scans);
+				if (DependencyGraph) {
+					targetset_foreach(Scans, Target, (void *)target_graph_dependencies);
+				}
 				targetset_foreach(Scans, 0, (void *)target_queue);
 				targetset_foreach(Scans, Target, (void *)target_wait);
 				targetset_foreach(Scans, Target->BuildDepends, (void *)target_find_leaves);
@@ -1255,6 +1271,9 @@ void target_update(target_t *Target) {
 			((target_expr_t *)Target)->Value = cache_expr_get(Target);
 		} else if (Target->Type == ScanTargetT) {
 			targetset_t *Scans = cache_scan_get(Target);
+			if (DependencyGraph) {
+				targetset_foreach(Scans, Target, (void *)target_graph_dependencies);
+			}
 			targetset_foreach(Scans, Target, (void *)target_queue);
 			targetset_foreach(Scans, Target, (void *)target_set_parent);
 			targetset_foreach(Scans, Target, (void *)target_wait);
