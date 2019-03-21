@@ -54,7 +54,7 @@ var ScanTest := Generated:scan("ScanTest") => fun() do
 		var Object := Source % "o"
 		var Meta := meta(Source:basename)[Object]
 		var Scan := Source:scan("INCLUDES", :true) => c_includes
-		Object[Source, Scan] => c_compile
+		Object[Source, Scan] => (c_compile !! [Source])
 		Objects:put(Meta)
 	end
 	return Objects
