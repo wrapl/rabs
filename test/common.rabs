@@ -5,8 +5,7 @@ DEBUG := defined("DEBUG")
 CFLAGS := []
 LDFLAGS := []
 
-c_compile := fun(Object) do
-	var Source := Object % "c"
+c_compile := fun(Source, Object) do
 	execute('gcc -c {CFLAGS} -o{Object} {Source}')
 end
 
@@ -34,8 +33,8 @@ c_program := fun(Executable, Objects, Libraries) do
 			var Source := Object % Extension
 			if Source:exists then
 				Sources:put(Source)
-				var Scan := Source:scan("INCLUDES", :true) => Functions[1]
-				Object[Source, Scan] => Functions[2]
+				var Scan := Source:scan("INCLUDES") => Functions[1]
+				Object[Source, Scan] => (Functions[2] !! [Source])
 				exit
 			end
 		end
