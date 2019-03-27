@@ -19,6 +19,10 @@
 #include <ml_file.h>
 #include <limits.h>
 
+#ifdef Linux
+#include "targetwatch.h"
+#endif
+
 enum {
 	STATE_UNCHECKED = 0,
 	STATE_CHECKING = -1,
@@ -34,6 +38,7 @@ typedef struct target_symb_t target_symb_t;
 int StatusUpdates = 0;
 int MonitorFiles = 0;
 int DebugThreads = 0;
+int WatchMode = 0;
 FILE *DependencyGraph = 0;
 
 pthread_mutex_t InterpreterLock[1] = {PTHREAD_MUTEX_INITIALIZER};
@@ -1296,6 +1301,15 @@ void target_update(target_t *Target) {
 	pthread_cond_broadcast(TargetUpdated);
 
 	targetset_foreach(Target->Affects, Target, (void *)target_affect);
+
+#ifdef Linux
+	if (WatchMode && !Target->Build && Target->Type == FileTargetT) {
+		target_file_t *FileTarget = (target_file_t *)Target;
+		if (!FileTarget->Absolute) {
+			targetwatch_add(vfs_resolve(FileTarget->Path));
+		}
+	}
+#endif
 }
 
 int target_wait(target_t *Target, target_t *Waiter) {

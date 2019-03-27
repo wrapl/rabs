@@ -6,6 +6,5 @@
 
 extern const char *RootPath, *SystemName;
 extern __thread const char *CurrentDirectory;
-void restart();
 
 #endif

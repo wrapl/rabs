@@ -2,7 +2,7 @@
 
 include("common.rabs")
 
-print(type(1), "\n")
+print(type(12), "\n")
 print(type("hello"), "\n")
 print(type([1, 2, 3]), "\n")
 print(type({"a" is 100}), "\n")
