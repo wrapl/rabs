@@ -322,6 +322,7 @@ typedef struct target_file_ls_t target_file_ls_t;
 struct target_file_ls_t {
 	ml_value_t *Results;
 	regex_t *Regex;
+	int Recursive;
 };
 
 static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
@@ -332,20 +333,23 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 	}
 	struct dirent *Entry = readdir(Dir);
 	while (Entry) {
-		if (
-			strcmp(Entry->d_name, ".") &&
-			strcmp(Entry->d_name, "..") &&
-			!(Ls->Regex && regexec(Ls->Regex, Entry->d_name, 0, 0, 0))
-		) {
-			const char *Absolute = concat(Path, "/", Entry->d_name, NULL);
-			const char *Relative = match_prefix(Absolute, RootPath);
-			target_t *File;
-			if (Relative) {
-				File = target_file_check(Relative + 1, 0);
-			} else {
-				File = target_file_check(Absolute, 1);
+		if (strcmp(Entry->d_name, ".") && strcmp(Entry->d_name, "..")) {
+			if (!(Ls->Regex && regexec(Ls->Regex, Entry->d_name, 0, 0, 0))) {
+				const char *Absolute = concat(Path, "/", Entry->d_name, NULL);
+				const char *Relative = match_prefix(Absolute, RootPath);
+				target_t *File;
+				if (Relative) {
+					File = target_file_check(Relative + 1, 0);
+				} else {
+					File = target_file_check(Absolute, 1);
+				}
+				ml_list_append(Ls->Results, (ml_value_t *)File);
 			}
-			ml_list_append(Ls->Results, (ml_value_t *)File);
+			if (Ls->Recursive && (Entry->d_type == DT_DIR)) {
+				const char *Subdir = concat(Path, "/", Entry->d_name, NULL);
+				printf("Recursing into %s\n", Subdir);
+				target_file_ls_fn(Ls, Subdir);
+			}
 		}
 		Entry = readdir(Dir);
 	}
@@ -354,17 +358,21 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 }
 
 ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
-	target_file_ls_t Ls[1] = {{ml_list(), NULL}};
-	if (Count > 1) {
-		const char *Pattern = ml_string_value(Args[1]);
-		Ls->Regex = new(regex_t);
-		int Error = regcomp(Ls->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
-		if (Error) {
-			size_t Length = regerror(Error, Ls->Regex, NULL, 0);
-			char *Message = snew(Length + 1);
-			regerror(Error, Ls->Regex, Message, Length);
-			regfree(Ls->Regex);
-			return ml_error("RegexError", "%s", Message);
+	target_file_ls_t Ls[1] = {{ml_list(), NULL, 0}};
+	for (int I = 1; I < Count; ++I) {
+		if (Args[I]->Type == MLStringT) {
+			const char *Pattern = ml_string_value(Args[I]);
+			Ls->Regex = new(regex_t);
+			int Error = regcomp(Ls->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
+			if (Error) {
+				size_t Length = regerror(Error, Ls->Regex, NULL, 0);
+				char *Message = snew(Length + 1);
+				regerror(Error, Ls->Regex, Message, Length);
+				regfree(Ls->Regex);
+				return ml_error("RegexError", "%s", Message);
+			}
+		} else if (Args[I]->Type == MLMethodT && !strcmp(ml_method_name(Args[I]), "R")) {
+			Ls->Recursive = 1;
 		}
 	}
 	target_file_t *Target = (target_file_t *)Args[0];
