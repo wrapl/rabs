@@ -426,6 +426,17 @@ ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
+ml_value_t *target_file_map(void *Data, int Count, ml_value_t **Args) {
+	target_file_t *Input = (target_file_t *)Args[0];
+	target_file_t *Source = (target_file_t *)Args[1];
+	target_file_t *Dest = (target_file_t *)Args[2];
+	const char *Relative = match_prefix(Input->Path, Source->Path);
+	if (!Relative) return ml_error("PathError", "File is not in source");
+	const char *Path = concat(Dest->Path, Relative, NULL);
+	target_t *Target = target_file_check(Path, Dest->Absolute);
+	return (ml_value_t *)Target;
+}
+
 ml_value_t *target_file_relative(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	target_file_t *BaseTarget = (target_file_t *)Args[1];
@@ -1447,6 +1458,7 @@ void target_init() {
 	ml_method_by_name("dirname", 0, target_file_dirname, FileTargetT, NULL);
 	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, NULL);
 	ml_method_by_name("extension", 0, target_file_extension, FileTargetT, NULL);
+	ml_method_by_name("map", 0, target_file_map, FileTargetT, FileTargetT, FileTargetT, NULL);
 	ml_method_by_name("-", 0, target_file_relative, FileTargetT, FileTargetT, NULL);
 	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, NULL);
 	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, NULL);
