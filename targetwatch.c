@@ -5,15 +5,14 @@
 #include <string.h>
 #include <stdio.h>
 #include <gc/gc.h>
-#include <sys/inotify.h>
 #include <limits.h>
 #include <sys/stat.h>
+#include <sys/inotify.h>
 
 #define INITIAL_SIZE 256
 
 typedef struct directory_t {
 	const char *Path;
-	target_t *Target;
 	stringmap_t Files[1];
 } directory_t;
 
@@ -28,11 +27,11 @@ void targetwatch_init() {
 	WatchHandle = inotify_init();
 }
 
-void targetwatch_add(const char *FilePath, target_t *Target) {
+void targetwatch_add(const char *FilePath) {
 	struct stat Stat[1];
 	if (stat(FilePath, Stat)) return;
 	if (S_ISDIR(Stat->st_mode)) {
-		directory_t **Slot = (directory_t **)stringmap_slot(DirectoriesByName, FilePath);
+		/*directory_t **Slot = (directory_t **)stringmap_slot(DirectoriesByName, FilePath);
 		directory_t *Directory = Slot[0];
 		if (!Directory) {
 			printf("Adding watch on %s\n", FilePath);
@@ -46,8 +45,7 @@ void targetwatch_add(const char *FilePath, target_t *Target) {
 				MaxHandles = Handle;
 			}
 			DirectoriesByHandle[Handle] = Directory;
-		}
-		Directory->Target = Target;
+		}*/
 	} else {
 		int Length = strlen(FilePath);
 		char *DirectoryPath = snew(Length + 1);
@@ -69,13 +67,13 @@ void targetwatch_add(const char *FilePath, target_t *Target) {
 			DirectoriesByHandle[Handle] = Directory;
 		}
 		printf("Adding watch on %s in %s\n", FileName, DirectoryPath);
-		stringmap_insert(Directory->Files, FileName, Target);
+		stringmap_insert(Directory->Files, FileName, FileName);
 	}
 }
 
 #define BUFFER_SIZE (sizeof(struct inotify_event) + NAME_MAX + 1)
 
-void targetwatch_wait() {
+void targetwatch_wait(void (restart)()) {
 	char Buffer[BUFFER_SIZE];
 	for (;;) {
 		ssize_t Bytes = read(WatchHandle, Buffer, BUFFER_SIZE);
@@ -87,10 +85,9 @@ void targetwatch_wait() {
 			if (Directory) {
 				printf("Event %x for %s in %s\n", Event->mask, Event->name, Directory->Path);
 				if (Event->mask & IN_CLOSE_WRITE) {
-					target_t *Target = stringmap_search(Directory->Files, Event->name);
-					if (Target) target_recheck(Target);
-				} else {
-					if (Directory->Target) target_recheck(Directory->Target);
+					if (stringmap_search(Directory->Files, Event->name)) {
+						restart();
+					}
 				}
 			}
 			Next += sizeof(struct inotify_event) + Event->len;

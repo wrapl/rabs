@@ -35,6 +35,7 @@ LDFLAGS += minilang/libminilang.a -lm -lgc -lsqlite3
 
 ifeq ($(PLATFORM), Linux)
 	LDFLAGS += -Wl,--export-dynamic -ldl
+	objects += targetwatch.o
 endif
 
 ifeq ($(PLATFORM), Mingw)
@@ -62,7 +63,7 @@ endif
 
 clean:
 	make -C minilang clean
-	rm -f rabs
+	rm -f $(RABS)
 	rm -f *.o
 
 PREFIX = /usr

@@ -20,11 +20,15 @@
 #include "library.h"
 #include "ml_console.h"
 
+#ifdef Linux
+#include "targetwatch.h"
+#endif
+
 #ifndef Mingw
 #include <sys/wait.h>
 #endif
 
-#define VERSION_STRING "1.7.5"
+#define VERSION_STRING "1.8.0"
 
 const char *SystemName = "build.rabs";
 const char *RootPath = 0;
@@ -67,7 +71,9 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 }
 
 static ml_value_t *load_file(const char *FileName) {
-	//if (MonitorFiles) targetwatch_add(FileName, (target_t *)-1);
+#ifdef Linux
+	if (WatchMode) targetwatch_add(FileName);
+#endif
 	ml_value_t *Closure = ml_load(rabs_ml_global, NULL, FileName);
 	if (Closure->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
@@ -133,6 +139,9 @@ ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 	char *Extension = FileName + strlen(FileName);
 	while ((Extension > FileName) && (Extension[-1] != '.')) --Extension;
 	if (!strcmp(Extension, "rabs")) {
+		if (FileName[0] != '/') {
+			FileName = vfs_resolve(concat(CurrentContext->FullPath, "/", FileName, NULL));
+		}
 		return load_file(FileName);
 	} else if (!strcmp(Extension, "so")) {
 		return library_load(FileName, Globals);
@@ -633,9 +642,9 @@ static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
-void restart() {
+static void restart() {
 	cache_close();
-	execv(SavedArgv[0], SavedArgv);
+	execv("/proc/self/exe", SavedArgv);
 }
 
 int main(int Argc, char **Argv) {
@@ -700,16 +709,6 @@ int main(int Argc, char **Argv) {
 	for (int I = 1; I < Argc; ++I) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
-			case 'h': {
-				printf("Usage: %s { options } [ target ]\n", Argv[0]);
-				puts("    -h              display this message");
-				puts("    -v              print version and exit");
-				puts("    -Dkey[=value]   add a define");
-				puts("    -c              print shell commands");
-				puts("    -p n            run n threads");
-				puts("    -w              watch for file changes");
-				exit(0);
-			}
 			case 'v': {
 				printf("rabs version %s\n", VERSION_STRING);
 				exit(0);
@@ -771,11 +770,13 @@ int main(int Argc, char **Argv) {
 				DebugThreads = 1;
 				break;
 			}
-			/*case 'w': {
+#ifdef Linux
+			case 'w': {
 				targetwatch_init();
-				MonitorFiles = 1;
+				WatchMode = 1;
 				break;
-			}*/
+			}
+#endif
 			case 't': {
 				GC_disable();
 				break;
@@ -784,6 +785,21 @@ int main(int Argc, char **Argv) {
 				if (!strcmp(Argv[I] + 2, "debug-compiler")) {
 					MLDebugClosures = 1;
 				}
+				break;
+			}
+			case 'h': default: {
+				printf("Usage: %s { options } [ target ]\n", Argv[0]);
+				puts("    -h              display this message and exit");
+				puts("    -v              print version and exit");
+				puts("    -Dkey[=value]   add a define");
+				puts("    -c              print shell commands");
+				puts("    -s              print each target after building");
+				puts("    -p n            run n threads");
+				puts("    -G              generate dependencies.dot");
+#ifdef Linux
+				puts("    -w              watch for file changes");
+#endif
+				exit(0);
 			}
 			}
 		} else {
@@ -809,11 +825,7 @@ int main(int Argc, char **Argv) {
 	context_push("");
 	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
 
-	if (InteractiveMode || MonitorFiles) {
-
-	} else {
-		target_threads_start(NumThreads);
-	}
+	if (!InteractiveMode) target_threads_start(NumThreads);
 
 	load_file(concat(RootPath, "/", SystemName, NULL));
 	target_t *Target;
@@ -844,6 +856,10 @@ int main(int Argc, char **Argv) {
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
 		ml_console(rabs_ml_global, Globals);
+	} else if (WatchMode) {
+#ifdef Linux
+		targetwatch_wait(restart);
+#endif
 	}
 	return 0;
 }
