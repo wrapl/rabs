@@ -91,7 +91,7 @@ static void csv_finalize(csv_t *Csv, void *Data) {
 	}
 }
 
-ml_value_t *open(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *csv_open(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(2);
 	ml_value_t *FileName = Args[0];
 	if (FileName->Type != MLStringT) {
@@ -116,11 +116,12 @@ ml_value_t *open(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Csv;
 }
 
-void *init(stringmap_t *Globals) {
+void *init(stringmap_t *Exports, stringmap_t *Globals) {
 	StringMethod = ml_method("string");
 	CsvT = ml_class(MLAnyT, "csv-file");
 	ml_method_by_name("read", 0, csv_read_fn, CsvT, NULL);
 	ml_method_by_name("write", 0, csv_write_fn, CsvT, MLListT, NULL);
 	ml_method_by_name("close", 0, csv_close_fn, CsvT, NULL);
+	stringmap_insert(Exports, "open", ml_function(0, csv_open));
 	return 0;
 }
