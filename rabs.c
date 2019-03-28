@@ -28,7 +28,7 @@
 #include <sys/wait.h>
 #endif
 
-#define VERSION_STRING "1.7.5"
+#define VERSION_STRING "1.8.0"
 
 const char *SystemName = "build.rabs";
 const char *RootPath = 0;
