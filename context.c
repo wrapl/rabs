@@ -96,6 +96,21 @@ static ml_value_t *context_get_scope(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)context_find(Path) ?: MLNil;
 }
 
+ml_value_t *context_in_scope(void *Data, int Count, ml_value_t **Args) {
+	context_t *OldContext = CurrentContext;
+	CurrentContext = (context_t *)Args[0];
+	ml_value_t *Result = ml_call(Args[1], 0, NULL);
+	if (Result->Type == MLErrorT) {
+		printf("Error: %s\n", ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		exit(1);
+	}
+	CurrentContext = OldContext;
+	return Result;
+}
+
 void context_init() {
 	DefaultString = ml_string("DEFAULT", -1);
 	ContextT = ml_class(MLAnyT, "context");
@@ -104,4 +119,5 @@ void context_init() {
 	ml_method_by_name("path", 0, context_path, ContextT, NULL);
 	ml_method_by_name("/", 0, context_get_subdir, ContextT, MLStringT, NULL);
 	ml_method_by_name("@", 0, context_get_scope, ContextT, MLStringT, NULL);
+	ml_method_by_name("in", 0, context_in_scope, ContextT, MLFunctionT, NULL);
 }
