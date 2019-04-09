@@ -28,7 +28,7 @@
 #include <sys/wait.h>
 #endif
 
-#define VERSION_STRING "1.8.0"
+#define VERSION_STRING "1.8.1"
 
 const char *SystemName = "build.rabs";
 const char *RootPath = 0;
@@ -165,7 +165,7 @@ ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
 }
 
 ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
-	return ml_string(CurrentContext->Path, -1);
+	return (ml_value_t *)CurrentContext;
 }
 
 #ifdef __MINGW32__
