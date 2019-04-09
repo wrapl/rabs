@@ -62,6 +62,10 @@ ml_value_t *context_symb_get(context_t *Context, const char *Name) {
 	return 0;
 }
 
+ml_value_t *context_symb_get_or_nil(context_t *Context, const char *Name) {
+	return context_symb_get(Context, Name) ?: MLNil;
+}
+
 void context_symb_set(context_t *Context, const char *Name, ml_value_t *Value) {
 	stringmap_insert(Context->Locals, Name, Value);
 }
@@ -69,7 +73,7 @@ void context_symb_set(context_t *Context, const char *Name, ml_value_t *Value) {
 static ml_value_t *context_get_local(void *Data, int Count, ml_value_t **Args) {
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
-	return ml_property(Context, Name, (ml_getter_t)context_symb_get, (ml_setter_t)context_symb_set, NULL, NULL);
+	return ml_property(Context, Name, (ml_getter_t)context_symb_get_or_nil, (ml_setter_t)context_symb_set, NULL, NULL);
 }
 
 static ml_value_t *context_get_parent(void *Data, int Count, ml_value_t **Args) {
