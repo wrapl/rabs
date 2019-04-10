@@ -3,6 +3,7 @@
 
 #include <pthread.h>
 #include "minilang.h"
+#include "minilang/ml_macros.h"
 
 extern const char *RootPath, *SystemName;
 extern __thread const char *CurrentDirectory;
