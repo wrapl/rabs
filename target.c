@@ -1429,12 +1429,12 @@ void target_threads_wait(target_t *Target) {
 
 void target_init() {
 	targetcache_init();
-	TargetT = ml_class(MLAnyT, "target");
-	FileTargetT = ml_class(TargetT, "file-target");
-	MetaTargetT = ml_class(TargetT, "meta-target");
-	ExprTargetT = ml_class(TargetT, "expr-target");
-	ScanTargetT = ml_class(TargetT, "scan-target");
-	SymbTargetT = ml_class(TargetT, "symb-target");
+	TargetT = ml_type(MLAnyT, "target");
+	FileTargetT = ml_type(TargetT, "file-target");
+	MetaTargetT = ml_type(TargetT, "meta-target");
+	ExprTargetT = ml_type(TargetT, "expr-target");
+	ScanTargetT = ml_type(TargetT, "scan-target");
+	SymbTargetT = ml_type(TargetT, "symb-target");
 	SymbTargetT->deref = symb_target_deref;
 	SymbTargetT->assign = symb_target_assign;
 	SHA256Method = ml_method("sha256");

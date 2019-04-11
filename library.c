@@ -45,6 +45,6 @@ static ml_value_t *library_get(void *Data, int Count, ml_value_t **Args) {
 }
 
 void library_init() {
-	LibraryT = ml_class(MLAnyT, "library");
+	LibraryT = ml_type(MLAnyT, "library");
 	ml_method_by_name(".", 0, library_get, LibraryT, MLStringT, NULL);
 }

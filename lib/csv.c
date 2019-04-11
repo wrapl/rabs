@@ -118,7 +118,7 @@ static ml_value_t *csv_open(void *Data, int Count, ml_value_t **Args) {
 
 void *init(stringmap_t *Exports, stringmap_t *Globals) {
 	StringMethod = ml_method("string");
-	CsvT = ml_class(MLAnyT, "csv-file");
+	CsvT = ml_type(MLAnyT, "csv-file");
 	ml_method_by_name("read", 0, csv_read_fn, CsvT, NULL);
 	ml_method_by_name("write", 0, csv_write_fn, CsvT, MLListT, NULL);
 	ml_method_by_name("close", 0, csv_close_fn, CsvT, NULL);
