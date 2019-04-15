@@ -372,8 +372,7 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 				return ml_error("RegexError", "%s", Message);
 			}
 		} else if (Args[I]->Type == MLRegexT) {
-			ml_regex_t *Regex = (ml_regex_t *)Args[I];
-			Ls->Regex = Regex->Value;
+			Ls->Regex = ml_regex_value(Args[I]);
 		} else if (Args[I]->Type == MLMethodT && !strcmp(ml_method_name(Args[I]), "R")) {
 			Ls->Recursive = 1;
 		}
