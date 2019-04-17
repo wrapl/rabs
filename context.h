@@ -24,7 +24,7 @@ context_t *context_scope(const char *Name);
 void context_pop();
 
 ml_value_t *context_symb_get(context_t *Context, const char *Name);
-void context_symb_set(context_t *Context, const char *Name, ml_value_t *Value);
+ml_value_t *context_symb_set(context_t *Context, const char *Name, ml_value_t *Value);
 
 extern __thread context_t *CurrentContext;
 

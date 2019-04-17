@@ -1,6 +1,7 @@
 #include "targetcache.h"
 #include "target.h"
 #include "minilang/stringmap.h"
+#include "minilang/ml_macros.h"
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
