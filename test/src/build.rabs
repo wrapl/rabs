@@ -1,3 +1,5 @@
+EXTERNALS := old or subdir("externals")
+
 var pkgconfig := fun(Args) expr(Args) => fun() Args
 
 TEST := defined("TEST")
@@ -26,6 +28,8 @@ end
 var TestCflags := expr("TestCflags")[Config, "TEST"] => fun() shell(Config):trim
 
 CFLAGS := old + [TestCflags, pkgconfig("-march=native")]
+LDFLAGS := old + ["-lminilang"]
+PREBUILDS := old + [EXTERNALS."MINILANG"]
 
 c_program(file("test"), [file("test.o"), file("test2.o")])
 

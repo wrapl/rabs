@@ -219,7 +219,8 @@ static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsig
 	if (stat(FileName, Stat)) {
 		printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
 		pthread_mutex_lock(InterpreterLock);
-		return 0;
+		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
+		return PreviousTime;
 	}
 	if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
@@ -1029,20 +1030,6 @@ target_t *target_find(const char *Id) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
 		return (target_t *)Target;
 	}
-	if (!memcmp(Id, "scan*:", 6)) {
-		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Slot);
-		const char *Name;
-		for (Name = Id + strlen(Id) - 1; --Name > Id + 6;) {
-			if (Name[0] == ':' && Name[1] == ':') break;
-		}
-		size_t ParentIdLength = Name - Id - 6;
-		char *ParentId = snew(ParentIdLength + 1);
-		memcpy(ParentId, Id + 6, ParentIdLength);
-		ParentId[ParentIdLength] = 0;
-		Target->Source = target_find(ParentId);
-		Target->Name = Name + 2;
-		return (target_t *)Target;
-	}
 	if (!memcmp(Id, "scan:", 5)) {
 		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Slot);
 		const char *Name;
@@ -1124,6 +1111,9 @@ int target_affect(target_t *Target, target_t *Depend) {
 static int target_depends_fn(target_t *Depend, int *DependsLastUpdated) {
 	//printf("\e[34m%s version = %d\e[0m\n", Depend->Id, Depend->LastUpdated);
 	if (Depend->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depend->LastUpdated;
+	if (Depend->LastUpdated == CurrentVersion) {
+		if (StatusUpdates) printf("\tUpdating due to \e[32m%s\e[0m\n", Depend->Id);
+	}
 	return 0;
 }
 
@@ -1159,6 +1149,11 @@ int target_find_leaves(target_t *Target, targetset_t *Leaves) {
 	} else {
 		targetset_insert(Leaves, Target);
 	}
+	return 0;
+}
+
+int target_insert(target_t *Target, targetset_t *Set) {
+	targetset_insert(Set, Target);
 	return 0;
 }
 
@@ -1270,16 +1265,18 @@ void target_update(target_t *Target) {
 				((target_expr_t *)Target)->Value = Result;
 				cache_expr_set(Target, Result);
 			} else if (Target->Type == ScanTargetT) {
+				targetset_t Roots[1] = {TARGETSET_INIT};
+				targetset_init(Roots, ml_list_length(Result));
+				ml_list_foreach(Result, Roots, (void *)build_scan_target_list);
 				targetset_t Scans[1] = {TARGETSET_INIT};
-				targetset_init(Scans, ml_list_length(Result));
-				ml_list_foreach(Result, Scans, (void *)build_scan_target_list);
+				targetset_foreach(Roots, Scans, (void *)target_insert);
+				targetset_foreach(Roots, Scans, (void *)target_find_leaves);
 				cache_scan_set(Target, Scans);
 				if (DependencyGraph) {
 					targetset_foreach(Scans, Target, (void *)target_graph_dependencies);
 				}
 				targetset_foreach(Scans, 0, (void *)target_queue);
 				targetset_foreach(Scans, Target, (void *)target_wait);
-				targetset_foreach(Scans, Target->BuildDepends, (void *)target_find_leaves);
 
 				//printf("scans(%s) = \n", Target->Id);
 				//targetset_foreach(Scans, 0, targetset_print);
@@ -1300,8 +1297,8 @@ void target_update(target_t *Target) {
 			if (DependencyGraph) {
 				targetset_foreach(Scans, Target, (void *)target_graph_dependencies);
 			}
-			targetset_foreach(Scans, Target, (void *)target_queue);
 			targetset_foreach(Scans, Target, (void *)target_set_parent);
+			targetset_foreach(Scans, Target, (void *)target_queue);
 			targetset_foreach(Scans, Target, (void *)target_wait);
 
 			//printf("scans(%s) = \n", Target->Id);
