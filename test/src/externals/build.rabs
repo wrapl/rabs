@@ -1,0 +1,12 @@
+context():parent."CFLAGS" := old + ['-I{PATH/"include"}']
+context():parent."LDFLAGS" := old + ['-L{PATH/"lib"}']
+
+MINILANG_VERSION := old or "1.2.0"
+
+MINILANG := meta("minilang"):scan("install") => fun() do
+	file("minilang"):rmdir:mkdir:chdir
+	execute('wget https://github.com/wrapl/minilang/archive/v{MINILANG_VERSION}.tar.gz -O- | tar xzP --strip-components=1')
+	execute('make -j4')
+	execute('make install PREFIX={PATH}')
+	ret [PATH / "lib/libminilang.a"]
+end
