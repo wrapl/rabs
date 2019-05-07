@@ -1,6 +1,6 @@
 -- ROOT --
 
-include("common.rabs")
+%include common.rabs
 
 print(type(12), "\n")
 print(type("hello"), "\n")

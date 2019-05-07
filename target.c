@@ -1354,9 +1354,9 @@ int target_wait(target_t *Target, target_t *Waiter) {
 
 static void *target_thread_fn(void *Arg) {
 	CurrentThread = (build_thread_t *)Arg;
-	const char *Path = getcwd(NULL, 0);
-	char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
-	CurrentDirectory = strcpy(Path2, Path);
+	char *Path = getcwd(NULL, 0);
+	CurrentDirectory = GC_strdup(Path);
+	free(Path);
 	pthread_mutex_lock(InterpreterLock);
 	++RunningThreads;
 	for (;;) {
