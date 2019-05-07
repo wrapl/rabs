@@ -110,7 +110,6 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 				FileName = vfs_resolve(concat(CurrentContext->FullPath, "/", FileName, NULL));
 			}
 			free(Line);
-			printf("Including <%s>\n", FileName);
 			preprocessor_node_t *NewNode = new(preprocessor_node_t);
 			NewNode->Next = Node;
 			NewNode->FileName = FileName;
