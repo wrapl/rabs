@@ -70,11 +70,74 @@ static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	return Value;
 }
 
+typedef struct preprocessor_node_t preprocessor_node_t;
+
+struct preprocessor_node_t {
+	preprocessor_node_t *Next;
+	const char *FileName;
+	FILE *File;
+	ml_source_t Source;
+};
+
+typedef struct preprocessor_t {
+	preprocessor_node_t *Nodes;
+	mlc_scanner_t *Scanner;
+	mlc_error_t Error[1];
+} preprocessor_t;
+
+static const char *preprocessor_read(preprocessor_t *Preprocessor) {
+	preprocessor_node_t *Node = Preprocessor->Nodes;
+	while (Node) {
+		if (!Node->File) {
+			Node->File = fopen(Node->FileName, "r");
+			if (!Node->File) {
+				Preprocessor->Error->Message = ml_error("LoadError", "error opening %s", Node->FileName);
+				longjmp(Preprocessor->Error->Handler, 1);
+			}
+		}
+		char *Line = NULL;
+		size_t Length = 0;
+		ssize_t Actual = getline(&Line, &Length, Node->File);
+		if (Actual < 0) {
+			free(Line);
+			fclose(Node->File);
+			Node = Preprocessor->Nodes = Node->Next;
+			if (Node) ml_scanner_source(Preprocessor->Scanner, Node->Source);
+		} else if (!strncmp(Line, "%include ", strlen("%include "))) {
+			while (Line[Actual] <= ' ') Line[Actual--] = 0;
+			const char *FileName = Line + strlen("%include ");
+			if (FileName[0] != '/') {
+				FileName = vfs_resolve(concat(CurrentContext->FullPath, "/", FileName, NULL));
+			}
+			free(Line);
+			printf("Including <%s>\n", FileName);
+			preprocessor_node_t *NewNode = new(preprocessor_node_t);
+			NewNode->Next = Node;
+			NewNode->FileName = FileName;
+			Node->Source = ml_scanner_source(Preprocessor->Scanner, (ml_source_t){FileName, 0});
+			++Node->Source.Line;
+			Node = Preprocessor->Nodes = NewNode;
+		} else {
+			const char *NewLine = GC_strdup(Line);
+			free(Line);
+			return NewLine;
+		}
+	}
+	return NULL;
+}
+
 static ml_value_t *load_file(const char *FileName) {
 #ifdef Linux
 	if (WatchMode) targetwatch_add(FileName);
 #endif
-	ml_value_t *Closure = ml_load(rabs_ml_global, NULL, FileName);
+	preprocessor_node_t *Node = new(preprocessor_node_t);
+	Node->FileName = FileName;
+	preprocessor_t Preprocessor[1] = {Node, NULL,};
+	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Error);
+	if (setjmp(Preprocessor->Error->Handler)) return Preprocessor->Error->Message;
+	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
+	ml_accept_eoi(Preprocessor->Scanner);
+	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, Preprocessor->Error);
 	if (Closure->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
 		const char *Source;
@@ -827,7 +890,14 @@ int main(int Argc, char **Argv) {
 
 	if (!InteractiveMode) target_threads_start(NumThreads);
 
-	load_file(concat(RootPath, "/", SystemName, NULL));
+	ml_value_t *Result = load_file(concat(RootPath, "/", SystemName, NULL));
+	if (Result->Type == MLErrorT) {
+		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		exit(1);
+	}
 	target_t *Target;
 	if (TargetName) {
 		int HasPrefix = !strncmp(TargetName, "meta:", strlen("meta:"));
