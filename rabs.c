@@ -13,7 +13,7 @@
 #include "util.h"
 #include "cache.h"
 #include "minilang.h"
-#include "ml_compiler.h"
+#include "ml_object.h"
 #include "ml_file.h"
 #include "rabs.h"
 #include "minilang/stringmap.h"
@@ -28,7 +28,7 @@
 #include <sys/wait.h>
 #endif
 
-#define VERSION_STRING "1.9.9"
+#define VERSION_STRING "2.0.0"
 
 const char *SystemName = "build.rabs";
 const char *RootPath = 0;
@@ -761,6 +761,7 @@ int main(int Argc, char **Argv) {
 	target_init();
 	context_init();
 	ml_file_init();
+	ml_object_init(Globals);
 	library_init();
 
 	const char *TargetName = 0;
