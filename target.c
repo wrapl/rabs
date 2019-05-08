@@ -1269,10 +1269,12 @@ void target_update(target_t *Target) {
 				targetset_t Roots[1] = {TARGETSET_INIT};
 				if (Result->Type != MLListT) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
+					exit(1);
 				}
 				targetset_init(Roots, ml_list_length(Result));
 				if (ml_list_foreach(Result, Roots, (void *)build_scan_target_list)) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
+					exit(1);
 				}
 				targetset_t Scans[1] = {TARGETSET_INIT};
 				targetset_foreach(Roots, Scans, (void *)target_insert);
