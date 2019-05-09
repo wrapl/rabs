@@ -812,6 +812,7 @@ static ml_value_t *target_scan_source(void *Data, int Count, ml_value_t **Args) 
 }
 
 static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
+	if (!ml_is((ml_value_t *)Depend, TargetT)) return 1;
 	targetset_insert(Scans, Depend);
 	return 0;
 }
@@ -1266,8 +1267,15 @@ void target_update(target_t *Target) {
 				cache_expr_set(Target, Result);
 			} else if (Target->Type == ScanTargetT) {
 				targetset_t Roots[1] = {TARGETSET_INIT};
+				if (Result->Type != MLListT) {
+					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
+					exit(1);
+				}
 				targetset_init(Roots, ml_list_length(Result));
-				ml_list_foreach(Result, Roots, (void *)build_scan_target_list);
+				if (ml_list_foreach(Result, Roots, (void *)build_scan_target_list)) {
+					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
+					exit(1);
+				}
 				targetset_t Scans[1] = {TARGETSET_INIT};
 				targetset_foreach(Roots, Scans, (void *)target_insert);
 				targetset_foreach(Roots, Scans, (void *)target_find_leaves);

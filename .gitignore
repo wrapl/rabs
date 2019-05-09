@@ -11,3 +11,4 @@ build.rabs.db*
 /.project
 /.settings
 /.vscode
+/docs/_build
