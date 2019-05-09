@@ -6,10 +6,21 @@
 Welcome to Rabs's documentation!
 ================================
 
-.. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+Introduction
+------------
 
+Rabs is a general purpose build system, designed for fast and consistent incremental rebuilds.
+
+Rabs is designed to build (or rebuild) a set of targets as necessary, by considering dependencies and changes to the contents / values of those dependencies.
+For a general overview of targets in Rabs, see here: :doc:`targets/targets`. 
+
+Rabs provides several types of targets: 
+
+* :doc:`targets/files`
+* :doc:`targets/symbols`
+* :doc:`targets/meta`
+* :doc:`targets/expressions`
+* :doc:`targets/scans`
 
 
 Indices and tables
