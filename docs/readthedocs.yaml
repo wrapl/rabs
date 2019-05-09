@@ -1,0 +1,7 @@
+version: 2
+formats: []
+python:
+   version: 3.7
+sphinx:
+   builder: html
+   configuration: conf.py
