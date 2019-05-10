@@ -52,3 +52,9 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ['_static']
 
 master_doc = 'index'
+
+def setup(sphinx):
+	import sys, os
+	sys.path.insert(0, os.path.abspath('./_util'))
+	from minilang import MinilangLexer
+	sphinx.add_lexer("mini", MinilangLexer())
