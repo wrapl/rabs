@@ -12,3 +12,5 @@ build.rabs.db*
 /.settings
 /.vscode
 /docs/_build
+/tmp/
+*.pyc
