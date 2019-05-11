@@ -35,66 +35,46 @@ Example
 
 .. code-block:: mini
 
-   PLATFORM := defined("PLATFORM") or shell("uname"):trim
-   OS := defined("OS")
-   DEBUG := defined("DEBUG")
+   -- ROOT --
    
-   CFLAGS := []
-   LDFLAGS := []
-   PREBUILDS := []
+   var SRC := file("src")
+   var BIN := file("bin"):mkdir
+   var OBJ := file("obj"):mkdir
    
-   c_compile := fun(Source, Object) do
-      execute('gcc -c {CFLAGS} -o{Object} {Source}')
+   var TEST_C := SRC / "test.c"
+   var TEST_H := SRC / "test.h"
+   var TEST_O := OBJ / "test.o"
+   
+   TEST_O[TEST_C, TEST_H] => fun() do
+      execute('gcc -c -o{TEST_O} -I{SRC} {TEST_C}')
    end
    
-   c_includes := fun(Target) do
-      var Files := []
-      var Lines := shell('gcc -c {CFLAGS} -M -MG {Target:source}')
-      var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( )"
-      Files:pop
-      for File in Files do
-         File := file(File:replace(r"\\ ", " "))
-      end
-      return Files
+   var TEST := BIN / "test"
+   
+   TEST[TEST_O] => fun() do
+      execute('gcc -o{TEST} {TEST_O}')
    end
    
-   var SourceTypes := {
-      "c" is [c_includes, c_compile]
-   }
-   
-   c_program := fun(Executable, Objects, Libraries) do
-      Objects := Objects or []
-      Libraries := Libraries or []
-      var Sources := []
-      for Object in Objects do
-         for Extension, Functions in SourceTypes do
-            var Source := Object % Extension
-            if Source:exists then
-               Sources:put(Source)
-               var Scan := Source:scan("INCLUDES")[PREBUILDS] => Functions[1]
-               Object[Source, Scan] => (Functions[2] !! [Source])
-               exit
-            end
-         end
-      end
-      Executable[Objects, Libraries] => fun(Executable) do
-         execute('gcc', '-o', Executable, Objects, Libraries, LDFLAGS)
-         DEBUG or execute('strip', Executable)
-      end
-      DEFAULT[Executable]
-   end
+   DEFAULT[TEST]
 
 Rabs is designed to build (or rebuild) a set of targets as necessary, by considering dependencies and changes to the contents / values of those dependencies.
-For a general overview of targets in Rabs, see here: :doc:`targets/targets`. 
+For a general overview of targets in Rabs, see here: :doc:`/targets`. 
 
 Rabs provides several types of targets: 
 
-* :doc:`targets/files`
-* :doc:`targets/symbols`
-* :doc:`targets/meta`
-* :doc:`targets/expressions`
-* :doc:`targets/scans`
+* :doc:`/targets/files`
+* :doc:`/targets/symbols`
+* :doc:`/targets/meta`
+* :doc:`/targets/expressions`
+* :doc:`/targets/scans`
 
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Contents:
+   
+   /targets
+   /contexts
 
 Indices and tables
 ==================

@@ -222,11 +222,14 @@ static cache_list_t *cache_list_parse(const char *Ids, int *Total) {
 	cache_list_t *List = 0;
 	int I = CACHE_LIST_SIZE, N = 0;
 	const char *Id = Ids;
-	while (*Id) {
-		size_t Length = strlen(Id) + 1;
-		char *Copy = snew(Length);
+	while (*Id > '\n') {
+		const char *End = Id + 1;
+		while (*End > '\n') ++End;
+		size_t Length = End - Id;
+		char *Copy = snew(Length + 1);
 		memcpy(Copy, Id, Length);
-		Id += Length;
+		Copy[Length] = 0;
+		Id = End + 1;
 		if (I == CACHE_LIST_SIZE) {
 			cache_list_t *Temp = CacheLists ?: new(cache_list_t);
 			CacheLists = Temp->Next;
@@ -265,7 +268,9 @@ static int cache_target_set_size(target_t *Target, int *Size) {
 }
 
 static int cache_target_set_append(target_t *Target, char **Buffer) {
-	*Buffer = stpcpy(*Buffer, Target->Id) + 1;
+	char *Result = stpcpy(*Buffer, Target->Id);
+	Result[0] = '\n';
+	*Buffer = Result + 1;
 	return 0;
 }
 
@@ -287,7 +292,7 @@ void cache_depends_set(target_t *Target, targetset_t *Depends) {
 	char *Buffer = snew(Size);
 	char *Next = Buffer;
 	targetset_foreach(Depends, &Next, (void *)cache_target_set_append);
-	*Next = 0;
+	*Next = '\n';
 	sqlite3_bind_text(DependsSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	sqlite3_bind_blob(DependsSetStatement, 2, Buffer, Size, SQLITE_STATIC);
 	sqlite3_step(DependsSetStatement);
@@ -313,7 +318,7 @@ void cache_scan_set(target_t *Target, targetset_t *Scans) {
 	char *Buffer = snew(Size);
 	char *Next = Buffer;
 	targetset_foreach(Scans, &Next, (void *)cache_target_set_append);
-	*Next = 0;
+	*Next = '\n';
 	sqlite3_bind_text(ScanSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	sqlite3_bind_blob(ScanSetStatement, 2, Buffer, Size, SQLITE_STATIC);
 	sqlite3_step(ScanSetStatement);

@@ -27,8 +27,8 @@ author = 'Raja Mukherji'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = [
-]
+
+extensions = ['sphinxcontrib.inlinesyntaxhighlight', 'sphinxcontrib.fulltoc']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -44,7 +44,8 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "sphinx_rtd_theme"
+#html_theme = "sphinx_rtd_theme"
+html_theme = 'sphinx_catalystcloud_theme'
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
@@ -52,6 +53,14 @@ html_theme = "sphinx_rtd_theme"
 html_static_path = ['_static']
 
 master_doc = 'index'
+
+pygments_style = 'tango'
+
+# use language set by highlight directive if no language is set by role
+inline_highlight_respect_highlight = True
+
+# use language set by highlight directive if no role is set
+inline_highlight_literals = False
 
 def setup(sphinx):
 	import sys, os
