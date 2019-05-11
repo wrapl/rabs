@@ -44,9 +44,9 @@ void cache_open(const char *RootPath) {
 		exit(1);
 	}
 	sqlite3_exec(Cache,
-		"PRAGMA locking_mode = EXCLUSIVE"
-		"PRAGMA journal_mode = MEMORY"
-		"PRAGMA synchronous = OFF",
+		"PRAGMA locking_mode = EXCLUSIVE;"
+		"PRAGMA journal_mode = MEMORY;"
+		"PRAGMA synchronous = OFF;",
 		0, 0, 0
 	);
 	if (CreateCache) {
