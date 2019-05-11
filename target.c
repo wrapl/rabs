@@ -1087,8 +1087,11 @@ int target_queue(target_t *Target, target_t *Parent) {
 		if (Target->WaitCount == 0) {
 			++QueuedTargets;
 			Target->LastUpdated = STATE_QUEUED;
-			Target->Next = NextTarget;
-			NextTarget = Target;
+			target_t **Slot = &NextTarget;
+			int Priority = Target->Affects->Size;
+			while (Slot[0] && Slot[0]->Affects->Size > Priority) Slot = &Slot[0]->Next;
+			Target->Next = Slot[0];
+			Slot[0] = Target;
 			pthread_cond_broadcast(TargetAvailable);
 		}
 	}
