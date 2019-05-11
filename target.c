@@ -1068,41 +1068,26 @@ int target_print(target_t *Target, void *Data) {
 }
 
 int target_queue(target_t *Target, target_t *Parent) {
-	/*if (Target->LastUpdated == STATE_UNCHECKED) {
-		++QueuedTargets;
-		Target->Parent = Parent;
-		Target->LastUpdated = STATE_QUEUED;
-		Target->Next = NextTarget;
-		NextTarget = Target;
-		pthread_cond_broadcast(TargetAvailable);
-	}*/
-
 	if (Target->LastUpdated > 0) return 0;
 	if (Parent) {
 		Parent->WaitCount += targetset_insert(Target->Affects, Parent);
 	}
 	if (Target->LastUpdated == STATE_UNCHECKED) {
-		//Target->Parent = Parent;
 		targetset_foreach(Target->Depends, Target, (void *)target_queue);
 		if (Target->WaitCount == 0) {
 			++QueuedTargets;
 			Target->LastUpdated = STATE_QUEUED;
-			target_t **Slot = &NextTarget;
-			int Priority = Target->Affects->Size;
-			while (Slot[0] && Slot[0]->Affects->Size > Priority) Slot = &Slot[0]->Next;
-			Target->Next = Slot[0];
-			Slot[0] = Target;
+			Target->Next = NextTarget;
+			NextTarget = Target;
 			pthread_cond_broadcast(TargetAvailable);
 		}
 	}
-
 	return 0;
 }
 
 int target_affect(target_t *Target, target_t *Depend) {
 	--Target->WaitCount;
 	if (Target->LastUpdated == STATE_UNCHECKED && Target->WaitCount == 0) {
-		//if (!strcmp(Target->Id, "scan*:file:dev/obj/lib/Markdown/Parser.c::INCLUDES")) asm("int3");
 		++QueuedTargets;
 		Target->LastUpdated = STATE_QUEUED;
 		Target->Next = NextTarget;
