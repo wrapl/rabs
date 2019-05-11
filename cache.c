@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <gc.h>
+#include <sys/stat.h>
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 
@@ -21,55 +22,61 @@ static sqlite3_stmt *ScanGetStatement;
 static sqlite3_stmt *ScanSetStatement;
 static sqlite3_stmt *ExprGetStatement;
 static sqlite3_stmt *ExprSetStatement;
-int CurrentVersion = 0;
+int CurrentIteration = 0;
 
-static int version_callback(void *Data, int NumCols, char **Values, char **Names) {
-	CurrentVersion = atoi(Values[0] ?: "0");
+static int version_callback(char *Result, int NumCols, char **Values, char **Names) {
+	strcpy(Result, Values[0] ?: "0.0.0");
+	return 0;
+}
+
+static int iteration_callback(int *Result, int NumCols, char **Values, char **Names) {
+	*Result = atoi(Values[0] ?: "0");
 	return 0;
 }
 
 void cache_open(const char *RootPath) {
 	sqlite3_config(SQLITE_CONFIG_SINGLETHREAD);
 	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", NULL);
+	struct stat Stat[1];
+	int CreateCache = !!stat(CacheFileName, Stat);
 	if (sqlite3_open_v2(CacheFileName, &Cache, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "PRAGMA locking_mode = EXCLUSIVE", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "PRAGMA journal_mode = MEMORY", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "PRAGMA synchronous = OFF", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS info(key TEXT PRIMARY KEY, value);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS hashes(id TEXT PRIMARY KEY, last_updated INTEGER, last_checked INTEGER, hash BLOB, file_time INTEGER);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS builds(id TEXT PRIMARY KEY, build BLOB);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS scans(id TEXT PRIMARY KEY, scan BLOB);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS depends(id TEXT PRIMARY KEY, depend BLOB);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_exec(Cache, "CREATE TABLE IF NOT EXISTS exprs(id TEXT PRIMARY KEY, value TEXT);", 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
+	sqlite3_exec(Cache,
+		"PRAGMA locking_mode = EXCLUSIVE"
+		"PRAGMA journal_mode = MEMORY"
+		"PRAGMA synchronous = OFF",
+		0, 0, 0
+	);
+	if (CreateCache) {
+		if (sqlite3_exec(Cache,
+			"CREATE TABLE info(key TEXT PRIMARY KEY, value);"
+			"INSERT INTO info(key, value) VALUES('version', '" CURRENT_VERSION "');"
+			"CREATE TABLE hashes(id TEXT PRIMARY KEY, last_updated INTEGER, last_checked INTEGER, hash BLOB, file_time INTEGER);"
+			"CREATE TABLE builds(id TEXT PRIMARY KEY, build BLOB);"
+			"CREATE TABLE scans(id TEXT PRIMARY KEY, scan BLOB);"
+			"CREATE TABLE depends(id TEXT PRIMARY KEY, depend BLOB);"
+			"CREATE TABLE exprs(id TEXT PRIMARY KEY, value TEXT);",
+			0, 0, 0) != SQLITE_OK
+		) {
+			printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+			exit(1);
+		}
+	} else {
+		char PreviousVersion[10] = {'0', '.', '0', '.', '0', 0,};
+		if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'version\'", (void *)version_callback, &PreviousVersion, 0) != SQLITE_OK) {
+			printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+			exit(1);
+		}
+		if (!PreviousVersion || strcmp(PreviousVersion, WORKING_VERSION) < 0) {
+			printf("Version error: database was built with version %s but this version of Rabs will only work with version %s or higher\n", PreviousVersion, WORKING_VERSION);
+			exit(1);
+		}
+		if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'iteration\'", (void *)iteration_callback, &CurrentIteration, 0) != SQLITE_OK) {
+			printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+			exit(1);
+		}
 	}
 	if (sqlite3_prepare_v2(Cache, "SELECT hash, last_updated, last_checked, file_time FROM hashes WHERE id = ?", -1, &HashGetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
@@ -115,14 +122,16 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'version\'", version_callback, 0, 0) != SQLITE_OK) {
+	++CurrentIteration;
+	printf("Rabs version = %s\n", CURRENT_VERSION);
+	printf("Build iteration = %d\n", CurrentIteration);
+	char Buffer[100];
+	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', '%s')", CURRENT_VERSION);
+	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	++CurrentVersion;
-	printf("Build iteration = %d\n", CurrentVersion);
-	char Buffer[100];
-	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', %d)", CurrentVersion);
+	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('iteration', %d)", CurrentIteration);
 	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
@@ -145,11 +154,17 @@ void cache_close() {
 	sqlite3_close(Cache);
 }
 
-void cache_bump_version() {
-	++CurrentVersion;
-	printf("CurrentVersion = %d\n", CurrentVersion);
+void cache_bump_iteration() {
+	++CurrentIteration;
+	printf("Rabs version = %s\n", CURRENT_VERSION);
+	printf("Build iteration = %d\n", CurrentIteration);
 	char Buffer[100];
-	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', %d)", CurrentVersion);
+	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', '%s')", CURRENT_VERSION);
+	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('iteration', %d)", CurrentIteration);
 	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
@@ -176,7 +191,7 @@ void cache_hash_set(target_t *Target, time_t FileTime) {
 	sqlite3_bind_text(HashSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	sqlite3_bind_blob(HashSetStatement, 2, Target->Hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
 	sqlite3_bind_int(HashSetStatement, 3, Target->LastUpdated);
-	sqlite3_bind_int(HashSetStatement, 4, CurrentVersion);
+	sqlite3_bind_int(HashSetStatement, 4, CurrentIteration);
 	sqlite3_bind_int(HashSetStatement, 5, FileTime);
 	sqlite3_step(HashSetStatement);
 	sqlite3_reset(HashSetStatement);
@@ -200,7 +215,7 @@ void cache_build_hash_set(target_t *Target, unsigned char BuildHash[SHA256_BLOCK
 }
 
 void cache_last_check_set(target_t *Target, time_t FileTime) {
-	sqlite3_bind_int(LastCheckSetStatement, 1, CurrentVersion);
+	sqlite3_bind_int(LastCheckSetStatement, 1, CurrentIteration);
 	sqlite3_bind_int(LastCheckSetStatement, 2, FileTime);
 	sqlite3_bind_text(LastCheckSetStatement, 3, Target->Id, Target->IdLength, SQLITE_STATIC);
 	sqlite3_step(LastCheckSetStatement);

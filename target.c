@@ -667,7 +667,7 @@ struct target_meta_t {
 static ml_type_t *MetaTargetT;
 
 static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
-	if (DependsLastUpdated == CurrentVersion) {
+	if (DependsLastUpdated == CurrentIteration) {
 		memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 		memcpy(Target->Hash, &DependsLastUpdated, sizeof(DependsLastUpdated));
 	} else {
@@ -877,7 +877,7 @@ void target_symb_update(const char *Name) {
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
 	FileTime = target_hash(Target, FileTime, Previous, 0);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
-		Target->LastUpdated = CurrentVersion;
+		Target->LastUpdated = CurrentIteration;
 		cache_hash_set(Target, FileTime);
 	} else {
 		Target->LastUpdated = LastUpdated;
@@ -1110,9 +1110,9 @@ int target_affect(target_t *Target, target_t *Depend) {
 }
 
 static int target_depends_fn(target_t *Depend, int *DependsLastUpdated) {
-	//printf("\e[34m%s version = %d\e[0m\n", Depend->Id, Depend->LastUpdated);
+	//printf("\e[34m%s iteration = %d\e[0m\n", Depend->Id, Depend->LastUpdated);
 	if (Depend->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depend->LastUpdated;
-	if (Depend->LastUpdated == CurrentVersion) {
+	if (Depend->LastUpdated == CurrentIteration) {
 		if (StatusUpdates) printf("\tUpdating due to \e[32m%s\e[0m\n", Depend->Id);
 	}
 	return 0;
@@ -1212,7 +1212,7 @@ void target_update(target_t *Target) {
 		cache_build_hash_get(Target, PreviousBuildHash);
 		if (memcmp(PreviousBuildHash, BuildHash, SHA256_BLOCK_SIZE)) {
 			//printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
-			DependsLastUpdated = CurrentVersion;
+			DependsLastUpdated = CurrentIteration;
 		}
 	} else {
 		memset(BuildHash, 0, sizeof(SHA256_BLOCK_SIZE));
@@ -1313,7 +1313,7 @@ void target_update(target_t *Target) {
 	}
 	FileTime = target_hash(Target, FileTime, Previous, DependsLastUpdated);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
-		Target->LastUpdated = CurrentVersion;
+		Target->LastUpdated = CurrentIteration;
 		cache_hash_set(Target, FileTime);
 		cache_depends_set(Target, Target->BuildDepends);
 	} else {
@@ -1321,7 +1321,7 @@ void target_update(target_t *Target) {
 		cache_last_check_set(Target, FileTime);
 	}
 	++BuiltTargets;
-	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to version %d\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id, Target->LastUpdated);
+	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to iteration %d\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id, Target->LastUpdated);
 	pthread_cond_broadcast(TargetUpdated);
 
 	targetset_foreach(Target->Affects, Target, (void *)target_affect);

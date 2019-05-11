@@ -8,4 +8,7 @@
 extern const char *RootPath, *SystemName;
 extern __thread const char *CurrentDirectory;
 
+#define CURRENT_VERSION "2.0.4"
+#define WORKING_VERSION "2.0.4"
+
 #endif
