@@ -25,7 +25,7 @@ void cache_scan_set(target_t *Target, targetset_t *Scans);
 ml_value_t *cache_expr_get(target_t *Target);
 void cache_expr_set(target_t *Target, ml_value_t *Value);
 
-extern int CurrentVersion;
-void cache_bump_version();
+extern int CurrentIteration;
+void cache_bump_iteration();
 
 #endif

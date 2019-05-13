@@ -667,7 +667,7 @@ struct target_meta_t {
 static ml_type_t *MetaTargetT;
 
 static time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
-	if (DependsLastUpdated == CurrentVersion) {
+	if (DependsLastUpdated == CurrentIteration) {
 		memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
 		memcpy(Target->Hash, &DependsLastUpdated, sizeof(DependsLastUpdated));
 	} else {
@@ -877,7 +877,7 @@ void target_symb_update(const char *Name) {
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
 	FileTime = target_hash(Target, FileTime, Previous, 0);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
-		Target->LastUpdated = CurrentVersion;
+		Target->LastUpdated = CurrentIteration;
 		cache_hash_set(Target, FileTime);
 	} else {
 		Target->LastUpdated = LastUpdated;
@@ -1068,21 +1068,11 @@ int target_print(target_t *Target, void *Data) {
 }
 
 int target_queue(target_t *Target, target_t *Parent) {
-	/*if (Target->LastUpdated == STATE_UNCHECKED) {
-		++QueuedTargets;
-		Target->Parent = Parent;
-		Target->LastUpdated = STATE_QUEUED;
-		Target->Next = NextTarget;
-		NextTarget = Target;
-		pthread_cond_broadcast(TargetAvailable);
-	}*/
-
 	if (Target->LastUpdated > 0) return 0;
 	if (Parent) {
 		Parent->WaitCount += targetset_insert(Target->Affects, Parent);
 	}
 	if (Target->LastUpdated == STATE_UNCHECKED) {
-		//Target->Parent = Parent;
 		targetset_foreach(Target->Depends, Target, (void *)target_queue);
 		if (Target->WaitCount == 0) {
 			++QueuedTargets;
@@ -1092,14 +1082,12 @@ int target_queue(target_t *Target, target_t *Parent) {
 			pthread_cond_broadcast(TargetAvailable);
 		}
 	}
-
 	return 0;
 }
 
 int target_affect(target_t *Target, target_t *Depend) {
 	--Target->WaitCount;
 	if (Target->LastUpdated == STATE_UNCHECKED && Target->WaitCount == 0) {
-		//if (!strcmp(Target->Id, "scan*:file:dev/obj/lib/Markdown/Parser.c::INCLUDES")) asm("int3");
 		++QueuedTargets;
 		Target->LastUpdated = STATE_QUEUED;
 		Target->Next = NextTarget;
@@ -1110,9 +1098,9 @@ int target_affect(target_t *Target, target_t *Depend) {
 }
 
 static int target_depends_fn(target_t *Depend, int *DependsLastUpdated) {
-	//printf("\e[34m%s version = %d\e[0m\n", Depend->Id, Depend->LastUpdated);
+	//printf("\e[34m%s iteration = %d\e[0m\n", Depend->Id, Depend->LastUpdated);
 	if (Depend->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depend->LastUpdated;
-	if (Depend->LastUpdated == CurrentVersion) {
+	if (Depend->LastUpdated == CurrentIteration) {
 		if (StatusUpdates) printf("\tUpdating due to \e[32m%s\e[0m\n", Depend->Id);
 	}
 	return 0;
@@ -1143,12 +1131,12 @@ static void target_rebuild(target_t *Target) {
 	}
 }
 
-int target_find_leaves(target_t *Target, targetset_t *Leaves) {
+int target_find_leaves(target_t *Target, target_t *ScanTarget) {
 	if (Target->Build || targetset_size(Target->Depends)) {
-		targetset_foreach(Target->Depends, Leaves, (void *)target_find_leaves);
-		targetset_foreach(Target->BuildDepends, Leaves, (void *)target_find_leaves);
+		targetset_foreach(Target->Depends, ScanTarget, (void *)target_find_leaves);
+		targetset_foreach(Target->BuildDepends, ScanTarget, (void *)target_find_leaves);
 	} else {
-		targetset_insert(Leaves, Target);
+		targetset_insert(ScanTarget->BuildDepends, Target);
 	}
 	return 0;
 }
@@ -1212,7 +1200,7 @@ void target_update(target_t *Target) {
 		cache_build_hash_get(Target, PreviousBuildHash);
 		if (memcmp(PreviousBuildHash, BuildHash, SHA256_BLOCK_SIZE)) {
 			//printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
-			DependsLastUpdated = CurrentVersion;
+			DependsLastUpdated = CurrentIteration;
 		}
 	} else {
 		memset(BuildHash, 0, sizeof(SHA256_BLOCK_SIZE));
@@ -1266,25 +1254,23 @@ void target_update(target_t *Target) {
 				((target_expr_t *)Target)->Value = Result;
 				cache_expr_set(Target, Result);
 			} else if (Target->Type == ScanTargetT) {
-				targetset_t Roots[1] = {TARGETSET_INIT};
+				targetset_t Scans[1] = {TARGETSET_INIT};
 				if (Result->Type != MLListT) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
 					exit(1);
 				}
-				targetset_init(Roots, ml_list_length(Result));
-				if (ml_list_foreach(Result, Roots, (void *)build_scan_target_list)) {
+				targetset_init(Scans, ml_list_length(Result));
+				if (ml_list_foreach(Result, Scans, (void *)build_scan_target_list)) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
 					exit(1);
 				}
-				targetset_t Scans[1] = {TARGETSET_INIT};
-				targetset_foreach(Roots, Scans, (void *)target_insert);
-				targetset_foreach(Roots, Scans, (void *)target_find_leaves);
-				cache_scan_set(Target, Scans);
 				if (DependencyGraph) {
 					targetset_foreach(Scans, Target, (void *)target_graph_dependencies);
 				}
+				cache_scan_set(Target, Scans);
 				targetset_foreach(Scans, 0, (void *)target_queue);
 				targetset_foreach(Scans, Target, (void *)target_wait);
+				targetset_foreach(Scans, Target, (void *)target_find_leaves);
 
 				//printf("scans(%s) = \n", Target->Id);
 				//targetset_foreach(Scans, 0, targetset_print);
@@ -1315,7 +1301,7 @@ void target_update(target_t *Target) {
 	}
 	FileTime = target_hash(Target, FileTime, Previous, DependsLastUpdated);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
-		Target->LastUpdated = CurrentVersion;
+		Target->LastUpdated = CurrentIteration;
 		cache_hash_set(Target, FileTime);
 		cache_depends_set(Target, Target->BuildDepends);
 	} else {
@@ -1323,7 +1309,7 @@ void target_update(target_t *Target) {
 		cache_last_check_set(Target, FileTime);
 	}
 	++BuiltTargets;
-	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to version %d\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id, Target->LastUpdated);
+	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to iteration %d\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id, Target->LastUpdated);
 	pthread_cond_broadcast(TargetUpdated);
 
 	targetset_foreach(Target->Affects, Target, (void *)target_affect);

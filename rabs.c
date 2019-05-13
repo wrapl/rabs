@@ -28,8 +28,6 @@
 #include <sys/wait.h>
 #endif
 
-#define VERSION_STRING "2.0.2"
-
 const char *SystemName = "build.rabs";
 const char *RootPath = 0;
 ml_value_t *AppendMethod;
@@ -323,7 +321,9 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
 	clock_t Start = clock();
-	chdir(CurrentDirectory);
+	if (chdir(CurrentDirectory)) {
+		return ml_error("ExecuteError", "error changing directory to %s", CurrentDirectory);
+	}
 	FILE *File = popen(Command, "r");
 	pthread_mutex_unlock(InterpreterLock);
 	char Chars[120];
@@ -358,7 +358,9 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
 	clock_t Start = clock();
-	chdir(CurrentDirectory);
+	if (chdir(CurrentDirectory)) {
+		return ml_error("ExecuteError", "error changing directory to %s", CurrentDirectory);
+	}
 	FILE *File = popen(Command, "r");
 	pthread_mutex_unlock(InterpreterLock);
 	char Chars[ML_STRINGBUFFER_NODE_SIZE];
@@ -482,7 +484,7 @@ ml_value_t *rabs_execv(void *Data, int Count, ml_value_t **Args) {
 	clock_t Start = clock();
 	pid_t Child = fork();
 	if (!Child) {
-		chdir(WorkingDirectory);
+		if (chdir(WorkingDirectory)) exit(-1);
 		int DevNull = open("/dev/null", O_WRONLY | O_CREAT, 0666);
 		dup2(DevNull, STDOUT_FILENO);
 		close(DevNull);
@@ -533,7 +535,7 @@ ml_value_t *rabs_shellv(void *Data, int Count, ml_value_t **Args) {
 	if (pipe(Pipe) == -1) return ml_error("PipeError", "failed to create pipe");
 	pid_t Child = fork();
 	if (!Child) {
-		chdir(WorkingDirectory);
+		if (chdir(WorkingDirectory)) exit(-1);
 		close(Pipe[0]);
 		dup2(Pipe[1], STDOUT_FILENO);
 		if (execvp(Argv[0], (char * const *)Argv) == -1) exit(-1);
@@ -773,7 +775,7 @@ int main(int Argc, char **Argv) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
 			case 'v': {
-				printf("rabs version %s\n", VERSION_STRING);
+				printf("rabs version %s\n", CURRENT_VERSION);
 				exit(0);
 			}
 			case 'D': {
@@ -886,7 +888,7 @@ int main(int Argc, char **Argv) {
 	cache_open(RootPath);
 
 	context_push("");
-	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentVersion));
+	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentIteration));
 
 	if (!InteractiveMode) target_threads_start(NumThreads);
 
