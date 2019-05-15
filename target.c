@@ -737,6 +737,11 @@ static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsig
 	return 0;
 }
 
+static int target_expr_missing(target_expr_t *Target) {
+	Target->Value = cache_expr_get((target_t *)Target);
+	return Target->Value == NULL;
+}
+
 ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
@@ -997,6 +1002,7 @@ static time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char P
 
 static int target_missing(target_t *Target, int LastChecked) {
 	if (Target->Type == FileTargetT) return target_file_missing((target_file_t *)Target);
+	if (Target->Type == ExprTargetT) return target_expr_missing((target_expr_t *)Target);
 	return 0;
 }
 
@@ -1282,9 +1288,7 @@ void target_update(target_t *Target) {
 			CurrentTarget = OldTarget;
 		}
 	} else {
-		if (Target->Type == ExprTargetT) {
-			((target_expr_t *)Target)->Value = cache_expr_get(Target);
-		} else if (Target->Type == ScanTargetT) {
+		if (Target->Type == ScanTargetT) {
 			targetset_t *Scans = cache_scan_get(Target);
 			if (DependencyGraph) {
 				targetset_foreach(Scans, Target, (void *)target_graph_dependencies);

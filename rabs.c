@@ -135,7 +135,13 @@ static ml_value_t *load_file(const char *FileName) {
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {Node, NULL,};
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Error);
-	if (setjmp(Preprocessor->Error->Handler)) return Preprocessor->Error->Message;
+	if (setjmp(Preprocessor->Error->Handler)) {
+		printf("\e[31mError: %s\n\e[0m", ml_error_message(Preprocessor->Error->Message));
+		const char *Source;
+		int Line;
+		for (int I = 0; ml_error_trace(Preprocessor->Error->Message, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		exit(1);
+	}
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
 	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, Preprocessor->Error);
@@ -708,10 +714,10 @@ static ml_value_t *error(void *Data, int Count, ml_value_t **Args) {
 }
 
 static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
-#if defined(X86)
-	asm("int3");
-#elif defined(ARM)
+#if defined(ARM)
 	__asm__ __volatile__("bkpt");
+#else
+	asm("int3");
 #endif
 	return MLNil;
 }
