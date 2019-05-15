@@ -8,6 +8,8 @@
 extern const char *RootPath, *SystemName;
 extern __thread const char *CurrentDirectory;
 
+ml_value_t *rabs_global(const char *Name);
+
 #define CURRENT_VERSION "2.0.4"
 #define WORKING_VERSION "2.0.4"
 

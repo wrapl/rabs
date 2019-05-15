@@ -41,6 +41,10 @@ static stringmap_t Defines[1] = {STRINGMAP_INIT};
 static int SavedArgc;
 static char **SavedArgv;
 
+ml_value_t *rabs_global(const char *Name) {
+	return stringmap_search(Globals, Name) ?: MLNil;
+}
+
 static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Name);
 	if (Value) {
@@ -186,6 +190,22 @@ ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	}
 	context_pop();
 	return (ml_value_t *)Context;
+}
+
+ml_value_t *symbol(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	/*const char *Name = ml_string_value(Args[0]);
+	ml_value_t *Value = context_symb_get(CurrentContext, Name);
+	if (Value) {
+		target_t *Target = target_symb_new(Name);
+		target_depends_auto(Target);
+		return Value;
+	} else {
+		return MLNil;
+	}*/
+
+	return (ml_value_t *)target_symb_new(ml_string_value(Args[0]));
 }
 
 ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
@@ -725,6 +745,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
 	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
 	stringmap_insert(Globals, "expr", ml_function(0, target_expr_new));
+	stringmap_insert(Globals, "symbol", ml_function(0, symbol));
 	stringmap_insert(Globals, "include", ml_function(0, include));
 	stringmap_insert(Globals, "context", ml_function(0, context));
 	stringmap_insert(Globals, "execute", ml_function(0, execute));

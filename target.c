@@ -833,27 +833,25 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 
 struct target_symb_t {
 	TARGET_FIELDS
-	const char *Name, *Context;
+	const char *Name;
+	context_t *Context;
 };
 
 static ml_type_t *SymbTargetT;
 
 static ml_value_t *symb_target_deref(ml_value_t *Ref) {
 	target_symb_t *Target = (target_symb_t *)Ref;
-	context_t *Context = context_find(Target->Context);
-	return context_symb_get(Context, Target->Name);
+	return context_symb_get(Target->Context, Target->Name) ?: rabs_global(Target->Name);
 }
 
 static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 	target_symb_t *Target = (target_symb_t *)Ref;
-	context_t *Context = context_find(Target->Context);
-	context_symb_set(Context, Target->Name, Value);
+	context_symb_set(Target->Context, Target->Name, Value);
 	return Value;
 }
 
 static time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
-	context_t *Context = context_find(Target->Context);
-	ml_value_t *Value = context_symb_get(Context, Target->Name) ?: MLNil;
+	ml_value_t *Value = context_symb_get(Target->Context, Target->Name) ?: MLNil;
 	target_value_hash(Value, Target->Hash);
 	return 0;
 }
@@ -863,7 +861,7 @@ target_t *target_symb_new(const char *Name) {
 	target_t **Slot = targetcache_lookup(Id);
 	if (!Slot[0]) {
 		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, Slot);
-		Target->Context = CurrentContext->Name;
+		Target->Context = CurrentContext;
 		Target->Name = Name;
 	}
 	return Slot[0];
@@ -1023,7 +1021,7 @@ target_t *target_find(const char *Id) {
 		char *Path = snew(PathLength + 1);
 		memcpy(Path, Id + 5, PathLength);
 		Path[PathLength] = 0;
-		Target->Context = Path;
+		Target->Context = context_find(Path);
 		Target->Name = Name + 1;
 		return (target_t *)Target;
 	}
