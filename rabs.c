@@ -135,32 +135,12 @@ static ml_value_t *load_file(const char *FileName) {
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {Node, NULL,};
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Error);
-	if (setjmp(Preprocessor->Error->Handler)) {
-		printf("\e[31mError: %s\n\e[0m", ml_error_message(Preprocessor->Error->Message));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Preprocessor->Error->Message, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
-		exit(1);
-	}
+	if (setjmp(Preprocessor->Error->Handler)) return Preprocessor->Error->Message;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
 	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, Preprocessor->Error);
-	if (Closure->Type == MLErrorT) {
-		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Closure, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
-		exit(1);
-	}
-	ml_value_t *Result = ml_call(Closure, 0, NULL);
-	if (Result->Type == MLErrorT) {
-		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
-		exit(1);
-	}
-	return Result;
+	if (Closure->Type == MLErrorT) return Closure;
+	return ml_call(Closure, 0, NULL);
 }
 
 ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
@@ -176,9 +156,13 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	target_t *ParentDefault = CurrentContext->Default;
 	context_t *Context = context_push(Path);
 	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
-	load_file(FileName);
+	ml_value_t *Result = load_file(FileName);
 	context_pop();
-	return (ml_value_t *)Context;
+	if (Result->Type == MLErrorT) {
+		return Result;
+	} else {
+		return (ml_value_t *)Context;
+	}
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
