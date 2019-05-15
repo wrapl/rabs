@@ -195,17 +195,7 @@ ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *symbol(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
-	/*const char *Name = ml_string_value(Args[0]);
-	ml_value_t *Value = context_symb_get(CurrentContext, Name);
-	if (Value) {
-		target_t *Target = target_symb_new(Name);
-		target_depends_auto(Target);
-		return Value;
-	} else {
-		return MLNil;
-	}*/
-
-	return (ml_value_t *)target_symb_new(ml_string_value(Args[0]));
+	return rabs_ml_global(NULL, ml_string_value(Args[0]));
 }
 
 ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
