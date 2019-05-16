@@ -9,8 +9,6 @@
 #include "sha256.h"
 #include "minilang.h"
 
-typedef struct target_t target_t;
-
 #define TARGET_FIELDS \
 	const ml_type_t *Type; \
 	target_t *Next, *Parent; \

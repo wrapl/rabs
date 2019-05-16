@@ -66,20 +66,8 @@ static void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK
 static time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
 static int target_missing(target_t *Target, int LastChecked);
 
-typedef enum {BUILD_IDLE, BUILD_WAIT, BUILD_EXEC} build_thread_status_t;
-
-typedef struct build_thread_t build_thread_t;
-
-struct build_thread_t {
-	build_thread_t *Next;
-	target_t *Target;
-	pthread_t Handle;
-	int Id;
-	build_thread_status_t Status;
-};
-
 static build_thread_t *BuildThreads = 0;
-static __thread build_thread_t *CurrentThread = 0;
+__thread build_thread_t *CurrentThread = 0;
 static int RunningThreads = 0, LastThread = 0;
 
 void target_depends_auto(target_t *Depend) {
@@ -1179,13 +1167,13 @@ void target_update(target_t *Target) {
 			if (Thread == CurrentThread) printf("\e[K\e[32m");
 			switch (Thread->Status) {
 			case BUILD_IDLE:
-				printf("Thread %2d IDLE\n", Thread->Id);
+				printf("[%2d] I\n", Thread->Id);
 				break;
 			case BUILD_WAIT:
-				printf("Thread %2d WAIT\t%s\n", Thread->Id, Thread->Target->Id);
+				printf("[%2d] W %s %.32s\n", Thread->Id, Thread->Target->Id, Thread->Command);
 				break;
 			case BUILD_EXEC:
-				printf("Thread %2d EXEC\t%s\n", Thread->Id, Thread->Target->Id);
+				printf("[%2d] X %s %.32s\n", Thread->Id, Thread->Target->Id, Thread->Command);
 				break;
 			}
 			printf("\e[0m");

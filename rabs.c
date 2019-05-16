@@ -320,6 +320,7 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
+	if (DebugThreads) strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command));
 	clock_t Start = clock();
 	if (chdir(CurrentDirectory)) {
 		return ml_error("ExecuteError", "error changing directory to %s", CurrentDirectory);
@@ -357,6 +358,7 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
+	if (DebugThreads) strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command));
 	clock_t Start = clock();
 	if (chdir(CurrentDirectory)) {
 		return ml_error("ExecuteError", "error changing directory to %s", CurrentDirectory);
