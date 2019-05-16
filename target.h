@@ -23,6 +23,7 @@ typedef struct target_t target_t;
 	int WaitCount; \
 	int LastUpdated; \
 	int IdLength; \
+	int QueueIndex, QueuePriority; \
 	unsigned long IdHash; \
 	unsigned char Hash[SHA256_BLOCK_SIZE];
 

@@ -3,6 +3,7 @@
 #include "util.h"
 #include "context.h"
 #include "targetcache.h"
+#include "targetqueue.h"
 #include "cache.h"
 #include <string.h>
 #include <stdlib.h>
@@ -59,7 +60,7 @@ __thread context_t *CurrentContext = 0;
 __thread const char *CurrentDirectory = 0;
 
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
-static target_t *NextTarget = 0;
+//static target_t *NextTarget = 0;
 
 static void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]);
 static time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
@@ -98,6 +99,7 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_
 	Target->IdHash = stringmap_hash(Id);
 	Target->Build = 0;
 	Target->LastUpdated = STATE_UNCHECKED;
+	Target->QueueIndex = -1;
 	Slot[0] = Target;
 	return Target;
 }
@@ -1073,18 +1075,22 @@ int target_print(target_t *Target, void *Data) {
 
 int target_queue(target_t *Target, target_t *Parent) {
 	if (Target->LastUpdated > 0) return 0;
-	if (Parent) {
-		Parent->WaitCount += targetset_insert(Target->Affects, Parent);
+	if (Parent && targetset_insert(Target->Affects, Parent)) {
+		Parent->WaitCount += 1;
+		Target->QueuePriority += Parent->QueuePriority;
 	}
 	if (Target->LastUpdated == STATE_UNCHECKED) {
 		targetset_foreach(Target->Depends, Target, (void *)target_queue);
 		if (Target->WaitCount == 0) {
 			++QueuedTargets;
 			Target->LastUpdated = STATE_QUEUED;
-			Target->Next = NextTarget;
-			NextTarget = Target;
+			//Target->Next = NextTarget;
+			//NextTarget = Target;
+			targetqueue_insert(Target);
 			pthread_cond_broadcast(TargetAvailable);
 		}
+	} else {
+		targetqueue_insert(Target);
 	}
 	return 0;
 }
@@ -1094,8 +1100,9 @@ int target_affect(target_t *Target, target_t *Depend) {
 	if (Target->LastUpdated == STATE_UNCHECKED && Target->WaitCount == 0) {
 		++QueuedTargets;
 		Target->LastUpdated = STATE_QUEUED;
-		Target->Next = NextTarget;
-		NextTarget = Target;
+		//Target->Next = NextTarget;
+		//NextTarget = Target;
+		targetqueue_insert(Target);
 		pthread_cond_broadcast(TargetAvailable);
 	}
 	return 0;
@@ -1356,6 +1363,7 @@ static void *target_thread_fn(void *Arg) {
 	pthread_mutex_lock(InterpreterLock);
 	++RunningThreads;
 	for (;;) {
+		target_t *NextTarget = targetqueue_next();
 		while (!NextTarget) {
 			if (DebugThreads) CurrentThread->Status = BUILD_IDLE;
 			if (--RunningThreads == 0) {
@@ -1365,9 +1373,10 @@ static void *target_thread_fn(void *Arg) {
 			}
 			pthread_cond_wait(TargetAvailable, InterpreterLock);
 			++RunningThreads;
+			NextTarget = targetqueue_next();
 		}
 		target_t *Target = NextTarget;
-		NextTarget = Target->Next;
+		//NextTarget = Target->Next;
 		if (Target->LastUpdated == STATE_QUEUED) target_update(Target);
 	}
 	return 0;
@@ -1424,6 +1433,7 @@ void target_threads_wait(target_t *Target) {
 
 void target_init() {
 	targetcache_init();
+	targetqueue_init();
 	TargetT = ml_type(MLAnyT, "target");
 	FileTargetT = ml_type(TargetT, "file-target");
 	MetaTargetT = ml_type(TargetT, "meta-target");
