@@ -1174,9 +1174,9 @@ static int target_graph_dependencies(target_t *Depend, target_t *Target) {
 
 void target_update(target_t *Target) {
 	if (DebugThreads) {
-		printf("\033[2J\033[H");
+		printf("\e[s\e[H");
 		for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
-			if (Thread == CurrentThread) printf("\e[32m");
+			if (Thread == CurrentThread) printf("\e[K\e[32m");
 			switch (Thread->Status) {
 			case BUILD_IDLE:
 				printf("Thread %2d IDLE\n", Thread->Id);
@@ -1190,7 +1190,7 @@ void target_update(target_t *Target) {
 			}
 			printf("\e[0m");
 		}
-		printf("\n\n");
+		printf("\e[K\n\e[u");
 	}
 	if (DependencyGraph) {
 		fprintf(DependencyGraph, "\tT%x [label=\"%s\"];\n", Target, Target->Id);
