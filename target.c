@@ -1130,12 +1130,12 @@ static void target_rebuild(target_t *Target) {
 	}
 }
 
-int target_find_leaves(target_t *Target, target_t *ScanTarget) {
+int target_find_leaves(target_t *Target, targetset_t *Scans) {
 	if (Target->Build || targetset_size(Target->Depends)) {
-		targetset_foreach(Target->Depends, ScanTarget, (void *)target_find_leaves);
-		targetset_foreach(Target->BuildDepends, ScanTarget, (void *)target_find_leaves);
+		targetset_foreach(Target->Depends, Scans, (void *)target_find_leaves);
+		targetset_foreach(Target->BuildDepends, Scans, (void *)target_find_leaves);
 	} else {
-		targetset_insert(ScanTarget->BuildDepends, Target);
+		targetset_insert(Scans, Target);
 	}
 	return 0;
 }
@@ -1255,23 +1255,24 @@ void target_update(target_t *Target) {
 				((target_expr_t *)Target)->Value = Result;
 				cache_expr_set(Target, Result);
 			} else if (Target->Type == ScanTargetT) {
-				targetset_t Scans[1] = {TARGETSET_INIT};
+				targetset_t Roots[1] = {TARGETSET_INIT};
 				if (Result->Type != MLListT) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
 					exit(1);
 				}
-				targetset_init(Scans, ml_list_length(Result));
-				if (ml_list_foreach(Result, Scans, (void *)build_scan_target_list)) {
+				targetset_init(Roots, ml_list_length(Result));
+				if (ml_list_foreach(Result, Roots, (void *)build_scan_target_list)) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
 					exit(1);
 				}
 				if (DependencyGraph) {
-					targetset_foreach(Scans, Target, (void *)target_graph_dependencies);
+					targetset_foreach(Roots, Target, (void *)target_graph_dependencies);
 				}
+				targetset_t Scans[1] = {TARGETSET_INIT};
+				targetset_foreach(Roots, 0, (void *)target_queue);
+				targetset_foreach(Roots, Target, (void *)target_wait);
+				targetset_foreach(Roots, Scans, (void *)target_find_leaves);
 				cache_scan_set(Target, Scans);
-				targetset_foreach(Scans, 0, (void *)target_queue);
-				targetset_foreach(Scans, Target, (void *)target_wait);
-				targetset_foreach(Scans, Target, (void *)target_find_leaves);
 
 				//printf("scans(%s) = \n", Target->Id);
 				//targetset_foreach(Scans, 0, targetset_print);
