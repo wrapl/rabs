@@ -1160,26 +1160,28 @@ static int target_graph_dependencies(target_t *Depend, target_t *Target) {
 	return 0;
 }
 
-void target_update(target_t *Target) {
-	if (DebugThreads) {
-		printf("\e[s\e[H\e[K");
-		for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
-			if (Thread == CurrentThread) printf("\e[32m");
-			switch (Thread->Status) {
-			case BUILD_IDLE:
-				printf("[%2d] I\n\e[K", Thread->Id);
-				break;
-			case BUILD_WAIT:
-				printf("[%2d] W %s %.32s\n\e[K", Thread->Id, Thread->Target->Id, Thread->Command);
-				break;
-			case BUILD_EXEC:
-				printf("[%2d] X %s %.32s\n\e[K", Thread->Id, Thread->Target->Id, Thread->Command);
-				break;
-			}
-			printf("\e[0m");
+void display_threads() {
+	printf("\e[s\e[H\e[K");
+	for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
+		if (Thread == CurrentThread) printf("\e[32m");
+		switch (Thread->Status) {
+		case BUILD_IDLE:
+			printf("[%2d] I\n\e[K", Thread->Id);
+			break;
+		case BUILD_WAIT:
+			printf("[%2d] W %s %.32s\n\e[K", Thread->Id, Thread->Target->Id, Thread->Command);
+			break;
+		case BUILD_EXEC:
+			printf("[%2d] X %s %.32s\n\e[K", Thread->Id, Thread->Target->Id, Thread->Command);
+			break;
 		}
-		printf("\n\e[u");
+		printf("\e[0m");
 	}
+	printf("\n\e[u");
+}
+
+void target_update(target_t *Target) {
+	if (DebugThreads) display_threads();
 	if (DependencyGraph) {
 		fprintf(DependencyGraph, "\tT%x [label=\"%s\"];\n", Target, Target->Id);
 		targetset_foreach(Target->Depends, Target, (void *)target_graph_dependencies);

@@ -61,4 +61,6 @@ void target_interactive_start(int NumThreads);
 int target_wait(target_t *Target, target_t *Waiter);
 int target_queue(target_t *Target, target_t *Parent);
 
+void display_threads();
+
 #endif
