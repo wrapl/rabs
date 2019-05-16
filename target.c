@@ -1162,23 +1162,23 @@ static int target_graph_dependencies(target_t *Depend, target_t *Target) {
 
 void target_update(target_t *Target) {
 	if (DebugThreads) {
-		printf("\e[s\e[H");
+		printf("\e[s\e[H\e[K");
 		for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
-			if (Thread == CurrentThread) printf("\e[K\e[32m");
+			if (Thread == CurrentThread) printf("\e[32m");
 			switch (Thread->Status) {
 			case BUILD_IDLE:
-				printf("[%2d] I\n", Thread->Id);
+				printf("[%2d] I\n\e[K", Thread->Id);
 				break;
 			case BUILD_WAIT:
-				printf("[%2d] W %s %.32s\n", Thread->Id, Thread->Target->Id, Thread->Command);
+				printf("[%2d] W %s %.32s\n\e[K", Thread->Id, Thread->Target->Id, Thread->Command);
 				break;
 			case BUILD_EXEC:
-				printf("[%2d] X %s %.32s\n", Thread->Id, Thread->Target->Id, Thread->Command);
+				printf("[%2d] X %s %.32s\n\e[K", Thread->Id, Thread->Target->Id, Thread->Command);
 				break;
 			}
 			printf("\e[0m");
 		}
-		printf("\e[K\n\e[u");
+		printf("\n\e[u");
 	}
 	if (DependencyGraph) {
 		fprintf(DependencyGraph, "\tT%x [label=\"%s\"];\n", Target, Target->Id);
