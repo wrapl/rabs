@@ -10,7 +10,7 @@ var package := fun(Name, Url, BuildFn) do
 		var Targets := []
 		for Source in OutDir:ls(:R) do
 			var Target := Source:map(OutDir, PATH)
-			if Source:is_dir then
+			if Source:isdir then
 				Target:mkdir
 			else	
 				execute('mv', Source, Target)

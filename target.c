@@ -1439,7 +1439,7 @@ void target_threads_wait(target_t *Target) {
 }
 
 #define target_file_methods_is(TYPE) \
-	ml_method_by_name("is_" #TYPE, 0, target_file_is_ ## TYPE, FileTargetT, NULL);
+	ml_method_by_name("is" #TYPE, 0, target_file_is_ ## TYPE, FileTargetT, NULL);
 
 void target_init() {
 	targetcache_init();
