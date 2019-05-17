@@ -312,6 +312,7 @@ typedef struct target_file_ls_t target_file_ls_t;
 
 struct target_file_ls_t {
 	ml_value_t *Results;
+	ml_value_t *FilterFn;
 	regex_t *Regex;
 	int Recursive;
 };
@@ -334,7 +335,17 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 				} else {
 					File = target_file_check(Absolute, 1);
 				}
-				ml_list_append(Ls->Results, (ml_value_t *)File);
+				if (Ls->FilterFn) {
+					ml_value_t *Result = ml_inline(Ls->FilterFn, 1, File);
+					if (Result->Type == MLErrorT) {
+						Ls->Results = Result;
+						return 1;
+					} else if (Result != MLNil) {
+						ml_list_append(Ls->Results, (ml_value_t *)File);
+					}
+				} else {
+					ml_list_append(Ls->Results, (ml_value_t *)File);
+				}
 			}
 			if (Ls->Recursive && (Entry->d_type == DT_DIR)) {
 				const char *Subdir = concat(Path, "/", Entry->d_name, NULL);
@@ -366,6 +377,8 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 			Ls->Regex = ml_regex_value(Args[I]);
 		} else if (Args[I]->Type == MLMethodT && !strcmp(ml_method_name(Args[I]), "R")) {
 			Ls->Recursive = 1;
+		} else {
+			Ls->FilterFn = Args[I];
 		}
 	}
 	target_file_t *Target = (target_file_t *)Args[0];
@@ -1155,8 +1168,13 @@ int targetset_print(target_t *Target, void *Data) {
 	return 0;
 }
 
-static int target_graph_dependencies(target_t *Depend, target_t *Target) {
-	fprintf(DependencyGraph, "\tT%x -> T%x;\n", Depend, Target);
+static int target_graph_depends(target_t *Depend, target_t *Target) {
+	fprintf(DependencyGraph, "\tT%x -> T%x;\n", Target, Depend);
+	return 0;
+}
+
+static int target_graph_scans(target_t *Depend, target_t *Target) {
+	fprintf(DependencyGraph, "\tT%x -> T%x [style=dashed];\n", Target, Depend);
 	return 0;
 }
 
@@ -1184,7 +1202,7 @@ void target_update(target_t *Target) {
 	if (DebugThreads) display_threads();
 	if (DependencyGraph) {
 		fprintf(DependencyGraph, "\tT%x [label=\"%s\"];\n", Target, Target->Id);
-		targetset_foreach(Target->Depends, Target, (void *)target_graph_dependencies);
+		targetset_foreach(Target->Depends, Target, (void *)target_graph_depends);
 	}
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
@@ -1220,7 +1238,7 @@ void target_update(target_t *Target) {
 		targetset_t *Depends = cache_depends_get(Target);
 		if (Depends) {
 			if (DependencyGraph) {
-				targetset_foreach(Depends, Target, (void *)target_graph_dependencies);
+				targetset_foreach(Depends, Target, (void *)target_graph_depends);
 			}
 			targetset_foreach(Depends, Target, (void *)target_queue);
 			targetset_foreach(Depends, Target->Parent, (void *)target_set_parent);
@@ -1265,14 +1283,15 @@ void target_update(target_t *Target) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
 					exit(1);
 				}
-				if (DependencyGraph) {
-					targetset_foreach(Roots, Target, (void *)target_graph_dependencies);
-				}
 				targetset_t Scans[1] = {TARGETSET_INIT};
 				targetset_foreach(Roots, 0, (void *)target_queue);
 				targetset_foreach(Roots, Target, (void *)target_wait);
 				targetset_foreach(Roots, Scans, (void *)target_find_leaves);
 				cache_scan_set(Target, Scans);
+				if (DependencyGraph) {
+					targetset_foreach(Roots, Target, (void *)target_graph_depends);
+					targetset_foreach(Scans, Target, (void *)target_graph_scans);
+				}
 
 				//printf("scans(%s) = \n", Target->Id);
 				//targetset_foreach(Scans, 0, targetset_print);
@@ -1289,7 +1308,7 @@ void target_update(target_t *Target) {
 		if (Target->Type == ScanTargetT) {
 			targetset_t *Scans = cache_scan_get(Target);
 			if (DependencyGraph) {
-				targetset_foreach(Scans, Target, (void *)target_graph_dependencies);
+				targetset_foreach(Scans, Target, (void *)target_graph_scans);
 			}
 			targetset_foreach(Scans, Target, (void *)target_set_parent);
 			targetset_foreach(Scans, Target, (void *)target_queue);

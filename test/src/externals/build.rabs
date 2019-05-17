@@ -1,12 +1,28 @@
 context():parent."CFLAGS" := old + ['-I{PATH/"include"}']
 context():parent."LDFLAGS" := old + ['-L{PATH/"lib"}']
 
-MINILANG_VERSION := old or "1.2.0"
+var package := fun(Name, Url, BuildFn) do
+	meta('package-{Name}'):scan("install") => fun() do
+		file('src/{Name}'):rmdir:mkdir:chdir
+		execute('wget -nv {Url} -O- | tar xzP --strip-components=1')
+		var OutDir := file('out/{Name}')
+		BuildFn(OutDir)
+		var Targets := []
+		for Source in OutDir:ls(:R) do
+			var Target := Source:map(OutDir, PATH)
+			if Source:is_dir then
+				Target:mkdir
+			else	
+				execute('mv', Source, Target)
+				Targets:put(Target)
+			end
+		end
+		Targets
+	end
+end
 
-MINILANG := meta("minilang"):scan("install") => fun() do
-	file("minilang"):rmdir:mkdir:chdir
-	execute('wget https://github.com/wrapl/minilang/archive/v{MINILANG_VERSION}.tar.gz -O- | tar xzP --strip-components=1')
+
+MINILANG := package("minilang", "https://github.com/wrapl/minilang/archive/v1.2.0.tar.gz"; OutDir) do
 	execute('make -j4')
-	execute('make install PREFIX={PATH}')
-	ret [PATH / "lib/libminilang.a"]
+	execute('make install PREFIX={OutDir}')
 end
