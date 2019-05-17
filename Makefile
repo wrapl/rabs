@@ -21,6 +21,7 @@ objects = \
 	rabs.o \
 	target.o \
 	targetcache.o \
+	targetqueue.o \
 	targetset.o \
 	util.o \
 	vfs.o \

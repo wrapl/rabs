@@ -41,6 +41,10 @@ static stringmap_t Defines[1] = {STRINGMAP_INIT};
 static int SavedArgc;
 static char **SavedArgv;
 
+ml_value_t *rabs_global(const char *Name) {
+	return stringmap_search(Globals, Name) ?: MLNil;
+}
+
 static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Name);
 	if (Value) {
@@ -135,22 +139,8 @@ static ml_value_t *load_file(const char *FileName) {
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
 	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, Preprocessor->Error);
-	if (Closure->Type == MLErrorT) {
-		printf("\e[31mError: %s\n\e[0m", ml_error_message(Closure));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Closure, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
-		exit(1);
-	}
-	ml_value_t *Result = ml_call(Closure, 0, NULL);
-	if (Result->Type == MLErrorT) {
-		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
-		exit(1);
-	}
-	return Result;
+	if (Closure->Type == MLErrorT) return Closure;
+	return ml_call(Closure, 0, NULL);
 }
 
 ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
@@ -166,9 +156,13 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	target_t *ParentDefault = CurrentContext->Default;
 	context_t *Context = context_push(Path);
 	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
-	load_file(FileName);
+	ml_value_t *Result = load_file(FileName);
 	context_pop();
-	return (ml_value_t *)Context;
+	if (Result->Type == MLErrorT) {
+		return Result;
+	} else {
+		return (ml_value_t *)Context;
+	}
 }
 
 ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
@@ -186,6 +180,12 @@ ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	}
 	context_pop();
 	return (ml_value_t *)Context;
+}
+
+ml_value_t *symbol(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	return rabs_ml_global(NULL, ml_string_value(Args[0]));
 }
 
 ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
@@ -320,6 +320,10 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
+	if (DebugThreads) {
+		strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command));
+		display_threads();
+	}
 	clock_t Start = clock();
 	if (chdir(CurrentDirectory)) {
 		return ml_error("ExecuteError", "error changing directory to %s", CurrentDirectory);
@@ -357,6 +361,10 @@ ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
+	if (DebugThreads) {
+		strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command));
+		display_threads();
+	}
 	clock_t Start = clock();
 	if (chdir(CurrentDirectory)) {
 		return ml_error("ExecuteError", "error changing directory to %s", CurrentDirectory);
@@ -698,10 +706,10 @@ static ml_value_t *error(void *Data, int Count, ml_value_t **Args) {
 }
 
 static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
-#if defined(X86)
-	asm("int3");
-#elif defined(ARM)
+#if defined(ARM)
 	__asm__ __volatile__("bkpt");
+#else
+	asm("int3");
 #endif
 	return MLNil;
 }
@@ -725,6 +733,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
 	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
 	stringmap_insert(Globals, "expr", ml_function(0, target_expr_new));
+	stringmap_insert(Globals, "symbol", ml_function(0, symbol));
 	stringmap_insert(Globals, "include", ml_function(0, include));
 	stringmap_insert(Globals, "context", ml_function(0, context));
 	stringmap_insert(Globals, "execute", ml_function(0, execute));

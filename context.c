@@ -11,12 +11,17 @@ static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;
 static ml_type_t *ContextT;
 
-context_t *context_find(const char *Path) {
-	return stringmap_search(ContextCache, Path);
+context_t *context_find(const char *Name) {
+	context_t **Slot = (context_t **)stringmap_slot(ContextCache, Name);
+	if (!Slot[0]) {
+		context_t *Context = Slot[0] = new(context_t);
+		Context->Name = Name;
+	}
+	return Slot[0];
 }
 
 context_t *context_push(const char *Path) {
-	context_t *Context = new(context_t);
+	context_t *Context = context_find(Path);
 	Context->Type = ContextT;
 	Context->Parent = CurrentContext;
 	Context->Path = Path;
@@ -30,16 +35,14 @@ context_t *context_push(const char *Path) {
 	stringmap_insert(Context->Locals, "BUILDDIR", BuildDir);
 	stringmap_insert(Context->Locals, "PATH", BuildDir);
 	stringmap_insert(Context->Locals, "_", Context);
-	stringmap_insert(ContextCache, Context->Name, Context);
 	return Context;
 }
 
 context_t *context_scope(const char *Name) {
-	context_t *Context = new(context_t);
+	context_t *Context = context_find(concat(CurrentContext->Name, ":", Name, NULL));
 	Context->Type = ContextT;
 	Context->Parent = CurrentContext;
 	Context->Path = CurrentContext->Path;
-	Context->Name = concat(CurrentContext->Name, ":", Name, NULL);
 	Context->FullPath = CurrentContext->FullPath;
 	CurrentContext = Context;
 	Context->Default = Context->Parent->Default;

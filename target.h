@@ -9,8 +9,6 @@
 #include "sha256.h"
 #include "minilang.h"
 
-typedef struct target_t target_t;
-
 #define TARGET_FIELDS \
 	const ml_type_t *Type; \
 	target_t *Next, *Parent; \
@@ -23,6 +21,7 @@ typedef struct target_t target_t;
 	int WaitCount; \
 	int LastUpdated; \
 	int IdLength; \
+	int QueueIndex, QueuePriority; \
 	unsigned long IdHash; \
 	unsigned char Hash[SHA256_BLOCK_SIZE];
 
@@ -61,5 +60,7 @@ void target_interactive_start(int NumThreads);
 
 int target_wait(target_t *Target, target_t *Waiter);
 int target_queue(target_t *Target, target_t *Parent);
+
+void display_threads();
 
 #endif
