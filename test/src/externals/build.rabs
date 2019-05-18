@@ -4,7 +4,7 @@ context():parent."LDFLAGS" := old + ['-L{PATH/"lib"}']
 var package := fun(Name, Url, BuildFn) do
 	meta('package-{Name}'):scan("install") => fun() do
 		file('src/{Name}'):rmdir:mkdir:chdir
-		execute('wget -nv {Url} -O- | tar xzP --strip-components=1')
+		execute('wget -nv {Url} -O- | tar xzPf - --strip-components=1')
 		var OutDir := file('out/{Name}')
 		BuildFn(OutDir)
 		var Targets := []
@@ -23,6 +23,11 @@ end
 
 
 MINILANG := package("minilang", "https://github.com/wrapl/minilang/archive/v1.2.0.tar.gz"; OutDir) do
-	execute('make -j4')
-	execute('make install PREFIX={OutDir}')
+	if PLATFORM = "FreeBSD" then
+		execute('gmake -j4')
+		execute('gmake install PREFIX={OutDir}')
+	else
+		execute('make -j4')
+		execute('make install PREFIX={OutDir}')
+	end
 end

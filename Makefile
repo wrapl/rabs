@@ -11,7 +11,7 @@ endif
 all: $(RABS)
 
 minilang/libminilang.a: minilang/Makefile minilang/*.c minilang/*.h
-	make -C minilang PLATFORM=$(PLATFORM) libminilang.a
+	$(MAKE) -C minilang PLATFORM=$(PLATFORM) libminilang.a
 
 *.o: *.h minilang/*.h
 
@@ -27,21 +27,23 @@ objects = \
 	vfs.o \
 	library.o
 
-ml_libs = \
-	
-
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing \
 	-I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
-LDFLAGS += minilang/libminilang.a -lm -lgc -lsqlite3
+LDFLAGS += minilang/libminilang.a -lm
 
 ifeq ($(PLATFORM), Linux)
-	LDFLAGS += -Wl,--export-dynamic -ldl
+	LDFLAGS += -Wl,--export-dynamic -ldl -lgc -lsqlite3
 	objects += targetwatch.o
+endif
+
+ifeq ($(PLATFORM), FreeBSD)
+	CFLAGS += -I/usr/local/include
+	LDFLAGS += -L/usr/local/lib -lgc-threaded -lsqlite3
 endif
 
 ifeq ($(PLATFORM), Mingw)
 	CFLAGS += -include ansicolor-w32.h
-	LDFLAGS += -lregex
+	LDFLAGS += -lregex -lgc -lsqlite3
 	objects += ansicolor-w32.o
 endif
 
@@ -63,7 +65,7 @@ endif
 	
 
 clean:
-	make -C minilang clean
+	$(gmake) -C minilang clean
 	rm -f $(RABS)
 	rm -f *.o
 
@@ -76,4 +78,4 @@ $(install_exe): $(install_bin)/%: %
 	mkdir -p $(install_bin)
 	cp $< $@
 
-install: $(install_exe) 
+install: $(install_exe)
