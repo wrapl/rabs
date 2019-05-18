@@ -70,7 +70,7 @@ clean:
 	rm -f *.o
 
 PREFIX = /usr
-install_bin = $(PREFIX)/bin
+install_bin = $(DESTDIR)$(PREFIX)/bin
 
 install_exe = $(install_bin)/rabs
 
