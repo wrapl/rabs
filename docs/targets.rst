@@ -7,23 +7,29 @@ This may involve checking other targets, and rebuilding them as necessary.
 
 Every target has the following attributes:
 
-:A unique identifier: Every target has a unique identifer. Likewise, every identifier corresponds to a unique target. This allows targets to be referenced across multiple scripts within a build.
+**A unique identifier**
+   Every target has a unique identifer. Likewise, every identifier corresponds to a unique target. This allows targets to be referenced across multiple scripts within a build.
 
 Some examples of identifiers:
 
 * ``file("test.c")`` has identifier **"file:test.c"**
 * ``meta("NAME")`` has identifier **"meta:<context path>:NAME"**
 
-:An optional build function: A target can have a build function which is called whenever the target needs to be rebuilt, or if the target is missing. To set the build function for a target, use the ``=>`` operator: 
-
-:Optional dependencies: A target can depend on other targets. If any dependency of a target is *changed* during a build then the target itself will be rebuilt (assuming it has a build function) and rechecked. To add dependencies to a target, use the ``[]`` operator. Both individual dependencies and lists of dependencies are accepted.
-
-:A SHA-256 checksum: Every target has a checksum created once the target is built. If the target is rebuilt, or possibly changed externally, a new checksum is calculated and compared to the previous one. If the checksum has changed, then the target is considered updated.
+**An optional build function**
+   A target can have a build function which is called whenever the target needs to be rebuilt, or if the target is missing. To set the build function for a target, use the ``=>`` operator:
+    
+**Optional dependencies**
+   A target can depend on other targets. If any dependency of a target is *changed* during a build then the target itself will be rebuilt (assuming it has a build function) and rechecked. To add dependencies to a target, use the ``[]`` operator. Both individual dependencies and lists of dependencies are accepted.
+   
+**A SHA-256 checksum**
+   Every target has a checksum created once the target is built. If the target is rebuilt, or possibly changed externally, a new checksum is calculated and compared to the previous one. If the checksum has changed, then the target is considered updated.
 
 Methods
 -------
 
 Every target supports the following methods:
+
+.. mini:method:: Target => BuildFunction
 
 .. code-block:: mini
 

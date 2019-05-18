@@ -1,5 +1,7 @@
 from pygments.lexer import RegexLexer, words, include
 from pygments.token import *
+from sphinxcontrib.domaintools import custom_domain
+import re
 
 class MinilangLexer(RegexLexer):
 	name = 'Minilang'
@@ -50,3 +52,18 @@ class MinilangLexer(RegexLexer):
 			include('root')
 		]
 	}
+
+minilangDomain = custom_domain('MinilangDomain',
+    name  = 'mini',
+    label = "mini", 
+    elements = dict(
+        function = dict(
+            objname = "Minilang Function",
+            indextemplate = "pair: %s; Minilang Function"
+        ),
+        method = dict(
+            objname = "Minilang Method",
+            indextemplate = "pair: %s; Minilang Method"
+        )
+    )
+)

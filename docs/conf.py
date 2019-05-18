@@ -28,7 +28,10 @@ author = 'Raja Mukherji'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 
-extensions = ['sphinxcontrib.inlinesyntaxhighlight', 'sphinxcontrib.fulltoc']
+extensions = [
+	'sphinxcontrib.inlinesyntaxhighlight',
+	'sphinxcontrib.fulltoc'
+]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -65,5 +68,6 @@ inline_highlight_literals = False
 def setup(sphinx):
 	import sys, os
 	sys.path.insert(0, os.path.abspath('./_util'))
-	from minilang import MinilangLexer
+	from minilang import MinilangLexer, minilangDomain
 	sphinx.add_lexer("mini", MinilangLexer())
+	sphinx.add_domain(minilangDomain) 

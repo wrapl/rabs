@@ -7,12 +7,12 @@ LDFLAGS := []
 PREBUILDS := []
 
 c_compile := fun(Source, Object) do
-	execute('gcc -c {CFLAGS} -o{Object} {Source}')
+	execute('cc -c {CFLAGS} -o{Object} {Source}')
 end
 
 c_includes := fun(Target) do
 	var Files := []
-	var Lines := shell('gcc -c {CFLAGS} -M -MG {Target:source}')
+	var Lines := shell('cc -c {CFLAGS} -M -MG {Target:source}')
 	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( )"
 	Files:pop
 	for File in Files do
@@ -41,7 +41,7 @@ c_program := fun(Executable, Objects, Libraries) do
 		end
 	end
 	Executable[Objects, Libraries] => fun(Executable) do
-		execute('gcc', '-o', Executable, Objects, Libraries, LDFLAGS)
+		execute('cc', '-o', Executable, Objects, Libraries, LDFLAGS)
 		DEBUG or execute('strip', Executable)
 	end
 	DEFAULT[Executable]
