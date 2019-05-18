@@ -1,4 +1,3 @@
-sphinx_catalystcloud_theme
 sphinxcontrib-inlinesyntaxhighlight
 sphinxcontrib-domaintools
 sphinxcontrib-fulltoc
