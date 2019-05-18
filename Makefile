@@ -65,7 +65,7 @@ endif
 	
 
 clean:
-	make -C minilang clean
+	$(gmake) -C minilang clean
 	rm -f $(RABS)
 	rm -f *.o
 
