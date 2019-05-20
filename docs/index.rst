@@ -75,8 +75,8 @@ Rabs build scripts are written using :doc:`/minilang`.
    :caption: Contents:
    
    /quickstart
-   /targets
    /contexts
+   /targets
 
 Indices and tables
 ==================

@@ -12,8 +12,8 @@ Every target has the following attributes:
 
 Some examples of identifiers:
 
-* ``file("test.c")`` has identifier **"file:test.c"**
-* ``meta("NAME")`` has identifier **"meta:<context path>:NAME"**
+* ``file("test.c")`` has identifier :code:`"file:test.c"`.
+* ``meta("NAME")`` has identifier :samp:`"meta:{context path}:NAME"` where *context path* is the path of the enclosing context.
 
 **An optional build function**
    A target can have a build function which is called whenever the target needs to be rebuilt, or if the target is missing. To set the build function for a target, use the ``=>`` operator:
