@@ -70,4 +70,4 @@ def setup(sphinx):
 	sys.path.insert(0, os.path.abspath('./_util'))
 	from minilang import MinilangLexer, minilangDomain
 	sphinx.add_lexer("mini", MinilangLexer())
-	sphinx.add_domain(minilangDomain) 
+	#sphinx.add_domain(minilangDomain) 
