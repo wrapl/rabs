@@ -29,8 +29,6 @@ Methods
 
 Every target supports the following methods:
 
-.. mini:method:: Target => BuildFunction
-
 .. code-block:: mini
 
    Target => BuildFunction

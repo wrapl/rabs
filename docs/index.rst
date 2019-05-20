@@ -9,7 +9,7 @@ Welcome to Rabs's documentation!
 Overview
 --------
 
-Rabs is a general purpose build system, designed for fast and consistent incremental rebuilds.
+Rabs is a general purpose build system, designed for fast and consistent incremental rebuilds. See here to get started: :doc:`/quickstart`.
 
 Features
 --------
@@ -68,11 +68,13 @@ Rabs provides several types of targets:
 * :doc:`/targets/expressions`
 * :doc:`/targets/scans`
 
+Rabs build scripts are written using :doc:`/minilang`.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
    
+   /quickstart
    /targets
    /contexts
 
