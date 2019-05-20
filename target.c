@@ -784,6 +784,16 @@ ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
+ml_value_t *target_get_id(void *Data, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Args[0];
+	return ml_string(Target->Id, -1);
+}
+
+ml_value_t *target_get_build(void *Data, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Args[0];
+	return Target->Build ?: MLNil;
+}
+
 ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	//printf("target_set_build(%s)\n", Target->Id);
@@ -1465,6 +1475,8 @@ void target_init() {
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);
 	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, NULL);
 	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, NULL);
+	ml_method_by_name("id", 0, target_get_id, TargetT, NULL);
+	ml_method_by_name("build", 0, target_get_build, TargetT, NULL);
 	ml_method_by_name("build", 0, target_set_build, TargetT, MLAnyT, NULL);
 	ml_method_by_name("source", 0, target_scan_source, ScanTargetT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);

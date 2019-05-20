@@ -225,7 +225,12 @@ ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
 }
 
 ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
-	return (ml_value_t *)CurrentContext;
+	if (Count > 0) {
+		ML_CHECK_ARG_TYPE(0, MLStringT);
+		return (ml_value_t *)context_find(ml_string_value(Args[0]));
+	} else {
+		return (ml_value_t *)CurrentContext;
+	}
 }
 
 #ifdef __MINGW32__
