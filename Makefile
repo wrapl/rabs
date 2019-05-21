@@ -47,6 +47,10 @@ ifeq ($(PLATFORM), Mingw)
 	objects += ansicolor-w32.o
 endif
 
+ifeq ($(PLATFORM), Darwine)
+	LDFLAGS += -Wl,--export-dynamic -ldl -lgc -lsqlite3
+endif
+
 ifdef DEBUG
 	CFLAGS += -g
 	LDFLAGS += -g

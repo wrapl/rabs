@@ -1,11 +1,38 @@
 Quickstart
 ==========
 
-Description
------------
+Building a small C program
+--------------------------
+
+Suppose we have a single directory project, containing a single source file, :file:`hello.c`.
+
+.. code-block:: c
+
+   #include <stdio.h>
+   
+   int main(int Argc, char **Argv) {
+      printf("Hello world!\n");
+      return 0;
+   }
+
+To build an executable, :file:`hello` from this file with *Rabs*, we can create the following :file:`build.rabs` file.
+
+.. code-block:: mini
+
+   -- ROOT --
+   
+   file("hello.o")[file("hello.c")] => fun() do
+      execute('gcc -c -o{file("hello.o")} {file("hello.c")}')
+   end
+   
+   file("hello")[file("hello.o")] => fun() do
+      execute('gcc -o{file("hello")} {file("hello.o")}')
+   end
+
+Here is some inline code :samp:`Target => Build`.
 
 Folder structure
-~~~~~~~~~~~~~~~~
+----------------
 
 *Rabs* is designed for building large projects that can span several directories with arbitrary nesting. Each directory contains a :file:`build.rabs` file which specifies the targets to build within that directory, the instructions to build those targets (written in :doc:`/minilang`), and any dependencies.
 
@@ -31,7 +58,7 @@ Each :file:`build.rabs` file introduces a new scope, which allows per-directory 
    -- ROOT --
 
 No patterns, only code
-~~~~~~~~~~~~~~~~~~~~~~
+----------------------
 
 Unlike many other build systems, *Rabs* does not use patterns to denote dependencies and build functions. Instead, every dependencies and build function must be explicitly created by code. 
 
@@ -71,4 +98,3 @@ This could be used to build a program:
    var Objects := [c_object(file("program.o"))]
    
    file("program")[Objects] => fun(Target) execute(CC, Objects, "-o", Target)
-
