@@ -48,7 +48,7 @@ ifeq ($(PLATFORM), Mingw)
 endif
 
 ifeq ($(PLATFORM), Darwin)
-	LDFLAGS += -Wl,--export-dynamic -ldl -lgc -lsqlite3
+	LDFLAGS += -ldl -lgc -lsqlite3
 endif
 
 ifdef DEBUG
