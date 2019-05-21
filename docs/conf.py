@@ -65,6 +65,8 @@ inline_highlight_respect_highlight = True
 # use language set by highlight directive if no role is set
 inline_highlight_literals = False
 
+highlight_language = 'mini'
+
 def setup(sphinx):
 	import sys, os
 	sys.path.insert(0, os.path.abspath('./_util'))
