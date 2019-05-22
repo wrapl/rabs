@@ -70,7 +70,7 @@ void cache_open(const char *RootPath) {
 			exit(1);
 		}
 		if (!PreviousVersion || strcmp(PreviousVersion, WORKING_VERSION) < 0) {
-			printf("Version error: database was built with version %s but this version of Rabs will only work with version %s or higher\n", PreviousVersion, WORKING_VERSION);
+			printf("Version error: database was built with version %s but this version of Rabs will only work with version %s or higher. Delete %s to force a clean build.\n", PreviousVersion, WORKING_VERSION, CacheFileName);
 			exit(1);
 		}
 		if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'iteration\'", (void *)iteration_callback, &CurrentIteration, 0) != SQLITE_OK) {
