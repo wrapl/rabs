@@ -88,6 +88,8 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_
 	Target->Build = 0;
 	Target->LastUpdated = STATE_UNCHECKED;
 	Target->QueueIndex = -1;
+	Target->Depends->Type = TargetSetT;
+	Target->Affects->Type = TargetSetT;
 	Slot[0] = Target;
 	return Target;
 }
@@ -801,6 +803,22 @@ ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
+ml_value_t *target_get_depends(void *Data, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Args[0];
+	return (ml_value_t *)Target->Depends;
+}
+
+ml_value_t *target_get_affects(void *Data, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Args[0];
+	return (ml_value_t *)Target->Affects;
+}
+
+ml_value_t *target_get_priority(void *Data, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Args[0];
+	return ml_integer(Target->QueuePriority);
+}
+
+
 struct target_scan_t {
 	TARGET_FIELDS
 	const char *Name;
@@ -1478,6 +1496,9 @@ void target_init() {
 	ml_method_by_name("id", 0, target_get_id, TargetT, NULL);
 	ml_method_by_name("build", 0, target_get_build, TargetT, NULL);
 	ml_method_by_name("build", 0, target_set_build, TargetT, MLAnyT, NULL);
+	ml_method_by_name("depends", 0, target_get_depends, TargetT, NULL);
+	ml_method_by_name("affects", 0, target_get_affects, TargetT, NULL);
+	ml_method_by_name("priority", 0, target_get_priority, TargetT, NULL);
 	ml_method_by_name("source", 0, target_scan_source, ScanTargetT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);

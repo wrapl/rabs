@@ -1,16 +1,22 @@
 #ifndef TARGETSET_H
 #define TARGETSET_H
 
+#include "minilang.h"
+
 typedef struct target_t target_t;
 typedef struct targetset_t targetset_t;
 
 struct targetset_t {
+	const ml_type_t *Type;
 	target_t **Targets;
 	int Size, Space;
 };
 
-#define TARGETSET_INIT {0,}
+extern ml_type_t TargetSetT[1];
 
+#define TARGETSET_INIT {TargetSetT, 0,}
+
+targetset_t *targetset_new();
 void targetset_init(targetset_t *Set, int Size);
 int targetset_insert(targetset_t *Set, target_t *Target);
 int targetset_foreach(targetset_t *Set, void *Data, int (*callback)(target_t *, void *));
