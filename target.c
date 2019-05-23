@@ -73,7 +73,7 @@ static int RunningThreads = 0, LastThread = 0;
 void target_depends_auto(target_t *Depend) {
 	if (CurrentTarget && CurrentTarget != Depend) {
 		targetset_insert(CurrentTarget->BuildDepends, Depend);
-		target_queue(Depend, 0);
+		target_queue(Depend, CurrentTarget);
 		target_wait(Depend, CurrentTarget);
 	}
 }
@@ -88,7 +88,6 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_
 	Target->Build = 0;
 	Target->LastUpdated = STATE_UNCHECKED;
 	Target->QueueIndex = -1;
-	Target->QueuePriority = 1;
 	Slot[0] = Target;
 	return Target;
 }
@@ -704,7 +703,7 @@ static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Arg
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_expr_t *Target = (target_expr_t *)Args[1];
 	target_depends_auto((target_t *)Target);
-	target_queue((target_t *)Target, 0);
+	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
 	return ml_inline(AppendMethod, 2, Buffer, Target->Value);
 }
@@ -712,7 +711,7 @@ static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Arg
 static ml_value_t *target_expr_argify(void *Data, int Count, ml_value_t **Args) {
 	target_expr_t *Target = (target_expr_t *)Args[1];
 	target_depends_auto((target_t *)Target);
-	target_queue((target_t *)Target, 0);
+	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
 	return ml_inline(ArgifyMethod, 2, Args[0], Target->Value);
 }
@@ -721,7 +720,7 @@ static ml_value_t *target_expr_cmdify(void *Data, int Count, ml_value_t **Args) 
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_expr_t *Target = (target_expr_t *)Args[1];
 	target_depends_auto((target_t *)Target);
-	target_queue((target_t *)Target, 0);
+	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
 	return ml_inline(AppendMethod, 2, Buffer, Target->Value);
 }
@@ -729,14 +728,12 @@ static ml_value_t *target_expr_cmdify(void *Data, int Count, ml_value_t **Args) 
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
 	target_expr_t *Target = (target_expr_t *)Args[0];
 	target_depends_auto((target_t *)Target);
-	target_queue((target_t *)Target, 0);
+	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
 	return ml_inline(StringMethod, 1, Target->Value);
 }
 
 static time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
-	//target_queue((target_t *)Target, 0);
-	//target_wait((target_t *)Target, CurrentTarget);
 	target_value_hash(Target->Value, Target->Hash);
 	return 0;
 }
@@ -1085,30 +1082,6 @@ int target_print(target_t *Target, void *Data) {
 	return 0;
 }
 
-int target_queue(target_t *Target, target_t *Parent) {
-	if (Target->LastUpdated > 0) return 0;
-	int UpdateQueue = 0;
-	if (Parent && targetset_insert(Target->Affects, Parent)) {
-		Parent->WaitCount += 1;
-		Target->QueuePriority += Parent->QueuePriority;
-		UpdateQueue = 1;
-	}
-	if (Target->LastUpdated == STATE_UNCHECKED) {
-		targetset_foreach(Target->Depends, Target, (void *)target_queue);
-		if (Target->WaitCount == 0) {
-			++QueuedTargets;
-			Target->LastUpdated = STATE_QUEUED;
-			//Target->Next = NextTarget;
-			//NextTarget = Target;
-			targetqueue_insert(Target);
-			pthread_cond_broadcast(TargetAvailable);
-		}
-	} else if (UpdateQueue && (Target->LastUpdated != STATE_CHECKING)){
-		targetqueue_insert(Target);
-	}
-	return 0;
-}
-
 int target_affect(target_t *Target, target_t *Depend) {
 	--Target->WaitCount;
 	if (Target->LastUpdated == STATE_UNCHECKED && Target->WaitCount == 0) {
@@ -1237,8 +1210,8 @@ void target_update(target_t *Target) {
 	} else {
 		memset(BuildHash, 0, sizeof(SHA256_BLOCK_SIZE));
 	}
+	if (Target->Parent) targetset_foreach(Target->Depends, Target->Parent, (void *)target_set_parent);
 	targetset_foreach(Target->Depends, Target, (void *)target_queue);
-	targetset_foreach(Target->Depends, Target->Parent, (void *)target_set_parent);
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
 
@@ -1253,8 +1226,8 @@ void target_update(target_t *Target) {
 			if (DependencyGraph) {
 				targetset_foreach(Depends, Target, (void *)target_graph_depends);
 			}
+			if (Target->Parent) targetset_foreach(Depends, Target->Parent, (void *)target_set_parent);
 			targetset_foreach(Depends, Target, (void *)target_queue);
-			targetset_foreach(Depends, Target->Parent, (void *)target_set_parent);
 			targetset_foreach(Depends, Target, (void *)target_wait);
 			targetset_foreach(Depends, &DependsLastUpdated, (void *)target_depends_fn);
 		}
@@ -1354,6 +1327,37 @@ void target_update(target_t *Target) {
 		}
 	}
 #endif
+}
+
+static int target_increase_priority(target_t *Target, void *Data) {
+	Target->QueuePriority += 1;
+	targetqueue_insert(Target);
+	targetset_foreach(Target->Depends, 0, target_increase_priority);
+}
+
+int target_queue(target_t *Target, target_t *Waiter) {
+	if (Target->LastUpdated > 0) return 0;
+	int UpdateQueue = 0;
+	if (Waiter && targetset_insert(Target->Affects, Waiter)) {
+		Waiter->WaitCount += 1;
+		Target->QueuePriority += 1;
+		UpdateQueue = 1;
+	}
+	if (Target->LastUpdated == STATE_UNCHECKED) {
+		targetset_foreach(Target->Depends, Target, (void *)target_queue);
+		if (Target->WaitCount == 0) {
+			++QueuedTargets;
+			Target->LastUpdated = STATE_QUEUED;
+			//Target->Next = NextTarget;
+			//NextTarget = Target;
+			targetqueue_insert(Target);
+			pthread_cond_broadcast(TargetAvailable);
+		}
+	} else if (UpdateQueue && (Target->LastUpdated != STATE_CHECKING)){
+		targetqueue_insert(Target);
+		targetset_foreach(Target->Depends, 0, target_increase_priority);
+	}
+	return 0;
 }
 
 int target_wait(target_t *Target, target_t *Waiter) {
