@@ -28,7 +28,7 @@ void targetqueue_insert(target_t *Target) {
 	while (Index > 0) {
 		int ParentIndex = (Index - 1) / 2;
 		target_t *Parent = QueueHeap[ParentIndex];
-		if (Parent->QueuePriority <= Target->QueuePriority) {
+		if (Parent->QueuePriority >= Target->QueuePriority) {
 			Target->QueueIndex = Index;
 			return;
 		}
@@ -40,6 +40,8 @@ void targetqueue_insert(target_t *Target) {
 }
 
 target_t *targetqueue_next() {
+	printf("Queue state:\n");
+	for (target_t **Q = QueueHeap; Q[0]; ++Q) printf("\t%d -> %s\n", Q[0]->QueuePriority, Q[0]->Id);
 	target_t *Next = QueueHeap[0];
 	if (!Next) return 0;
 	Next->QueueIndex = -1;

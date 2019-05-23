@@ -73,3 +73,4 @@ def setup(sphinx):
 	from minilang import MinilangLexer, minilangDomain
 	sphinx.add_lexer("mini", MinilangLexer())
 	#sphinx.add_domain(minilangDomain) 
+	sphinx.add_stylesheet('css/custom.css')

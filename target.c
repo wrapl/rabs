@@ -88,6 +88,7 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_
 	Target->Build = 0;
 	Target->LastUpdated = STATE_UNCHECKED;
 	Target->QueueIndex = -1;
+	Target->QueuePriority = 1;
 	Slot[0] = Target;
 	return Target;
 }
@@ -1294,7 +1295,7 @@ void target_update(target_t *Target) {
 					exit(1);
 				}
 				targetset_t Scans[1] = {TARGETSET_INIT};
-				targetset_foreach(Roots, 0, (void *)target_queue);
+				targetset_foreach(Roots, Target, (void *)target_queue);
 				targetset_foreach(Roots, Target, (void *)target_wait);
 				targetset_foreach(Roots, Scans, (void *)target_find_leaves);
 				cache_scan_set(Target, Scans);
