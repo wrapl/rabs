@@ -1087,9 +1087,11 @@ int target_print(target_t *Target, void *Data) {
 
 int target_queue(target_t *Target, target_t *Parent) {
 	if (Target->LastUpdated > 0) return 0;
+	int UpdateQueue = 0;
 	if (Parent && targetset_insert(Target->Affects, Parent)) {
 		Parent->WaitCount += 1;
 		Target->QueuePriority += Parent->QueuePriority;
+		UpdateQueue = 1;
 	}
 	if (Target->LastUpdated == STATE_UNCHECKED) {
 		targetset_foreach(Target->Depends, Target, (void *)target_queue);
@@ -1101,7 +1103,7 @@ int target_queue(target_t *Target, target_t *Parent) {
 			targetqueue_insert(Target);
 			pthread_cond_broadcast(TargetAvailable);
 		}
-	} else {
+	} else if (UpdateQueue && (Target->LastUpdated != STATE_CHECKING)){
 		targetqueue_insert(Target);
 	}
 	return 0;
