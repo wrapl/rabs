@@ -1329,12 +1329,6 @@ void target_update(target_t *Target) {
 #endif
 }
 
-static int target_increase_priority(target_t *Target, void *Data) {
-	Target->QueuePriority += 1;
-	targetqueue_insert(Target);
-	targetset_foreach(Target->Depends, 0, target_increase_priority);
-}
-
 int target_queue(target_t *Target, target_t *Waiter) {
 	if (Target->LastUpdated > 0) return 0;
 	int UpdateQueue = 0;
@@ -1355,7 +1349,6 @@ int target_queue(target_t *Target, target_t *Waiter) {
 		}
 	} else if (UpdateQueue && (Target->LastUpdated != STATE_CHECKING)){
 		targetqueue_insert(Target);
-		targetset_foreach(Target->Depends, 0, target_increase_priority);
 	}
 	return 0;
 }
