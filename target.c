@@ -1355,6 +1355,7 @@ int target_queue(target_t *Target, target_t *Waiter) {
 		Target->QueuePriority += 1;
 		UpdateQueue = 1;
 	}
+	printf("target_queue[%d] -> %s\n", Target->Id, Target->QueuePriority);
 	if (Target->LastUpdated == STATE_UNCHECKED) {
 		targetset_foreach(Target->Depends, Target, (void *)target_queue);
 		if (Target->WaitCount == 0) {
@@ -1365,7 +1366,7 @@ int target_queue(target_t *Target, target_t *Waiter) {
 			targetqueue_insert(Target);
 			pthread_cond_broadcast(TargetAvailable);
 		}
-	} else if (UpdateQueue && (Target->LastUpdated != STATE_CHECKING)){
+	} else if (UpdateQueue && (Target->LastUpdated != STATE_CHECKING)) {
 		targetqueue_insert(Target);
 	}
 	return 0;
