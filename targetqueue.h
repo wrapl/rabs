@@ -5,6 +5,7 @@
 
 void targetqueue_init();
 void targetqueue_insert(target_t *Target);
+void targetqueue_adjust(target_t *Target);
 target_t *targetqueue_next();
 
 #endif

@@ -758,16 +758,25 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Slot[0];
 }
 
+static int target_priority_increase(target_t *Target, void *Data) {
+	++Target->QueuePriority;
+	targetset_foreach(Target->Depends, 0, target_priority_increase);
+	if (Target->QueueIndex >= 0) targetqueue_adjust(Target);
+	return 0;
+}
+
 static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 	if (Arg->Type == MLListT) {
 		return ml_list_foreach(Arg, Target, (void *)target_depends_single);
 	} else if (Arg->Type == MLStringT) {
 		target_t *Depend = target_symb_new(ml_string_value(Arg));
 		targetset_insert(Target->Depends, Depend);
+		target_priority_increase(Depend, 0);
 		return 0;
 	} else if (ml_is(Arg, TargetT)) {
 		target_t *Depend = (target_t *)Arg;
 		targetset_insert(Target->Depends, Depend);
+		target_priority_increase(Depend, 0);
 		return 0;
 	} else if (Arg == MLNil) {
 		return 0;
@@ -1191,10 +1200,10 @@ void display_threads() {
 			printf("[%2d] I\n\e[K", Thread->Id);
 			break;
 		case BUILD_WAIT:
-			printf("[%2d] W %s %.32s\n\e[K", Thread->Id, Thread->Target->Id, Thread->Command);
+			printf("[%2d] W %6d|%s %.32s\n\e[K", Thread->Id, Thread->Target->QueuePriority, Thread->Target->Id, Thread->Command);
 			break;
 		case BUILD_EXEC:
-			printf("[%2d] X %s %.32s\n\e[K", Thread->Id, Thread->Target->Id, Thread->Command);
+			printf("[%2d] X %6d|%s %.32s\n\e[K", Thread->Id, Thread->Target->QueuePriority, Thread->Target->Id, Thread->Command);
 			break;
 		}
 		printf("\e[0m");
@@ -1349,13 +1358,9 @@ void target_update(target_t *Target) {
 
 int target_queue(target_t *Target, target_t *Waiter) {
 	if (Target->LastUpdated > 0) return 0;
-	int UpdateQueue = 0;
 	if (Waiter && targetset_insert(Target->Affects, Waiter)) {
 		Waiter->WaitCount += 1;
-		Target->QueuePriority += 1;
-		UpdateQueue = 1;
 	}
-	printf("target_queue[%d] -> %s\n", Target->Id, Target->QueuePriority);
 	if (Target->LastUpdated == STATE_UNCHECKED) {
 		targetset_foreach(Target->Depends, Target, (void *)target_queue);
 		if (Target->WaitCount == 0) {
@@ -1363,11 +1368,10 @@ int target_queue(target_t *Target, target_t *Waiter) {
 			Target->LastUpdated = STATE_QUEUED;
 			//Target->Next = NextTarget;
 			//NextTarget = Target;
+			//printf("target_queue[%d] -> %s\n", Target->QueuePriority, Target->Id);
 			targetqueue_insert(Target);
 			pthread_cond_broadcast(TargetAvailable);
 		}
-	} else if (UpdateQueue && (Target->LastUpdated != STATE_CHECKING)) {
-		targetqueue_insert(Target);
 	}
 	return 0;
 }
