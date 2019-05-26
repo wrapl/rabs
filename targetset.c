@@ -5,6 +5,74 @@
 
 #define INITIAL_SIZE 4
 
+typedef struct targetset_iter_t {
+	const ml_type_t *Type;
+	target_t **Current, **End;
+} targetset_iter_t;
+
+static ml_value_t *targetset_iter_current(ml_value_t *Value) {
+	targetset_iter_t *Iter = (targetset_iter_t *)Value;
+	return (ml_value_t *)Iter->Current[0];
+}
+
+static ml_value_t *targetset_iter_next(ml_value_t *Value) {
+	targetset_iter_t *Iter = (targetset_iter_t *)Value;
+	for (target_t **Current = Iter->Current + 1; Current < Iter->End; ++Current) {
+		if (*Current) {
+			Iter->Current = Current;
+			return Value;
+		}
+	}
+	return MLNil;
+}
+
+static ml_type_t TargetSetIterT[1] = {{
+	MLTypeT,
+	MLAnyT, "targetset",
+	ml_default_hash,
+	ml_default_call,
+	ml_default_deref,
+	ml_default_assign,
+	ml_default_iterate,
+	targetset_iter_current,
+	targetset_iter_next,
+	ml_default_key
+}};
+
+static ml_value_t *targetset_iterate(ml_value_t *Value) {
+	targetset_t *Set = (targetset_t *)Value;
+	target_t **End = Set->Targets + Set->Size;
+	for (target_t **T = Set->Targets; T < End; ++T) {
+		if (*T) {
+			targetset_iter_t *Iter = new(targetset_iter_t);
+			Iter->Type = TargetSetIterT;
+			Iter->Current = T;
+			Iter->End = End;
+			return (ml_value_t *)Iter;
+		}
+	}
+	return MLNil;
+}
+
+ml_type_t TargetSetT[1] = {{
+	MLTypeT,
+	MLAnyT, "targetset",
+	ml_default_hash,
+	ml_default_call,
+	ml_default_deref,
+	ml_default_assign,
+	targetset_iterate,
+	ml_default_current,
+	ml_default_next,
+	ml_default_key
+}};
+
+targetset_t *targetset_new() {
+	targetset_t *Set = new(targetset_t);
+	Set->Type = TargetSetT;
+	return Set;
+}
+
 void targetset_init(targetset_t *Set, int Min) {
 	int Size = 1;
 	while (Size < Min) Size <<= 1;
