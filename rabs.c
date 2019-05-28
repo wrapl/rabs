@@ -781,14 +781,12 @@ int main(int Argc, char **Argv) {
 	library_init();
 
 	const char *TargetName = 0;
-	int QueryOnly = 0;
-	int ListTargets = 0;
 	int NumThreads = 1;
 	int InteractiveMode = 0;
 	for (int I = 1; I < Argc; ++I) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
-			case 'v': {
+			case 'V': {
 				printf("rabs version %s\n", CURRENT_VERSION);
 				exit(0);
 			}
@@ -809,14 +807,6 @@ int main(int Argc, char **Argv) {
 			}
 			case 's': {
 				StatusUpdates = 1;
-				break;
-			}
-			case 'q': {
-				QueryOnly = 1;
-				break;
-			}
-			case 'l': {
-				ListTargets = 1;
 				break;
 			}
 			case 'p': {
@@ -869,14 +859,14 @@ int main(int Argc, char **Argv) {
 			case 'h': default: {
 				printf("Usage: %s { options } [ target ]\n", Argv[0]);
 				puts("    -h              display this message and exit");
-				puts("    -v              print version and exit");
+				puts("    -V              print version and exit");
 				puts("    -Dkey[=value]   add a define");
 				puts("    -c              print shell commands");
 				puts("    -s              print each target after building");
 				puts("    -p n            run n threads");
 				puts("    -G              generate dependencies.dot");
 #ifdef Linux
-				puts("    -w              watch for file changes");
+				puts("    -w              watch for file changes [experimental]");
 #endif
 				exit(0);
 			}
@@ -898,7 +888,8 @@ int main(int Argc, char **Argv) {
 		exit(1);
 	}
 
-	printf("RootPath = %s, Path = %s\n", RootPath, Path);
+	printf("RootPath = %s\n", RootPath);
+	printf("Building in %s\n", Path);
 	cache_open(RootPath);
 
 	context_push("");
