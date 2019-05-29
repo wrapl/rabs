@@ -1,0 +1,11 @@
+-- ROOT --
+   
+file("hello.o")[file("hello.c")] => fun() do
+	execute('gcc -c -o{file("hello.o")} {file("hello.c")}')
+end
+
+file("hello")[file("hello.o")] => fun() do
+	execute('gcc -o{file("hello")} {file("hello.o")}')
+end
+
+DEFAULT[file("hello")]

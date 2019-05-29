@@ -36,18 +36,17 @@ Folder structure
 
 *Rabs* is designed for building large projects that can span several directories with arbitrary nesting. Each directory contains a :file:`build.rabs` file which specifies the targets to build within that directory, the instructions to build those targets (written in :doc:`/minilang`), and any dependencies.
 
-::
+.. folders::
    
-   .
-   ├── build.rabs
-   ├── folder 1
-   │   └── build.rabs
-   ├── folder 2
-   │   └── build.rabs
-   ├── folder 3
-   │   └── build.rabs
-   ├── file 1
-   └── file 2
+   - build.rabs
+   + folder 1
+      - build.rabs
+   + folder 2
+      - build.rabs
+   + folder 3
+      - build.rabs
+   - file 1
+   - file 2
 
 Each :file:`build.rabs` file introduces a new scope, which allows per-directory configurations. This scope also inherits the scope from the parent directory, allowing common functionality or settings to be defined in the root directory of the project.
 

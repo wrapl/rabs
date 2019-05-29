@@ -1,3 +1,43 @@
+from docutils.parsers.rst import Directive
+from docutils import nodes
+import re
+
+class FoldersDirective(Directive):
+	has_content = True
+	
+	def run(self):
+		env = self.state.document.settings.env
+		block_quote = nodes.line_block()
+		block_quote['classes'].append('folders')
+		node = nodes.bullet_list()
+		block_quote.append(node)
+		stack = [node]
+		indents = [-1]
+		for line in self.content:
+			match = re.search('[-+] ', line)
+			if match is None:
+				break
+			indent = match.start()
+			node = nodes.list_item()
+			text = line[match.end():]
+			print(line[match.end():])
+			if indent <= indents[-1]:
+				stack.pop()
+				indents.pop()
+			stack[-1].append(node)
+			if line[match.start()] == '+':
+				node.append(nodes.inline(text = '📁 ' + text))
+				node['classes'].append('folder')
+				children = nodes.bullet_list()
+				node.append(children)
+				stack.append(children)
+				indents.append(indent)
+			else:
+				node.append(nodes.inline(text = '🖹 ' + text))
+				node['classes'].append('file')
+		return [block_quote]
+		
+
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
@@ -73,4 +113,5 @@ def setup(sphinx):
 	from minilang import MinilangLexer, minilangDomain
 	sphinx.add_lexer("mini", MinilangLexer())
 	#sphinx.add_domain(minilangDomain) 
+	sphinx.add_directive('folders', FoldersDirective)
 	sphinx.add_stylesheet('css/custom.css')

@@ -115,6 +115,7 @@ static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Arg
 	} else {
 		Path = RootPath;
 	}
+	//Path = relative_path(Path, CurrentDirectory);
 	const char *I = Path, *J = Path;
 	for (;; ++J) switch (*J) {
 	case 0: goto done;
@@ -141,14 +142,16 @@ done:
 
 static ml_value_t *target_file_argify(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[1];
+	const char *Path;
 	if (Target->Absolute) {
-		ml_list_append(Args[0], ml_string(Target->Path, strlen(Target->Path)));
+		Path = Target->Path;
 	} else if (Target->Path[0]) {
-		const char *Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
-		ml_list_append(Args[0], ml_string(Path, strlen(Path)));
+		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	} else {
-		ml_list_append(Args[0], ml_string(RootPath, strlen(RootPath)));
+		Path = RootPath;
 	}
+	//Path = relative_path(Path, CurrentDirectory);
+	ml_list_append(Args[0], ml_string(Path, strlen(Path)));
 	return MLSome;
 }
 
@@ -163,6 +166,7 @@ static ml_value_t *target_file_cmdify(void *Data, int Count, ml_value_t **Args) 
 	} else {
 		Path = RootPath;
 	}
+	//Path = relative_path(Path, CurrentDirectory);
 	const char *I = Path, *J = Path;
 	for (;; ++J) switch (*J) {
 	case 0: goto done;
@@ -189,14 +193,16 @@ done:
 
 static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
+	const char *Path;
 	if (Target->Absolute) {
-		return ml_string(Target->Path, -1);
+		Path = Target->Path;
 	} else if (Target->Path[0]) {
-		const char *Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
-		return ml_string(Path, -1);
+		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
 	} else {
-		return ml_string(RootPath, -1);
+		Path = RootPath;
 	}
+	//Path = relative_path(Path, CurrentDirectory);
+	return ml_string(Path, strlen(Path));
 }
 
 static time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
@@ -955,7 +961,7 @@ static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
 	return 0;
 }
 
-static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
+static int map_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
 	unsigned char ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Key, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
@@ -987,10 +993,10 @@ void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE])
 		sha256_init(Ctx);
 		ml_list_foreach(Value, Ctx, (void *)list_update_hash);
 		sha256_final(Ctx, Hash);
-	} else if (Value->Type == MLTreeT) {
+	} else if (Value->Type == MLMapT) {
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		ml_tree_foreach(Value, Ctx, (void *)tree_update_hash);
+		ml_map_foreach(Value, Ctx, (void *)map_update_hash);
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == MLClosureT) {
 		ml_closure_sha256(Value, Hash);

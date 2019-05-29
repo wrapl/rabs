@@ -341,6 +341,156 @@ void cache_scan_set(target_t *Target, targetset_t *Scans) {
 	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
 }
 
+static int cache_expr_value_size(ml_value_t *Value);
+
+static int cache_expr_value_size_fn(ml_value_t *Key, ml_value_t *Value, int *Size) {
+	*Size += cache_expr_value_size(Key);
+	*Size += cache_expr_value_size(Value);
+	return 0;
+}
+
+static int cache_expr_value_size(ml_value_t *Value) {
+	if (Value->Type == MLStringT) {
+		return 6 + ml_string_length(Value);
+	} else if (Value->Type == MLIntegerT) {
+		return 9;
+	} else if (Value->Type == MLRealT) {
+		return 9;
+	} else if (Value == MLNil) {
+		return 1;
+	} else if (Value->Type == MLListT) {
+		int Size = 5;
+		for (ml_list_node_t *Node = ml_list_head(Value); Node; Node = Node->Next) {
+			Size += cache_expr_value_size(Node->Value);
+		}
+		return Size;
+	} else if (Value->Type == MLMapT) {
+		int Size = 5;
+		ml_map_foreach(Value, &Size, (void *)cache_expr_value_size_fn);
+	} else if (ml_is(Value, TargetT)) {
+		target_t *Target = (target_t *)Value;
+		return 6 + Target->IdLength;
+	}
+	return 0;
+}
+
+static char *cache_expr_value_write(ml_value_t *Value, char *Buffer);
+
+static int cache_expr_value_write_fn(ml_value_t *Key, ml_value_t *Value, char **Buffer) {
+	*Buffer = cache_expr_value_write(Key, *Buffer);
+	*Buffer = cache_expr_value_write(Value, *Buffer);
+	return 0;
+}
+
+#define CACHE_EXPR_NIL			0
+#define CACHE_EXPR_STRING		1
+#define CACHE_EXPR_INTEGER		2
+#define CACHE_EXPR_REAL			3
+#define CACHE_EXPR_LIST			4
+#define CACHE_EXPR_MAP			5
+#define CACHE_EXPR_TARGET		6
+
+static char *cache_expr_value_write(ml_value_t *Value, char *Buffer) {
+	if (Value->Type == MLStringT) {
+		int Length = ml_string_length(Value);
+		*Buffer++ = CACHE_EXPR_STRING;
+		*(int32_t *)Buffer = Length;
+		Buffer += 4;
+		memcpy(Buffer, ml_string_value(Value), Length);
+		Buffer[Length] = 0;
+		Buffer += Length + 1;
+	} else if (Value->Type == MLIntegerT) {
+		*Buffer++ = CACHE_EXPR_INTEGER;
+		*(int64_t *)Buffer = ml_integer_value(Value);
+		Buffer += 8;
+	} else if (Value->Type == MLRealT) {
+		*Buffer++ = CACHE_EXPR_REAL;
+		*(double *)Buffer = ml_real_value(Value);
+		Buffer += 8;
+	} else if (Value == MLNil) {
+		*Buffer++ = CACHE_EXPR_NIL;
+	} else if (Value->Type == MLListT) {
+		*Buffer++ = CACHE_EXPR_LIST;
+		*(int32_t *)Buffer = ml_list_length(Value);
+		Buffer += 4;
+		for (ml_list_node_t *Node = ml_list_head(Value); Node; Node = Node->Next) {
+			Buffer = cache_expr_value_write(Node->Value, Buffer);
+		}
+	} else if (Value->Type == MLMapT) {
+		*Buffer++ = CACHE_EXPR_MAP;
+		*(int32_t *)Buffer = ml_map_size(Value);
+		Buffer += 4;
+		ml_map_foreach(Value, &Buffer, (void *)cache_expr_value_write_fn);
+	} else if (ml_is(Value, TargetT)) {
+		*Buffer++ = CACHE_EXPR_TARGET;
+		target_t *Target = (target_t *)Value;
+		*(int32_t *)Buffer = Target->IdLength;
+		memcpy(Buffer, Target->Id, Target->IdLength);
+		Buffer[Target->IdLength] = 0;
+		Buffer += Target->IdLength + 1;
+	}
+	return Buffer;
+}
+
+static char *cache_expr_value_read(char *Buffer, ml_value_t **Output) {
+	switch (*Buffer++) {
+	case CACHE_EXPR_NIL: {
+		*Output = MLNil;
+		return Buffer;
+	}
+	case CACHE_EXPR_STRING: {
+		int Length = *(int32_t *)Buffer;
+		Buffer += 4;
+		char *Chars = GC_malloc_atomic(Length + 1);
+		memcpy(Chars, Buffer, Length);
+		Chars[Length] = 0;
+		*Output = ml_string(Chars, Length);
+		return Buffer + Length + 1;
+	}
+	case CACHE_EXPR_INTEGER: {
+		*Output = ml_integer(*(int64_t *)Buffer);
+		return Buffer + 8;
+	}
+	case CACHE_EXPR_REAL: {
+		*Output = ml_real(*(double *)Buffer);
+		return Buffer + 8;
+	}
+	case CACHE_EXPR_LIST: {
+		int Length = *(int32_t *)Buffer;
+		Buffer += 4;
+		ml_value_t *List = *Output = ml_list();
+		for (int I = 0; I < Length; ++I) {
+			ml_value_t *Value;
+			Buffer = cache_expr_value_read(Buffer, &Value);
+			ml_list_append(List, Value);
+		}
+		return Buffer;
+	}
+	case CACHE_EXPR_MAP: {
+		int Length = *(int32_t *)Buffer;
+		Buffer += 4;
+		ml_value_t *Map = *Output = ml_map();
+		for (int I = 0; I < Length; ++I) {
+			ml_value_t *Key, *Value;
+			Buffer = cache_expr_value_read(Buffer, &Key);
+			Buffer = cache_expr_value_read(Buffer, &Value);
+			ml_map_insert(Map, Key, Value);
+		}
+		return Buffer;
+	}
+	case CACHE_EXPR_TARGET: {
+		int Length = *(int32_t *)Buffer;
+		Buffer += 4;
+		char *Id = GC_malloc_atomic(Length + 1);
+		memcpy(Id, Buffer, Length);
+		Id[Length] = 0;
+		*Output = target_find(Id);
+		return Buffer + Length + 1;
+	}
+	}
+	return Buffer;
+}
+
 ml_value_t *cache_expr_get(target_t *Target) {
 	sqlite3_bind_text(ExprGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	ml_value_t *Result = 0;
@@ -363,6 +513,12 @@ ml_value_t *cache_expr_get(target_t *Target) {
 		case SQLITE_NULL:
 			Result = MLNil;
 			break;
+		case SQLITE_BLOB: {
+			int Length = sqlite3_column_bytes(ExprGetStatement, 0);
+			const char *Buffer = sqlite3_column_blob(ExprGetStatement, 0);
+			cache_expr_value_read(Buffer, &Result);
+			break;
+		}
 		}
 	}
 	sqlite3_reset(ExprGetStatement);
@@ -370,8 +526,8 @@ ml_value_t *cache_expr_get(target_t *Target) {
 }
 
 void cache_expr_set(target_t *Target, ml_value_t *Value) {
+	sqlite3_bind_text(ExprSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	if (Value->Type == MLStringT) {
-		sqlite3_bind_text(ExprSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 		sqlite3_bind_text(ExprSetStatement, 2, ml_string_value(Value), ml_string_length(Value), SQLITE_STATIC);
 	} else if (Value->Type == MLIntegerT) {
 		sqlite3_bind_int64(ExprSetStatement, 2, ml_integer_value(Value));
@@ -379,6 +535,11 @@ void cache_expr_set(target_t *Target, ml_value_t *Value) {
 		sqlite3_bind_double(ExprSetStatement, 2, ml_real_value(Value));
 	} else if (Value == MLNil) {
 		sqlite3_bind_null(ExprSetStatement, 2);
+	} else {
+		int Length = cache_expr_value_size(Value);
+		char *Buffer = GC_malloc_atomic(Length);
+		cache_expr_value_write(Value, Buffer);
+		sqlite3_bind_blob(ExprSetStatement, 2, Buffer, Length, SQLITE_STATIC);
 	}
 	sqlite3_step(ExprSetStatement);
 	sqlite3_reset(ExprSetStatement);

@@ -286,7 +286,7 @@ typedef struct cmdify_context_t {
 	int First;
 } cmdify_context_t;
 
-static int cmdify_tree_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t *Context) {
+static int cmdify_map_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t *Context) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Context->Argv;
 	if (Context->First) {
 		Context->First = 0;
@@ -309,9 +309,9 @@ static int cmdify_tree_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t
 	return 0;
 }
 
-ml_value_t *cmdify_tree(void *Data, int Count, ml_value_t **Args) {
+ml_value_t *cmdify_map(void *Data, int Count, ml_value_t **Args) {
 	cmdify_context_t Context = {Args[0], MLSome, 1};
-	ml_tree_foreach(Args[1], &Context, (void *)cmdify_tree_node);
+	ml_map_foreach(Args[1], &Context, (void *)cmdify_map_node);
 	return Context.Result;
 }
 
@@ -442,7 +442,7 @@ typedef struct argify_context_t {
 	ml_value_t *Result;
 } argify_context_t;
 
-static int argify_tree_node(ml_value_t *Key, ml_value_t *Value, argify_context_t *Context) {
+static int argify_map_node(ml_value_t *Key, ml_value_t *Value, argify_context_t *Context) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Key);
 	if (Result->Type == MLErrorT) {
@@ -463,9 +463,9 @@ static int argify_tree_node(ml_value_t *Key, ml_value_t *Value, argify_context_t
 	return 0;
 }
 
-ml_value_t *argify_tree(void *Data, int Count, ml_value_t **Args) {
+ml_value_t *argify_map(void *Data, int Count, ml_value_t **Args) {
 	argify_context_t Context = {Args[0], MLSome};
-	ml_tree_foreach(Args[1], &Context, (void *)argify_tree_node);
+	ml_map_foreach(Args[1], &Context, (void *)argify_map_node);
 	return Context.Result;
 }
 
@@ -764,7 +764,7 @@ int main(int Argc, char **Argv) {
 	ml_method_by_value(ArgifyMethod, NULL, argify_string, MLListT, MLStringT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, argify_method, MLListT, MLMethodT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, argify_list, MLListT, MLListT, NULL);
-	ml_method_by_value(ArgifyMethod, NULL, argify_tree, MLListT, MLTreeT, NULL);
+	ml_method_by_value(ArgifyMethod, NULL, argify_map, MLListT, MLMapT, NULL);
 
 	ml_method_by_value(CmdifyMethod, NULL, cmdify_nil, MLStringBufferT, MLNilT, NULL);
 	ml_method_by_value(CmdifyMethod, NULL, cmdify_integer, MLStringBufferT, MLIntegerT, NULL);
@@ -772,7 +772,7 @@ int main(int Argc, char **Argv) {
 	ml_method_by_value(CmdifyMethod, NULL, cmdify_string, MLStringBufferT, MLStringT, NULL);
 	ml_method_by_value(CmdifyMethod, NULL, cmdify_method, MLStringBufferT, MLMethodT, NULL);
 	ml_method_by_value(CmdifyMethod, NULL, cmdify_list, MLStringBufferT, MLListT, NULL);
-	ml_method_by_value(CmdifyMethod, NULL, cmdify_tree, MLStringBufferT, MLTreeT, NULL);
+	ml_method_by_value(CmdifyMethod, NULL, cmdify_map, MLStringBufferT, MLMapT, NULL);
 
 	target_init();
 	context_init();
@@ -781,14 +781,12 @@ int main(int Argc, char **Argv) {
 	library_init();
 
 	const char *TargetName = 0;
-	int QueryOnly = 0;
-	int ListTargets = 0;
 	int NumThreads = 1;
 	int InteractiveMode = 0;
 	for (int I = 1; I < Argc; ++I) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
-			case 'v': {
+			case 'V': {
 				printf("rabs version %s\n", CURRENT_VERSION);
 				exit(0);
 			}
@@ -809,14 +807,6 @@ int main(int Argc, char **Argv) {
 			}
 			case 's': {
 				StatusUpdates = 1;
-				break;
-			}
-			case 'q': {
-				QueryOnly = 1;
-				break;
-			}
-			case 'l': {
-				ListTargets = 1;
 				break;
 			}
 			case 'p': {
@@ -869,14 +859,14 @@ int main(int Argc, char **Argv) {
 			case 'h': default: {
 				printf("Usage: %s { options } [ target ]\n", Argv[0]);
 				puts("    -h              display this message and exit");
-				puts("    -v              print version and exit");
+				puts("    -V              print version and exit");
 				puts("    -Dkey[=value]   add a define");
 				puts("    -c              print shell commands");
 				puts("    -s              print each target after building");
 				puts("    -p n            run n threads");
 				puts("    -G              generate dependencies.dot");
 #ifdef Linux
-				puts("    -w              watch for file changes");
+				puts("    -w              watch for file changes [experimental]");
 #endif
 				exit(0);
 			}
@@ -898,7 +888,8 @@ int main(int Argc, char **Argv) {
 		exit(1);
 	}
 
-	printf("RootPath = %s, Path = %s\n", RootPath, Path);
+	printf("RootPath = %s\n", RootPath);
+	printf("Building in %s\n", Path);
 	cache_open(RootPath);
 
 	context_push("");

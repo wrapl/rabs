@@ -48,6 +48,17 @@ const char *match_prefix(const char *Subject, const char *Prefix) {
 	return Subject;
 }
 
+const char *relative_path(const char *Path, const char *Base) {
+	const char *Relative = Path;
+	while (*Base) {
+		if (*Base != *Relative) return Path;
+		++Base;
+		++Relative;
+	}
+	if (Relative[0] == '/') return Relative + 1;
+	return Path;
+}
+
 int mkdir_p(char *Path) {
 	if (!Path[0]) return -1;
 	struct stat Stat[1];
