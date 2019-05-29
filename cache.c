@@ -364,9 +364,9 @@ static int cache_expr_value_size(ml_value_t *Value) {
 			Size += cache_expr_value_size(Node->Value);
 		}
 		return Size;
-	} else if (Value->Type == MLTreeT) {
+	} else if (Value->Type == MLMapT) {
 		int Size = 5;
-		ml_tree_foreach(Value, &Size, cache_expr_value_size_fn);
+		ml_map_foreach(Value, &Size, (void *)cache_expr_value_size_fn);
 	} else if (ml_is(Value, TargetT)) {
 		target_t *Target = (target_t *)Value;
 		return 6 + Target->IdLength;
@@ -387,7 +387,7 @@ static int cache_expr_value_write_fn(ml_value_t *Key, ml_value_t *Value, char **
 #define CACHE_EXPR_INTEGER		2
 #define CACHE_EXPR_REAL			3
 #define CACHE_EXPR_LIST			4
-#define CACHE_EXPR_TREE			5
+#define CACHE_EXPR_MAP			5
 #define CACHE_EXPR_TARGET		6
 
 static char *cache_expr_value_write(ml_value_t *Value, char *Buffer) {
@@ -416,11 +416,11 @@ static char *cache_expr_value_write(ml_value_t *Value, char *Buffer) {
 		for (ml_list_node_t *Node = ml_list_head(Value); Node; Node = Node->Next) {
 			Buffer = cache_expr_value_write(Node->Value, Buffer);
 		}
-	} else if (Value->Type == MLTreeT) {
-		*Buffer++ = CACHE_EXPR_TREE;
-		*(int32_t *)Buffer = ((ml_tree_t *)Value)->Size;
+	} else if (Value->Type == MLMapT) {
+		*Buffer++ = CACHE_EXPR_MAP;
+		*(int32_t *)Buffer = ml_map_size(Value);
 		Buffer += 4;
-		ml_tree_foreach(Value, &Buffer, cache_expr_value_write_fn);
+		ml_map_foreach(Value, &Buffer, (void *)cache_expr_value_write_fn);
 	} else if (ml_is(Value, TargetT)) {
 		*Buffer++ = CACHE_EXPR_TARGET;
 		target_t *Target = (target_t *)Value;
@@ -432,7 +432,7 @@ static char *cache_expr_value_write(ml_value_t *Value, char *Buffer) {
 	return Buffer;
 }
 
-static char *cache_expr_value_read(char *Buffer, ml_value_t *Output) {
+static char *cache_expr_value_read(char *Buffer, ml_value_t **Output) {
 	switch (*Buffer++) {
 	case CACHE_EXPR_NIL: {
 		*Output = MLNil;
@@ -466,15 +466,15 @@ static char *cache_expr_value_read(char *Buffer, ml_value_t *Output) {
 		}
 		return Buffer;
 	}
-	case CACHE_EXPR_TREE: {
+	case CACHE_EXPR_MAP: {
 		int Length = *(int32_t *)Buffer;
 		Buffer += 4;
-		ml_value_t *Tree = *Output = ml_tree();
+		ml_value_t *Map = *Output = ml_map();
 		for (int I = 0; I < Length; ++I) {
 			ml_value_t *Key, *Value;
 			Buffer = cache_expr_value_read(Buffer, &Key);
 			Buffer = cache_expr_value_read(Buffer, &Value);
-			ml_tree_insert(Tree, Key, Value);
+			ml_map_insert(Map, Key, Value);
 		}
 		return Buffer;
 	}
@@ -515,7 +515,7 @@ ml_value_t *cache_expr_get(target_t *Target) {
 			break;
 		case SQLITE_BLOB: {
 			int Length = sqlite3_column_bytes(ExprGetStatement, 0);
-			char *Buffer = sqlite3_column_blob(ExprGetStatement, 0);
+			const char *Buffer = sqlite3_column_blob(ExprGetStatement, 0);
 			cache_expr_value_read(Buffer, &Result);
 			break;
 		}

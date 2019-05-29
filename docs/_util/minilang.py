@@ -17,7 +17,8 @@ class MinilangLexer(RegexLexer):
 				"susp", "with", "do", "on", "nil", "and", "or",
 				"not", "old", "def", "var"
 			), suffix = r'\b'), Name.Builtin),
-			(r'-?([0-9]*\.)?[0-9]+((e|E)[0-9]+)?', Number),
+			(r'-?[0-9]+(\.[0-9]*)?((e|E)-?[0-9]+)?', Number),
+			(r'-?\.[0-9]+((e|E)-?[0-9]+)?', Number),
 			('\"', String, 'string'),
 			('\'', String, 'string2'),
 			('\(', Operator, 'brackets'),

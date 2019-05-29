@@ -961,7 +961,7 @@ static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
 	return 0;
 }
 
-static int tree_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
+static int map_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
 	unsigned char ChildHash[SHA256_BLOCK_SIZE];
 	target_value_hash(Key, ChildHash);
 	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
@@ -993,10 +993,10 @@ void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE])
 		sha256_init(Ctx);
 		ml_list_foreach(Value, Ctx, (void *)list_update_hash);
 		sha256_final(Ctx, Hash);
-	} else if (Value->Type == MLTreeT) {
+	} else if (Value->Type == MLMapT) {
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		ml_tree_foreach(Value, Ctx, (void *)tree_update_hash);
+		ml_map_foreach(Value, Ctx, (void *)map_update_hash);
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == MLClosureT) {
 		ml_closure_sha256(Value, Hash);
