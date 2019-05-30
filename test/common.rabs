@@ -1,5 +1,4 @@
 PLATFORM := defined("PLATFORM") or shell("uname"):trim
-OS := defined("OS")
 DEBUG := defined("DEBUG")
 
 CFLAGS := []
@@ -13,7 +12,7 @@ end
 c_includes := fun(Target) do
 	var Files := []
 	var Lines := shell('cc -c {CFLAGS} -M -MG {Target:source}')
-	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( )"
+	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( +)"
 	Files:pop
 	for File in Files do
 		File := file(File:replace(r"\\ ", " "))

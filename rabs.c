@@ -155,7 +155,7 @@ ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	FileName = vfs_resolve(FileName);
 	target_t *ParentDefault = CurrentContext->Default;
 	context_t *Context = context_push(Path);
-	targetset_insert(ParentDefault->Depends, CurrentContext->Default);
+	if (Count < 2 || Args[1] != MLNil) targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	ml_value_t *Result = load_file(FileName);
 	context_pop();
 	if (Result->Type == MLErrorT) {
@@ -777,7 +777,7 @@ int main(int Argc, char **Argv) {
 	target_init();
 	context_init();
 	ml_file_init();
-	ml_object_init(Globals);
+	ml_object_init(Globals, (ml_setter_t)stringmap_insert);
 	library_init();
 
 	const char *TargetName = 0;
