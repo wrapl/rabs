@@ -204,6 +204,9 @@ ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 		}
 		return load_file(FileName);
 	} else if (!strcmp(Extension, "so")) {
+		if (FileName[0] != '/') {
+			FileName = vfs_resolve(concat(CurrentContext->FullPath, "/", FileName, NULL));
+		}
 		return library_load(FileName, Globals);
 	} else {
 		return ml_error("IncludeError", "Unknown include type: %s", FileName);
@@ -227,7 +230,7 @@ ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
 	if (Count > 0) {
 		ML_CHECK_ARG_TYPE(0, MLStringT);
-		return (ml_value_t *)context_find(ml_string_value(Args[0]));
+		return (ml_value_t *)context_find(ml_string_value(Args[0])) ?: MLNil;
 	} else {
 		return (ml_value_t *)CurrentContext;
 	}

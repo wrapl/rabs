@@ -17,7 +17,8 @@ struct context_t {
 
 void context_init();
 
-context_t *context_find(const char *Path);
+context_t *context_find(const char *Name);
+context_t *context_make(const char *Path);
 
 context_t *context_push(const char *Path);
 context_t *context_scope(const char *Name);

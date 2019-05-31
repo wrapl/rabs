@@ -12,6 +12,10 @@ static ml_value_t *DefaultString;
 static ml_type_t *ContextT;
 
 context_t *context_find(const char *Name) {
+	return stringmap_search(ContextCache, Name);
+}
+
+context_t *context_make(const char *Name) {
 	context_t **Slot = (context_t **)stringmap_slot(ContextCache, Name);
 	if (!Slot[0]) {
 		context_t *Context = Slot[0] = new(context_t);
@@ -21,7 +25,7 @@ context_t *context_find(const char *Name) {
 }
 
 context_t *context_push(const char *Path) {
-	context_t *Context = context_find(Path);
+	context_t *Context = context_make(Path);
 	Context->Type = ContextT;
 	Context->Parent = CurrentContext;
 	Context->Path = Path;
@@ -39,7 +43,7 @@ context_t *context_push(const char *Path) {
 }
 
 context_t *context_scope(const char *Name) {
-	context_t *Context = context_find(concat(CurrentContext->Name, ":", Name, NULL));
+	context_t *Context = context_make(concat(CurrentContext->Name, ":", Name, NULL));
 	Context->Type = ContextT;
 	Context->Parent = CurrentContext;
 	Context->Path = CurrentContext->Path;
@@ -94,14 +98,14 @@ static ml_value_t *context_get_subdir(void *Data, int Count, ml_value_t **Args) 
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	const char *Path = concat(Context->Path, "/", Name, NULL);
-	return (ml_value_t *)context_find(Path) ?: MLNil;
+	return (ml_value_t *)context_make(Path) ?: MLNil;
 }
 
 static ml_value_t *context_get_scope(void *Data, int Count, ml_value_t **Args) {
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	const char *Path = concat(Context->Path, ":", Name, NULL);
-	return (ml_value_t *)context_find(Path) ?: MLNil;
+	return (ml_value_t *)context_make(Path) ?: MLNil;
 }
 
 ml_value_t *context_in_scope(void *Data, int Count, ml_value_t **Args) {

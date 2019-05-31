@@ -42,4 +42,3 @@ Syntax
                   : `list_expression`
                   : `map_expression`
                   : `operator` `expression`
-    
