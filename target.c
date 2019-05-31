@@ -1227,6 +1227,7 @@ void target_update(target_t *Target) {
 		fprintf(DependencyGraph, "\tT%x [label=\"%s\"];\n", Target, Target->Id);
 		targetset_foreach(Target->Depends, Target, (void *)target_graph_depends);
 	}
+retry_build:
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
 	unsigned char PreviousBuildHash[SHA256_BLOCK_SIZE];
@@ -1272,7 +1273,11 @@ void target_update(target_t *Target) {
 
 	if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
 		//printf("\e[34m rebuilding %s\e[0m\n", Target->Id);
-		if (!Target->Build && Target->Parent) target_rebuild(Target->Parent);
+		if (!Target->Build && Target->Parent) {
+			target_rebuild(Target->Parent);
+			Target->Parent = 0;
+			goto retry_build;
+		}
 		if (DebugThreads) {
 			CurrentThread->Status = BUILD_EXEC;
 			CurrentThread->Target = Target;
@@ -1309,6 +1314,7 @@ void target_update(target_t *Target) {
 				targetset_t Scans[1] = {TARGETSET_INIT};
 				targetset_foreach(Roots, Target, (void *)target_queue);
 				targetset_foreach(Roots, Target, (void *)target_wait);
+				targetset_foreach(Roots, Scans, (void *)target_insert);
 				targetset_foreach(Roots, Scans, (void *)target_find_leaves);
 				cache_scan_set(Target, Scans);
 				if (DependencyGraph) {
