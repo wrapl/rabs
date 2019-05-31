@@ -1053,6 +1053,7 @@ static int target_missing(target_t *Target, int LastChecked) {
 target_t *target_find(const char *Id) {
 	target_t **Slot = targetcache_lookup(Id);
 	if (Slot[0]) return Slot[0];
+	Id = GC_strdup(Id);
 	if (!memcmp(Id, "file:", 5)) {
 		//return target_file_check(Id + 5, Id[5] == '/');
 		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Slot);
