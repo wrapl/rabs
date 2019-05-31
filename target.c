@@ -1072,7 +1072,7 @@ target_t *target_find(const char *Id) {
 		char *Path = snew(PathLength + 1);
 		memcpy(Path, Id + 5, PathLength);
 		Path[PathLength] = 0;
-		Target->Context = context_find(Path);
+		Target->Context = context_make(Path);
 		Target->Name = Name + 1;
 		return (target_t *)Target;
 	}

@@ -55,7 +55,7 @@ ifdef DEBUG
 	CFLAGS += -g
 	LDFLAGS += -g
 else
-	CFLAGS += -O2
+	CFLAGS += -O3
 endif
 
 ifdef DEBUG
