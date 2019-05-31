@@ -861,8 +861,11 @@ static ml_value_t *target_scan_source(void *Data, int Count, ml_value_t **Args) 
 }
 
 static int build_scan_target_list(target_t *Depend, targetset_t *Scans) {
-	if (!ml_is((ml_value_t *)Depend, TargetT)) return 1;
-	targetset_insert(Scans, Depend);
+	if (Depend->Type == MLListT) {
+		ml_list_foreach(Depend, Scans, (void *)build_scan_target_list);
+	} else if (ml_is((ml_value_t *)Depend, TargetT)) {
+		targetset_insert(Scans, Depend);
+	}
 	return 0;
 }
 
