@@ -38,7 +38,7 @@ context_t *context_push(const char *Path) {
 	target_t *BuildDir = target_file_check(Path[0] == '/' ? Path + 1 : Path, 0);
 	stringmap_insert(Context->Locals, "BUILDDIR", BuildDir);
 	stringmap_insert(Context->Locals, "PATH", BuildDir);
-	stringmap_insert(Context->Locals, "_", Context);
+	stringmap_insert(Context->Locals, "CONTEXT", Context);
 	return Context;
 }
 
@@ -51,6 +51,7 @@ context_t *context_scope(const char *Name) {
 	CurrentContext = Context;
 	Context->Default = Context->Parent->Default;
 	Context->Locals[0] = (stringmap_t)STRINGMAP_INIT;
+	stringmap_insert(Context->Locals, "CONTEXT", Context);
 	stringmap_insert(ContextCache, Context->Name, Context);
 	return Context;
 }
