@@ -896,7 +896,7 @@ int main(int Argc, char **Argv) {
 	cache_open(RootPath);
 
 	context_push("");
-	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentIteration));
+	context_symb_set(CurrentContext, "ITERATION", ml_integer(CurrentIteration));
 
 	if (!InteractiveMode) target_threads_start(NumThreads);
 

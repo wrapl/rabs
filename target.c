@@ -357,7 +357,6 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 			}
 			if (Ls->Recursive && (Entry->d_type == DT_DIR)) {
 				const char *Subdir = concat(Path, "/", Entry->d_name, NULL);
-				printf("Recursing into %s\n", Subdir);
 				target_file_ls_fn(Ls, Subdir);
 			}
 		}
