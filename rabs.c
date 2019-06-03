@@ -896,7 +896,13 @@ int main(int Argc, char **Argv) {
 	cache_open(RootPath);
 
 	context_push("");
-	context_symb_set(CurrentContext, "VERSION", ml_integer(CurrentIteration));
+
+	target_t *Iteration = target_find("meta:::ITERATION");
+	Iteration->LastUpdated = CurrentIteration;
+	memset(Iteration->Hash, 0, SHA256_BLOCK_SIZE);
+	*(long *)Iteration->Hash = CurrentIteration;
+	Iteration->Hash[SHA256_BLOCK_SIZE - 1] = 1;
+	context_symb_set(CurrentContext, "ITERATION", (ml_value_t *)Iteration);
 
 	if (!InteractiveMode) target_threads_start(NumThreads);
 
