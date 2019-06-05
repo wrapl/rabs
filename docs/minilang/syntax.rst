@@ -1,44 +1,51 @@
 Syntax
 ======
 
-*Minilang* uses a simple syntax, similar to *Pascal* or *Lua*.
+*Minilang* has a simple syntax, not too different from *Pascal* (although probably closer to *Oberon-2*). Keywords are in lower case, statements are delimited by semicolons ``;``, although these can be (and are usually) omitted at the end of a line. The following is an example of *Minilang* code showing an implementation of the Fibonacci numbers.
 
-.. productionlist:: minilang
-   program        : { `declaration` | `expression` }
-   expression     : `term` { `operator` `term` }
-                  : `term` ":=" `expression`
-                  : `term` "and" `expression`
-                  : `term` "or" `expression`
-                  : `term` "for" `identifier` [ "," `identifier` ] "in" `expression`
-                  : `term`
-   term           : `factor` `argument_list`
-                  : `factor` "[" `expression_list` "]"
-                  : `factor` `method` [ `argument_list` ]
-                  : `factor`
-   argument_list  : "(" [ `expression_list` ] ";" `parameter_list` ")" `expression`
-                  : "(" [ `expression_list` ] ")"
-   expression_list: `expression` { "," `expression` }
-   factor         : `block_expression`
-                  : `if_expression`
-                  : `loop_expression`
-                  : `for_expression`
-                  : `all_expression`
-                  : `not_expression`
-                  : `while_expression`
-                  : `until_expression`
-                  : `exit_expression`
-                  : `next_expression`
-                  : `fun_expression`
-                  : `ret_expression`
-                  : `susp_expression`
-                  : `with_expression`
-                  : `identifier`
-                  : `number`
-                  : `string`
-                  : `method`
-                  : "nil"
-                  : "old"
-                  : "(" `expression` ")"
-                  : `list_expression`
-                  : `map_expression`
-                  : `operator` `expression`
+.. code-block:: mini
+
+   fun fibonacci(N) do
+      if N <= 0 then
+         error("RangeError", "N must be postive")
+      elseif N <= 2 then
+         ret 1
+      end
+      var A := 1, B := 1
+      for I in 2 .. (N - 1) do
+         var C := A + B
+         A := B
+         B := C
+      end
+      ret B
+   end
+   
+   for I in 1 .. 10 do
+      print('fibonacci({I}) = {fibonacci(I)}\n')
+   end
+   
+   print('fibonacci({0}) = {fibonacci(0)}\n')
+
+This produces the following output:
+
+::
+
+   $ ./minilang test/test12.mini
+   fibonacci(1) = 1
+   fibonacci(2) = 1
+   fibonacci(3) = 2
+   fibonacci(4) = 3
+   fibonacci(5) = 5
+   fibonacci(6) = 8
+   fibonacci(7) = 13
+   fibonacci(8) = 21
+   fibonacci(9) = 34
+   fibonacci(10) = 55
+   Error: N must be postive
+      test/test12.mini:3
+      test/test12.mini:20
+
+
+
+
+      

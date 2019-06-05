@@ -55,6 +55,27 @@ They support the standard arithmetic operations, comparison operations and conve
    10.
    0.78e-12
 
+Methods
+~~~~~~~
+
+.. code-block:: mini
+
+   -- Arithmetic
+   1 + 1 -- 2
+   2 - 1.5 -- 0.5
+   2 * 3 -- 6
+   4 / 2 -- 2
+   3 / 2 -- 1.5
+   3 // 2 -- 1
+   
+   -- Comparison
+   1 < 2 -- 2
+   1 <= 2 -- 2
+   1 = 1.0 -- 1.0
+   1 > 1 -- nil
+   1 >= 1 -- 1
+   1 != 1 -- nil
+
 Strings
 -------
 
