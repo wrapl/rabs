@@ -7,3 +7,4 @@ Reference
    
    /contexts
    /targets
+   /minilang
