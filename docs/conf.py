@@ -1,6 +1,8 @@
-from docutils.parsers.rst import Directive
+from docutils.parsers.rst import Directive, roles
 from docutils import nodes
 import re
+from pygments import lexers
+import inspect
 
 class FoldersDirective(Directive):
 	has_content = True
@@ -68,9 +70,7 @@ author = 'Raja Mukherji'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 
-extensions = [
-	'sphinxcontrib.inlinesyntaxhighlight',
-	'sphinxcontrib.fulltoc'
+extensions = [#'sphinxcontrib.fulltoc'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -99,19 +99,22 @@ master_doc = 'index'
 
 pygments_style = 'tango'
 
-# use language set by highlight directive if no language is set by role
-inline_highlight_respect_highlight = True
+rst_prolog = """
+.. role:: mini(code)
+   :language: mini
+   :class: highlight
 
-# use language set by highlight directive if no role is set
-inline_highlight_literals = False
-
-highlight_language = 'mini'
+.. role:: html(code)
+   :language: html
+   :class: highlight
+"""
 
 def setup(sphinx):
 	import sys, os
 	sys.path.insert(0, os.path.abspath('./_util'))
 	from minilang import MinilangLexer, minilangDomain
 	sphinx.add_lexer("mini", MinilangLexer())
+	lexers.LEXERS['mini'] = ('minilang', 'Minilang', ('mini',), ('*.mini', '*.rabs'), ('text/x-mini',))
 	#sphinx.add_domain(minilangDomain) 
 	sphinx.add_directive('folders', FoldersDirective)
 	sphinx.add_stylesheet('css/custom.css')

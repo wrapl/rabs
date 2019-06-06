@@ -76,7 +76,6 @@ Rabs build scripts are written using :doc:`/minilang`.
    
    /quickstart
    /tutorial
-   /minilang
    /reference
 
 Indices and tables

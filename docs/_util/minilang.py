@@ -3,6 +3,8 @@ from pygments.token import *
 from sphinxcontrib.domaintools import custom_domain
 import re
 
+__all__ = ['MinilangLexer']
+
 class MinilangLexer(RegexLexer):
 	name = 'Minilang'
 	aliases = ['minilang']
