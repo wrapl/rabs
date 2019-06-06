@@ -1,3 +1,2 @@
-sphinxcontrib-inlinesyntaxhighlight
 sphinxcontrib-domaintools
 sphinxcontrib-fulltoc

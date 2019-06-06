@@ -6,11 +6,11 @@ Types
 Nil
 ---
 
-The special built in value ``nil`` denotes the absence of any other value. Every variable has the value ``nil`` before they are assigned any other value. Likewise, function parameters default to ``nil`` if a function is called with too few arguments.
+The special built in value :mini:`nil` denotes the absence of any other value. Every variable has the value ``nil`` before they are assigned any other value. Likewise, function parameters default to ``nil`` if a function is called with too few arguments.
 
 .. note::
 
-   *Minilang* has no boolean values, such as ``true`` or ``false``. Instead, conditional and looping statements treat ``nil`` as false and *any* other value as true.  
+   *Minilang* has no boolean values, such as ``true`` or ``false``. Instead, conditional and looping statements treat :mini:`nil` as false and *any* other value as true.  
 
 .. code-block:: mini
 
@@ -27,7 +27,7 @@ The special built in value ``nil`` denotes the absence of any other value. Every
 
 .. _comparisons:
 
-In *Minilang*, comparison operators such as ``=``, ``>=``, etc, all return the second argument if the comparison is true, and ``nil`` if it is not.
+In *Minilang*, comparison operators such as :mini:`=`, :mini:`>=`, etc, all return the second argument if the comparison is true, and :mini:`nil` if it is not.
 
 .. code-block:: mini
 
