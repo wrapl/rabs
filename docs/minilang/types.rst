@@ -55,9 +55,6 @@ They support the standard arithmetic operations, comparison operations and conve
    10.
    0.78e-12
 
-Methods
-~~~~~~~
-
 .. code-block:: mini
 
    -- Arithmetic
@@ -108,9 +105,50 @@ Regular expressions can be written as ``r"expression"``, where *expression* is a
 Lists
 -----
 
-Lists are extendable ordered collections of values, and are created using square brackets, ``[`` and ``]``. A list can contain any value, including other lists.
+Lists are extendable ordered collections of values, and are created using square brackets, ``[`` and ``]``. A list can contain any value, including other lists, maps, etc.
+
+:mini:`List[I]`
+   Returns an assignable reference to the *I*-th element of *List*. If *I* is negative, then the indexing is done from the end *List*, where ``-1`` is the last element. If *I* is outside the bounds of *List*, then :mini:`nil` is returned.
+   
+:mini:`List[I, J]`
+   Returns the sub-list of *List* starting with the *I*-th element up to but excluding the *J*-th element. Negative indices are taken from the end of *List*. If either *I* or *J* it outside the range of *List*, or *I* > *J* then :mini:`nil` is returned.
+   
+:mini:`List:put(X1, X2, ...)`
+   Puts *X1*, *X2*, ... onto the end of *List* and returns *List*.
+   
+:mini:`List:push(X1, X2, ...)`
+   Puts *X1*, *X2*, ... onto the beginning of *List* and returns *List*.
+   
+:mini:`List:pull`
+   Removes and returns the last element of *List*, or :mini:`nil` if *List* is empty.
+   
+:mini:`List:pop`
+   Removes and returns the first element of *List*, or :mini:`nil` if *List* is empty.
+   
+:mini:`List1 + List2`
+   Returns the concatenation of *List1* and *List2*.
+   
+:mini:`List:length`
+   Returns the number of elements in *List*.
+   
+:mini:`List:string`
+   Returns *List* converted to a string.
+   
+:mini:`List:join(Sep)`
+   Returns *List* converted to a list with *Sep* between each element.
+
+:mini:`for Value in List do ... end`
+   Iterates through the values in *List*.
+
+:mini:`for Index, Value in List do ... end`
+   Iterates through the indices and values in *List*. 
 
 Maps
 ----
 
-Maps are created using braces ``{`` and ``}``.
+Maps are extendable collections of key-value pairs, which can be indexed by its keys. Maps are created using braces ``{`` and ``}``. Keys can be of any immutable type supporting equality testings (typically numbers and strings), and different types of keys can be mixed in the same map. Each key can only be associated with one value, although values can be any type, including lists, other maps, etc.
+
+:mini:`Map[Key]`
+   Returns an assignable reference to the value associated with *Key* in *Map*. If *Key* is not currently in *Map* then returns :mini:`nil`. Assigning to :mini:`Map[Key]` will overwrite the associated value or insert a new association if *Key* is not already in *Map*.
+   
+ 
