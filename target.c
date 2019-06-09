@@ -86,6 +86,7 @@ static target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_
 	Target->IdLength = strlen(Id);
 	Target->IdHash = stringmap_hash(Id);
 	Target->Build = 0;
+	Target->Parent = 0;
 	Target->LastUpdated = STATE_UNCHECKED;
 	Target->QueueIndex = -1;
 	Target->Depends->Type = TargetSetT;
@@ -777,11 +778,23 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 		target_t *Depend = target_symb_new(ml_string_value(Arg));
 		targetset_insert(Target->Depends, Depend);
 		target_priority_increase(Depend, 0);
+		/*target_t *Parent = CurrentTarget;
+		while (Parent) {
+			targetset_insert(Parent->BuildDepends, Depend);
+			Parent = Parent->Parent;
+		}*/
+		if (CurrentTarget) targetset_insert(Target->BuildDepends, Depend);
 		return 0;
 	} else if (ml_is(Arg, TargetT)) {
 		target_t *Depend = (target_t *)Arg;
 		targetset_insert(Target->Depends, Depend);
 		target_priority_increase(Depend, 0);
+		/*target_t *Parent = CurrentTarget;
+		while (Parent) {
+			targetset_insert(Parent->BuildDepends, Depend);
+			Parent = Parent->Parent;
+		}*/
+		if (CurrentTarget) targetset_insert(Target->BuildDepends, Depend);
 		return 0;
 	} else if (Arg == MLNil) {
 		return 0;
@@ -814,6 +827,7 @@ ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	//if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
+	if (CurrentTarget) Target->Parent = CurrentTarget;
 	return Args[0];
 }
 
@@ -1175,13 +1189,23 @@ int target_find_leaves(target_t *Target, targetset_t *Scans) {
 	return 0;
 }
 
+int target_find_leaves0(target_t *Target, targetset_t *Scans) {
+	targetset_foreach(Target->Depends, Scans, (void *)target_find_leaves);
+	targetset_foreach(Target->BuildDepends, Scans, (void *)target_find_leaves);
+	return 0;
+}
+
 int target_insert(target_t *Target, targetset_t *Set) {
 	targetset_insert(Set, Target);
 	return 0;
 }
 
 int target_set_parent(target_t *Target, target_t *Parent) {
-	if (!Target->Parent) Target->Parent = Parent;
+	if (!Target->Parent) {
+		Target->Parent = Parent;
+		cache_parent_set(Target);
+		fprintf(DependencyGraph, "\tT%x -> T%x [color=red];\n", Target, Target->Parent);
+	}
 	return 0;
 }
 
@@ -1192,6 +1216,11 @@ int targetset_print(target_t *Target, void *Data) {
 
 static int target_graph_depends(target_t *Depend, target_t *Target) {
 	fprintf(DependencyGraph, "\tT%x -> T%x;\n", Target, Depend);
+	return 0;
+}
+
+static int target_graph_build_depends(target_t *Depend, target_t *Target) {
+	fprintf(DependencyGraph, "\tT%x -> T%x [style=dotted];\n", Target, Depend);
 	return 0;
 }
 
@@ -1247,7 +1276,7 @@ retry_build:
 	} else {
 		memset(BuildHash, 0, sizeof(SHA256_BLOCK_SIZE));
 	}
-	if (Target->Parent) targetset_foreach(Target->Depends, Target->Parent, (void *)target_set_parent);
+	//if (Target->Parent) targetset_foreach(Target->Depends, Target->Parent, (void *)target_set_parent);
 	targetset_foreach(Target->Depends, Target, (void *)target_queue);
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
@@ -1272,11 +1301,18 @@ retry_build:
 
 	if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
 		//printf("\e[34m rebuilding %s\e[0m\n", Target->Id);
-		if (!Target->Build && Target->Parent) {
+		if (!Target->Build) {
+			if (!Target->Parent) cache_parent_get(Target);
+			if (Target->Parent) {
+				target_rebuild(Target->Parent);
+				goto retry_build;
+			}
+		}
+		/*if (!Target->Build && Target->Parent) {
 			target_rebuild(Target->Parent);
 			Target->Parent = 0;
 			goto retry_build;
-		}
+		}*/
 		if (DebugThreads) {
 			CurrentThread->Status = BUILD_EXEC;
 			CurrentThread->Target = Target;
@@ -1300,24 +1336,22 @@ retry_build:
 				((target_expr_t *)Target)->Value = Result;
 				cache_expr_set(Target, Result);
 			} else if (Target->Type == ScanTargetT) {
-				targetset_t Roots[1] = {TARGETSET_INIT};
+				targetset_t Scans[1] = {TARGETSET_INIT};
 				if (Result->Type != MLListT) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
 					exit(1);
 				}
-				targetset_init(Roots, ml_list_length(Result));
-				if (ml_list_foreach(Result, Roots, (void *)build_scan_target_list)) {
+				targetset_init(Scans, ml_list_length(Result));
+				if (ml_list_foreach(Result, Scans, (void *)build_scan_target_list)) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
 					exit(1);
 				}
-				targetset_t Scans[1] = {TARGETSET_INIT};
-				targetset_foreach(Roots, Target, (void *)target_queue);
-				targetset_foreach(Roots, Target, (void *)target_wait);
-				targetset_foreach(Roots, Scans, (void *)target_insert);
-				targetset_foreach(Roots, Scans, (void *)target_find_leaves);
+				targetset_foreach(Scans, Target, (void *)target_queue);
+				targetset_foreach(Scans, Target, (void *)target_wait);
+				targetset_foreach(Scans, Target->BuildDepends, (void *)target_find_leaves0);
+				targetset_foreach(Scans, Target, (void *)target_set_parent);
 				cache_scan_set(Target, Scans);
 				if (DependencyGraph) {
-					targetset_foreach(Roots, Target, (void *)target_graph_depends);
 					targetset_foreach(Scans, Target, (void *)target_graph_scans);
 				}
 
@@ -1338,7 +1372,7 @@ retry_build:
 			if (DependencyGraph) {
 				targetset_foreach(Scans, Target, (void *)target_graph_scans);
 			}
-			targetset_foreach(Scans, Target, (void *)target_set_parent);
+			//targetset_foreach(Scans, Target, (void *)target_set_parent);
 			targetset_foreach(Scans, Target, (void *)target_queue);
 			targetset_foreach(Scans, Target, (void *)target_wait);
 
@@ -1346,11 +1380,18 @@ retry_build:
 			//targetset_foreach(Scans, 0, targetset_print);
 		}
 	}
+	if (DependencyGraph && Target->Parent) {
+		fprintf(DependencyGraph, "\tT%x -> T%x [color=red];\n", Target, Target->Parent);
+	}
+	if (DependencyGraph) {
+		targetset_foreach(Target->BuildDepends, Target, (void *)target_graph_build_depends);
+	}
 	FileTime = target_hash(Target, FileTime, Previous, DependsLastUpdated);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 		Target->LastUpdated = CurrentIteration;
 		cache_hash_set(Target, FileTime);
 		cache_depends_set(Target, Target->BuildDepends);
+		if (Target->Parent) cache_parent_set(Target);
 	} else {
 		Target->LastUpdated = LastUpdated;
 		cache_last_check_set(Target, FileTime);
