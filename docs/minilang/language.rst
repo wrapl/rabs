@@ -1,5 +1,5 @@
-Syntax
-======
+Language
+========
 
 *Minilang* has a simple syntax, not too different from *Pascal* (although probably closer to *Oberon-2*). Keywords are in lower case, statements are delimited by semicolons ``;``, although these can be (and are usually) omitted at the end of a line. The following is an example of *Minilang* code showing an implementation of the Fibonacci numbers.
 
@@ -30,7 +30,6 @@ This produces the following output:
 
 ::
 
-   $ ./minilang test/test12.mini
    fibonacci(1) = 1
    fibonacci(2) = 1
    fibonacci(3) = 2
@@ -45,7 +44,12 @@ This produces the following output:
       test/test12.mini:3
       test/test12.mini:20
 
+.. toctree::
+   :maxdepth: 2
+   
+   /minilang/declarations
+   /minilang/expressions
+   /minilang/functions
 
 
 
-      
