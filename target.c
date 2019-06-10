@@ -1204,7 +1204,9 @@ int target_set_parent(target_t *Target, target_t *Parent) {
 	if (!Target->Parent) {
 		Target->Parent = Parent;
 		//cache_parent_set(Target);
-		fprintf(DependencyGraph, "\tT%x -> T%x [color=red];\n", Target, Target->Parent);
+		if (DependencyGraph) {
+			fprintf(DependencyGraph, "\tT%x -> T%x [color=red];\n", Target, Target->Parent);
+		}
 	}
 	return 0;
 }
