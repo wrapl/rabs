@@ -1,5 +1,5 @@
 Minilang
-======== 
+========
 
 Introduction
 ------------
@@ -33,11 +33,11 @@ Sample
    end
 
 Details
--------
+=======
 
 .. toctree::
    :maxdepth: 2
    
-   /minilang/syntax
+   /minilang/language
    /minilang/types
    /minilang/embedding

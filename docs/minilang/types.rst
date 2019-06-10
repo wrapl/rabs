@@ -6,7 +6,7 @@ Types
 Nil
 ---
 
-The special built in value :mini:`nil` denotes the absence of any other value. Every variable has the value ``nil`` before they are assigned any other value. Likewise, function parameters default to ``nil`` if a function is called with too few arguments.
+The special built in value :mini:`nil` denotes the absence of any other value. Every variable has the value :mini:`nil` before they are assigned any other value. Likewise, function parameters default to :mini:`nil` if a function is called with too few arguments.
 
 .. note::
 

@@ -16,8 +16,8 @@ static sqlite3_stmt *HashSetStatement;
 static sqlite3_stmt *HashBuildGetStatement;
 static sqlite3_stmt *HashBuildSetStatement;
 static sqlite3_stmt *LastCheckSetStatement;
-static sqlite3_stmt *ParentGetStatement;
-static sqlite3_stmt *ParentSetStatement;
+//static sqlite3_stmt *ParentGetStatement;
+//static sqlite3_stmt *ParentSetStatement;
 static sqlite3_stmt *DependsGetStatement;
 static sqlite3_stmt *DependsSetStatement;
 static sqlite3_stmt *ScanGetStatement;
@@ -56,7 +56,7 @@ void cache_open(const char *RootPath) {
 			"CREATE TABLE info(key TEXT PRIMARY KEY, value);"
 			"INSERT INTO info(key, value) VALUES('version', '" CURRENT_VERSION "');"
 			"CREATE TABLE hashes(id TEXT PRIMARY KEY, last_updated INTEGER, last_checked INTEGER, hash BLOB, file_time INTEGER);"
-			"CREATE TABLE parents(id TEXT PRIMARY KEY, parent TEXT);"
+			//"CREATE TABLE parents(id TEXT PRIMARY KEY, parent TEXT);"
 			"CREATE TABLE builds(id TEXT PRIMARY KEY, build BLOB);"
 			"CREATE TABLE scans(id TEXT PRIMARY KEY, scan TEXT);"
 			"CREATE TABLE depends(id TEXT PRIMARY KEY, depend TEXT);"
@@ -89,14 +89,14 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
-	if (sqlite3_prepare_v2(Cache, "SELECT parent FROM parents WHERE id = ?", -1, &ParentGetStatement, 0) != SQLITE_OK) {
+	/*if (sqlite3_prepare_v2(Cache, "SELECT parent FROM parents WHERE id = ?", -1, &ParentGetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
 	if (sqlite3_prepare_v2(Cache, "REPLACE INTO parents(id, parent) VALUES(?, ?)", -1, &ParentSetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
-	}
+	}*/
 	if (sqlite3_prepare_v2(Cache, "SELECT build FROM builds WHERE id = ?", -1, &HashBuildGetStatement, 0) != SQLITE_OK) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
@@ -233,7 +233,7 @@ void cache_last_check_set(target_t *Target, time_t FileTime) {
 	sqlite3_reset(LastCheckSetStatement);
 }
 
-void cache_parent_get(target_t *Target) {
+/*void cache_parent_get(target_t *Target) {
 	sqlite3_bind_text(ParentGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	if (sqlite3_step(ParentGetStatement) == SQLITE_ROW) {
 		const char *Text = sqlite3_column_text(ParentGetStatement, 0);
@@ -252,7 +252,7 @@ void cache_parent_set(target_t *Target) {
 	sqlite3_bind_blob(ParentSetStatement, 2, Target->Parent->Id, Target->Parent->IdLength, SQLITE_STATIC);
 	sqlite3_step(ParentSetStatement);
 	sqlite3_reset(ParentSetStatement);
-}
+}*/
 
 static targetset_t *cache_target_set_parse(char *Id) {
 	targetset_t *Set = targetset_new();
