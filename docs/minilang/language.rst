@@ -44,12 +44,130 @@ This produces the following output:
       test/test12.mini:3
       test/test12.mini:20
 
-.. toctree::
-   :maxdepth: 2
+Declarations
+------------
+
+All variables must be declared in *Minilang* using :mini:`var`. Variables are visible within their scope and any nested scopes, including nested functions, unless they are shadowed by another declaration. Before assignment, variables have the value :mini:`nil`. Optionally, a variable can be initialized when it is declared. Note that variables can be referenced within their scope before their declaration, but they will have the value :mini:`nil` before their initialization.
+
+.. code-block:: mini
+
+   print('Y = {Y}\n') -- Y is nil here
    
-   /minilang/declarations
-   /minilang/expressions
-   /minilang/functions
+   var Y := 1 + 2
+   
+   print('Y = {Y}\n') -- Y is 3 here
+   
+   var X
+   
+   do
+      X := 1 -- Sets X in surrounding scope
+   end
+   
+   print('X = {X}\n')
+   
+   do
+      var X -- Shadows declaration of X 
+      X := 2 -- Assigns to X in the previous line
+      print('X = {X}\n')
+   end
+   
+   print('X = {X}\n')
+
+::
+
+   Y =
+   Y = 3 
+   X = 1
+   X = 2
+   X = 1
+
+For convenience, functions can declared using the following syntax:
+
+.. code-block:: mini
+
+   fun add(X, Y) X + Y
+
+This is equivalent to writing
+
+.. code-block:: mini
+
+   var add := fun(X, Y) X + Y
+
+Functions themselves are described in :ref:`minilang/functions`.
+
+Expressions
+-----------
+
+Other than declarations, everything else in *Minilang* is an expression (something that can be evaluated).
+
+Values
+~~~~~~
+
+The simplest expressions are single values. More information on values in *Minilang* can be found in :doc:`minilang/types`.
+
+Nil:
+   :mini:`nil`.
+Integers:
+   :mini:`1`, :mini:`-257`. Note that the leading ``-`` is parsed as part of a negative number, so that :mini:`2-1` will be parsed as ``2 -1`` (and be invalid syntax) and not ``2 - 1``.
+Reals:
+   :mini:`1.2`, :mini:`.13`, :mini:`-1.3e5`.
+Strings:
+   :mini:`"Hello world!\n"`, :mini:`'X = {X}'`. Strings can be written using double quotes or single quotes. Strings written with single quotes can have embedded expressions (between ``{`` and ``}``) and may span multiple lines.
+Regular Expressions:
+   :mini:`r".*\.c"`.
+Lists:
+   :mini:`[1, 2, 3]`, :mini:`["a", 1.23, [nil]]`. The values in a list can be of any type including other lists and maps.
+Maps:
+   :mini:`{"a" is 1, 10 is "string"}`. The keys of a map have to be immutable and comparable (e.g. numbers and strings). The values can be of any type. 
+
+If Expressions
+~~~~~~~~~~~~~~
+
+The basic :mini:`if ... then ... else ... end` expression in *Minilang* returns the value of the selected branch. For example:
+
+.. code-block:: mini
+
+   var X := 1
+   print(if X % 2 = 0 then "even" else "odd" end, "\n")
+
+will print ``even``.
+
+Multiple conditions can be included using :mini:`elseif`.
+
+.. code-block:: mini
+
+   for I in 1 .. 100 do
+      if I % 3 = 0 and I % 5 = 0 then
+         print("fizzbuzz\n")
+      elseif I % 3 = 0 then
+         print("fizz\n")
+      elseif I % 5 = 0 then
+         print("buzz\n")
+      else
+         print(I, "\n")
+      end
+   end
+
+Loop Expressions
+~~~~~~~~~~~~~~~~
+
+*Minilang* provides a simple looping expression, :mini:`loop ... end`. This keeps evaluating the code inside indefinitely. The expression :mini:`exit <value>` exits a loop and returns the given value as the value of the loop. The value can be omitted, in which case the loop evaluates to :mini:`nil`.
+
+.. code-block:: mini
+
+   var I := 1
+   print('Found fizzbuzz at I = {loop
+      if I % 3 = 0 and I % 5 = 0 then
+         exit I
+      end
+      I := I + 1
+   end}\n')
+
+
+.. _minilang/functions:
+
+Functions
+---------
 
 
 
