@@ -24,6 +24,10 @@
 #include "targetwatch.h"
 #endif
 
+#ifndef Mingw
+#include <sys/wait.h>
+#endif
+
 enum {
 	STATE_UNCHECKED = 0,
 	STATE_CHECKING = -1,
@@ -1529,6 +1533,17 @@ void target_threads_wait(target_t *Target) {
 	}
 }
 
+void target_threads_kill() {
+	for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
+		if (Thread->Child) {
+			fprintf(stderr, "\e[31mKilling child process %d\n\e[0m", Thread->Child);
+			killpg(Thread->Child, SIGKILL);
+			int Status;
+			waitpid(Thread->Child, &Status, 0);
+		}
+	}
+}
+
 #define target_file_methods_is(TYPE) \
 	ml_method_by_name("is" #TYPE, 0, target_file_is_ ## TYPE, FileTargetT, NULL);
 
@@ -1589,4 +1604,5 @@ void target_init() {
 	target_file_methods_is(lnk);
 	target_file_methods_is(sock);
 #endif
+	atexit(target_threads_kill);
 }

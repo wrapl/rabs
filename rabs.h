@@ -2,6 +2,7 @@
 #define RABS_H
 
 #include <pthread.h>
+#include <unistd.h>
 #include "minilang.h"
 #include "minilang/ml_macros.h"
 
@@ -16,6 +17,7 @@ struct build_thread_t {
 	target_t *Target;
 	pthread_t Handle;
 	int Id;
+	pid_t Child;
 	build_thread_status_t Status;
 	char Command[32];
 };

@@ -1,6 +1,5 @@
 #include <gc/gc.h>
 #include <string.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <stdlib.h>
 #include <sys/stat.h>
@@ -172,11 +171,8 @@ ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	context_t *Context = context_scope(Name);
 	ml_value_t *Result = ml_call(Args[1], 0, NULL);
 	if (Result->Type == MLErrorT) {
-		printf("Error: %s\n", ml_error_message(Result));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
-		exit(1);
+		context_pop();
+		return Result;
 	}
 	context_pop();
 	return (ml_value_t *)Context;
@@ -318,7 +314,7 @@ ml_value_t *cmdify_map(void *Data, int Count, ml_value_t **Args) {
 	return Context.Result;
 }
 
-ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
@@ -333,75 +329,66 @@ ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
 		display_threads();
 	}
 	clock_t Start = clock();
-	if (chdir(CurrentDirectory)) {
-		return ml_error("ExecuteError", "error changing directory to %s", CurrentDirectory);
+	const char *WorkingDirectory = CurrentDirectory;
+	int Pipe[2];
+	if (pipe(Pipe) == -1) return ml_error("PipeError", "failed to create pipe");
+	pid_t Child = fork();
+	if (!Child) {
+		setpgid(0, 0);
+		if (chdir(WorkingDirectory)) exit(-1);
+		close(Pipe[0]);
+		dup2(Pipe[1], STDOUT_FILENO);
+		execl("/bin/sh", "sh", "-c", Command, 0);
+		exit(-1);
 	}
-	FILE *File = popen(Command, "r");
+	close(Pipe[1]);
+	ml_value_t *Result = MLNil;
+	CurrentThread->Child = Child;
 	pthread_mutex_unlock(InterpreterLock);
-	char Chars[120];
-	while (!feof(File)) {
-		ssize_t Size = fread(Chars, 1, 120, File);
-		if (Size == -1) break;
-		//fwrite(Chars, 1, Size, stdout);
+	if (Capture) {
+		ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+		char Chars[ML_STRINGBUFFER_NODE_SIZE];
+		for (;;) {
+			ssize_t Size = read(Pipe[0], Chars, ML_STRINGBUFFER_NODE_SIZE);
+			if (Size <= 0) break;
+			//pthread_mutex_lock(GlobalLock);
+			if (Size > 0) ml_stringbuffer_add(Buffer, Chars, Size);
+			//pthread_mutex_unlock(GlobalLock);
+		}
+		Result = ml_stringbuffer_get_string(Buffer);
+	} else {
+		char Chars[ML_STRINGBUFFER_NODE_SIZE];
+		for (;;) {
+			ssize_t Size = read(Pipe[0], Chars, ML_STRINGBUFFER_NODE_SIZE);
+			if (Size <= 0) break;
+		}
 	}
-	int Result = pclose(File);
+	close(Pipe[0]);
+	int Status;
+	if (waitpid(Child, &Status, 0) == -1) {
+		Result = ml_error("WaitError", "error waiting for child process");
+	}
 	clock_t End = clock();
 	pthread_mutex_lock(InterpreterLock);
+	CurrentThread->Child = 0;
 	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
-	if (WIFEXITED(Result)) {
-		if (WEXITSTATUS(Result) != 0) {
+	if (WIFEXITED(Status)) {
+		if (WEXITSTATUS(Status) != 0) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
 		} else {
-			return MLNil;
+			return Result;
 		}
 	} else {
 		return ml_error("ExecuteError", "process exited abnormally");
 	}
 }
 
+ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
+	return command(0, Count, Args);
+}
+
 ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
-	ML_CHECK_ARG_COUNT(1);
-	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_inline(CmdifyMethod, 2, Buffer, Args[I]);
-		if (Result->Type == MLErrorT) return Result;
-		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
-	}
-	const char *Command = ml_stringbuffer_get(Buffer);
-	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
-	if (DebugThreads) {
-		strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command));
-		display_threads();
-	}
-	clock_t Start = clock();
-	if (chdir(CurrentDirectory)) {
-		return ml_error("ExecuteError", "error changing directory to %s", CurrentDirectory);
-	}
-	FILE *File = popen(Command, "r");
-	pthread_mutex_unlock(InterpreterLock);
-	char Chars[ML_STRINGBUFFER_NODE_SIZE];
-	while (!feof(File)) {
-		ssize_t Size = fread(Chars, 1, ML_STRINGBUFFER_NODE_SIZE, File);
-		if (Size == -1) break;
-		//pthread_mutex_lock(GlobalLock);
-		if (Size > 0) ml_stringbuffer_add(Buffer, Chars, Size);
-		//pthread_mutex_unlock(GlobalLock);
-	}
-	int Result = pclose(File);
-	clock_t End = clock();
-	pthread_mutex_lock(InterpreterLock);
-	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
-	if (WIFEXITED(Result)) {
-		if (WEXITSTATUS(Result) != 0) {
-			return ml_error("ExecuteError", "process returned non-zero exit code");
-		} else {
-			size_t Length = Buffer->Length;
-			ml_value_t *Result = ml_string(ml_stringbuffer_get(Buffer), Length);
-			return Result;
-		}
-	} else {
-		return ml_error("ExecuteError", "process exited abnormally");
-	}
+	return command(1, Count, Args);
 }
 
 ml_value_t *argify_nil(void *Data, int Count, ml_value_t **Args) {
