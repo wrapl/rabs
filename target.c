@@ -1354,7 +1354,7 @@ retry_build:
 				}
 				targetset_foreach(Scans, Target, (void *)target_queue);
 				targetset_foreach(Scans, Target, (void *)target_wait);
-				targetset_foreach(Scans, Target->BuildDepends, (void *)target_find_leaves0);
+				targetset_foreach(Scans, Target->BuildDepends, (void *)target_find_leaves);
 				//targetset_foreach(Scans, Target, (void *)target_set_parent);
 				cache_scan_set(Target, Scans);
 				if (DependencyGraph) {
