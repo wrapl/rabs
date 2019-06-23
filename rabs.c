@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <time.h>
 #include <stdio.h>
+#include  <signal.h>
 #include "target.h"
 #include "context.h"
 #include "util.h"
