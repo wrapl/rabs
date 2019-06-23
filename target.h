@@ -11,7 +11,7 @@
 
 #define TARGET_FIELDS \
 	const ml_type_t *Type; \
-	target_t *Next, *Parent; \
+	target_t *PriorityAdjustNext, *Parent; \
 	ml_value_t *Build; \
 	struct context_t *BuildContext; \
 	const char *Id; \

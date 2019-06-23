@@ -257,6 +257,9 @@ void cache_parent_set(target_t *Target) {
 static targetset_t *cache_target_set_parse(char *Id) {
 	targetset_t *Set = targetset_new();
 	if (!Id) return Set;
+	int Size = strtol(Id, &Id, 10);
+	targetset_init(Set, Size);
+	++Id;
 	while (*Id > '\n') {
 		char *End = Id + 1;
 		while (*End > '\n') ++End;
@@ -296,10 +299,11 @@ targetset_t *cache_depends_get(target_t *Target) {
 
 void cache_depends_set(target_t *Target, targetset_t *Depends) {
 	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
-	int Size = 1;
+	char LengthBuffer[16];
+	int Size = sprintf(LengthBuffer, "%d\n", Depends->Size - Depends->Space) + 1;
 	targetset_foreach(Depends, &Size, (void *)cache_target_set_size);
 	char *Buffer = snew(Size);
-	char *Next = Buffer;
+	char *Next = stpcpy(Buffer, LengthBuffer);
 	targetset_foreach(Depends, &Next, (void *)cache_target_set_append);
 	*Next = '\n';
 	sqlite3_bind_text(DependsSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
@@ -325,10 +329,11 @@ targetset_t *cache_scan_get(target_t *Target) {
 
 void cache_scan_set(target_t *Target, targetset_t *Scans) {
 	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
-	int Size = 1;
+	char LengthBuffer[16];
+	int Size = sprintf(LengthBuffer, "%d\n", Scans->Size - Scans->Space) + 1;
 	targetset_foreach(Scans, &Size, (void *)cache_target_set_size);
 	char *Buffer = snew(Size);
-	char *Next = Buffer;
+	char *Next = stpcpy(Buffer, LengthBuffer);
 	targetset_foreach(Scans, &Next, (void *)cache_target_set_append);
 	*Next = '\n';
 	sqlite3_bind_text(ScanSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);

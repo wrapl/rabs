@@ -1,6 +1,7 @@
 .PHONY: clean all install
 
 PLATFORM = $(shell uname)
+MACHINE = $(shell uname -m)
 
 ifeq ($(PLATFORM), Mingw)
 	RABS = rabs.exe
@@ -55,7 +56,7 @@ ifdef DEBUG
 	CFLAGS += -g
 	LDFLAGS += -g
 else
-	CFLAGS += -O3
+	CFLAGS += -O3 -g
 endif
 
 ifdef DEBUG
