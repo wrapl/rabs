@@ -28,7 +28,7 @@ Language
 
 This produces the following output:
 
-::
+.. code-block:: console
 
    fibonacci(1) = 1
    fibonacci(2) = 1
@@ -73,7 +73,7 @@ All variables must be declared in *Minilang* using :mini:`var`. Variables are vi
    
    print('X = {X}\n')
 
-::
+.. code-block:: console
 
    Y =
    Y = 3 
@@ -164,10 +164,72 @@ Loop Expressions
    end}\n')
 
 
+The keyword :mini:`next` jumps to the start of the next iteration of the loop.
+
+Note that if an expression is passed to :mini:`exit`, it is evaluated outside the loop. This allows control of nested loops by writing code like :mini:`exit exit Value` or :mini:`exit next`.
+
+For Expressions
+~~~~~~~~~~~~~~~
+
+The for expression, :mini:`for Value in Collection do ... end` is used to iterate through a collection of values.
+
+.. code-block:: mini
+
+   for X in [1, 2, 3, 4, 5] do
+      print('X = {X}\n')
+   end
+
+If the collection has a key associated with each value, then a second variable can be added, :mini:`for Key, Value in Collection do ... end`. When iterating through a list, the index of each value is used as the key.
+
+.. code-block:: mini
+
+   for Key, Value in {"a" is 1, "b" is 2, "c" is 3} do
+      print('{Key} -> {Value}\n')
+   end
+
+A for loop is also an expression (like most things in *Minilang*), and can return a value using :mini:`exit`. Unlike a basic loop expression in *Minilang*, a for loop can also end when it runs out of values. In this case, the value of the for loop is :mini:`nil`. An optional :mini:`else` clause can be added to the for loop to give a different value in this case.
+
+.. code-block:: mini
+
+   var L := [1, 2, 3, 4, 5]
+   
+   print('Index of 3 is {for I, X in L do if X = 3 then exit I end end}\n')
+   print('Index of 6 is {for I, X in L do if X = 6 then exit I end end}\n')
+   print('Index of 6 is {for I, X in L do if X = 6 then exit I end else "not found" end}\n')
+
+.. code-block:: console
+
+   Index of 3 is 3
+   Index of 6 is
+   Index of 6 is not found
+
 .. _minilang/functions:
 
 Functions
 ---------
+
+Functions in *Minilang* are first class values. That means they can be passed to other functions and stored in variables, lists, maps, etc. Functions have access to variables in their surrounding scope when they were created.
+
+The general syntax of a function is :mini:`fun(Arguments) Body`. 
+
+.. code-block:: mini
+
+   var add := fun(A, B) A + B
+   
+   print('add(2, 3) = {add(2, 3)}\n')
+
+
+.. code-block:: console
+
+   add(2, 3) = 5
+
+As a shorthand, the code :mini:`var Name := fun(Arguments) Body` can be written as :mini:`fun Name(Arguments) Body`. Internally, the two forms are identical.
+
+.. code-block:: mini
+
+   fun add(A, B) A + B
+
+The body of a function can be a block :mini:`do ... end` containing local variables and other expressions.
 
 
 
