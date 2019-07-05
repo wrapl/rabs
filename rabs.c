@@ -14,6 +14,7 @@
 #include "cache.h"
 #include "minilang.h"
 #include "ml_object.h"
+#include "ml_iterfns.h"
 #include "ml_file.h"
 #include "rabs.h"
 #include "minilang/stringmap.h"
@@ -767,8 +768,9 @@ int main(int Argc, char **Argv) {
 
 	target_init();
 	context_init();
-	ml_file_init();
-	ml_object_init(Globals, (ml_setter_t)stringmap_insert);
+	ml_object_init(Globals);
+	ml_iterfns_init(Globals);
+	ml_file_init(Globals);
 	library_init();
 
 	const char *TargetName = 0;
