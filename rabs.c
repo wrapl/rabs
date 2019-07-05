@@ -299,7 +299,7 @@ static int cmdify_map_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t 
 		Context->Result = Result;
 		return 1;
 	}
-	if (Value != MLNil) {
+	if (Value != MLNil && Value != MLSome) {
 		ml_stringbuffer_add(Buffer, "=", 1);
 		Result = ml_inline(AppendMethod, 2, Buffer, Value);
 		if (Result->Type == MLErrorT) {
