@@ -29,7 +29,7 @@ We place the :file:`build.rabs` in the same folder, so it looks as follows.
 
 Running ``rabs -c`` in the folder, gives the following output:
 
-::
+.. code-block:: console
 
    $ rabs -c
    output
