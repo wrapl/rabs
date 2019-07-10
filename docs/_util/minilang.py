@@ -17,7 +17,7 @@ class MinilangLexer(RegexLexer):
 				"while", "until", "exit", "next", "for", "all",
 				"in", "is", "fun", "return", "suspend", "ret",
 				"susp", "with", "do", "on", "nil", "and", "or",
-				"not", "old", "def", "var"
+				"not", "old", "def", "var", "to"
 			), suffix = r'\b'), Name.Builtin),
 			(r'-?[0-9]+(\.[0-9]*)?((e|E)-?[0-9]+)?', Number),
 			(r'-?\.[0-9]+((e|E)-?[0-9]+)?', Number),
@@ -31,6 +31,7 @@ class MinilangLexer(RegexLexer):
 			(r'[A-Za-z_][A-Za-z0-9_]*', Text),
 			(':=', Operator),
 			(',', Operator),
+			(';', Operator),
 			(']', Operator),
 			('\[', Operator),
 			(r'[!@#$%^&*+=|\\~`/?<>.-]+', Operator)

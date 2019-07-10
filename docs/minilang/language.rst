@@ -120,6 +120,52 @@ Lists:
 Maps:
    :mini:`{"a" is 1, 10 is "string"}`. The keys of a map have to be immutable and comparable (e.g. numbers and strings). The values can be of any type. 
 
+
+
+.. _minilang/functions:
+
+Functions
+~~~~~~~~~
+
+Functions in *Minilang* are first class values. That means they can be passed to other functions and stored in variables, lists, maps, etc. Functions have access to variables in their surrounding scope when they were created.
+
+The general syntax of a function is :mini:`fun(Arguments) Body`. Calling a function is achieved by the traditional syntax :mini:`name(Arguments)`. 
+
+.. code-block:: mini
+
+   var add := fun(A, B) A + B
+   
+   print('add(2, 3) = {add(2, 3)}\n')
+
+
+.. code-block:: console
+
+   add(2, 3) = 5
+
+As a shorthand, the code :mini:`var Name := fun(Arguments) Body` can be written as :mini:`fun Name(Arguments) Body`. Internally, the two forms are identical.
+
+.. code-block:: mini
+
+   fun add(A, B) A + B
+
+The body of a function can be a block :mini:`do ... end` containing local variables and other expressions.
+
+When calling a function which expects another function as its last parameter, the following shorthand can be used:
+
+.. code-block:: mini
+
+   f(1, 2, fun(A, B) do
+      ret A + B
+   end)
+
+can be written as
+
+.. code-block:: mini
+
+   f(1, 2; A, B) do
+      ret A + B
+   end
+
 If Expressions
 ~~~~~~~~~~~~~~
 
@@ -202,34 +248,40 @@ A for loop is also an expression (like most things in *Minilang*), and can retur
    Index of 3 is 3
    Index of 6 is
    Index of 6 is not found
-
-.. _minilang/functions:
-
-Functions
----------
-
-Functions in *Minilang* are first class values. That means they can be passed to other functions and stored in variables, lists, maps, etc. Functions have access to variables in their surrounding scope when they were created.
-
-The general syntax of a function is :mini:`fun(Arguments) Body`. 
-
-.. code-block:: mini
-
-   var add := fun(A, B) A + B
    
-   print('add(2, 3) = {add(2, 3)}\n')
+Generators
+..........
 
+For loops are not restricted to using lists and maps. Any value can be used in a for loop if it can generate a sequence of values (or key / value pairs for the two variable version).
 
-.. code-block:: console
-
-   add(2, 3) = 5
-
-As a shorthand, the code :mini:`var Name := fun(Arguments) Body` can be written as :mini:`fun Name(Arguments) Body`. Internally, the two forms are identical.
+In order to loop over a range of numbers, *Minilang* has a range type, created using the :mini:`..` operator.
 
 .. code-block:: mini
 
-   fun add(A, B) A + B
+   for X in 1 .. 5 do
+      print('X = {X}\n')
+   end
 
-The body of a function can be a block :mini:`do ... end` containing local variables and other expressions.
+::
 
+   X = 1
+   X = 2
+   X = 3
+   X = 4
+   X = 5
 
+The default step size is :mini:`1` but can be changed with an additional :mini:`..` call.
 
+.. code-block:: mini
+
+   for X in 1 .. 3 .. 10 do
+      print('X = {X}\n')
+   end
+
+::
+
+   X = 1
+   X = 3
+   X = 5
+   X = 7
+   X = 9
