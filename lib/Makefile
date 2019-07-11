@@ -1,6 +1,6 @@
 .PHONY: clean all install
 
-all: csv.so
+all: rabs/csv.so
 
 *.o: ../*.h ../minilang/*.h
 
@@ -15,7 +15,8 @@ else
 	CFLAGS += -O2
 endif
 
-csv.so: Makefile csv.o libcsv.o *.h
+rabs/csv.so: Makefile csv.o libcsv.o *.h
+	mkdir -p rabs
 	gcc -shared csv.o libcsv.o $(LDFLAGS) -o $@
 	strip $@
 

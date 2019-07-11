@@ -4,9 +4,9 @@ PLATFORM = $(shell uname)
 MACHINE = $(shell uname -m)
 
 ifeq ($(PLATFORM), Mingw)
-	RABS = rabs.exe
+	RABS = bin/rabs.exe
 else
-	RABS = rabs
+	RABS = bin/rabs
 endif
 
 all: $(RABS)
@@ -26,7 +26,8 @@ objects = \
 	targetset.o \
 	util.o \
 	vfs.o \
-	library.o
+	library.o \
+	whereami.o
 
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing \
 	-I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
@@ -64,6 +65,7 @@ $(RABS): Makefile $(objects) *.h minilang/libminilang.a
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 else
 $(RABS): Makefile $(objects) *.h minilang/libminilang.a
+	mkdir -p bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 	strip $@
 endif
@@ -77,10 +79,10 @@ clean:
 PREFIX = /usr
 install_bin = $(DESTDIR)$(PREFIX)/bin
 
-install_exe = $(install_bin)/rabs
+install_exe = $(DESTDIR)$(PREFIX)/bin/rabs
 
-$(install_exe): $(install_bin)/%: %
-	mkdir -p $(install_bin)
+$(install_exe): $(DESTDIR)$(PREFIX)/%: %
+	mkdir -p $(DESTDIR)$(PREFIX)/bin
 	cp $< $@
 
 install: $(install_exe)

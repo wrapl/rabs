@@ -20,6 +20,7 @@
 #include "minilang/stringmap.h"
 #include "library.h"
 #include "ml_console.h"
+#include "whereami.h"
 
 #ifdef Linux
 #include "targetwatch.h"
@@ -186,6 +187,16 @@ ml_value_t *symbol(void *Data, int Count, ml_value_t **Args) {
 	return rabs_ml_global(NULL, ml_string_value(Args[0]));
 }
 
+#if defined(Darwin)
+#define LIB_EXTENSION ".dylib"
+#elif defined(Mingw)
+#define LIB_EXTENSION ".dll"
+#else
+#define LIB_EXTENSION ".so"
+#endif
+
+#define MAX_EXTENSION 10
+
 ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
@@ -193,22 +204,26 @@ ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
-	char *FileName = ml_stringbuffer_get(Buffer);
-	char *Extension = FileName + strlen(FileName);
-	while ((Extension > FileName) && (Extension[-1] != '.')) --Extension;
-	if (!strcmp(Extension, "rabs")) {
-		if (FileName[0] != '/') {
-			FileName = vfs_resolve(concat(CurrentContext->FullPath, "/", FileName, NULL));
-		}
-		return load_file(FileName);
-	} else if (!strcmp(Extension, "so")) {
-		if (FileName[0] != '/') {
-			FileName = vfs_resolve(concat(CurrentContext->FullPath, "/", FileName, NULL));
-		}
-		return library_load(FileName, Globals);
-	} else {
-		return ml_error("IncludeError", "Unknown include type: %s", FileName);
+	size_t Length = Buffer->Length;
+	char *FileName0 = GC_malloc_atomic(Length + MAX_EXTENSION);
+	memcpy(FileName0, ml_stringbuffer_get(Buffer), Length);
+	char *FileName = FileName0;
+	struct stat Stat[1];
+
+	strcpy(FileName0 + Length, ".rabs");
+	if (FileName0[0] != '/') {
+		FileName = vfs_resolve(concat(CurrentContext->FullPath, "/", FileName, NULL));
 	}
+	if (!stat(FileName, Stat)) return load_file(FileName);
+
+	FileName = FileName0;
+	strcpy(FileName0 + Length, LIB_EXTENSION);
+	if (FileName0[0] != '/') {
+		FileName = vfs_resolve(concat(CurrentContext->FullPath, "/", FileName, NULL));
+	}
+	if (!stat(FileName, Stat)) return library_load(FileName, Globals);
+
+	return ml_error("IncludeError", "Unable to include: %s", FileName);
 }
 
 ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
@@ -326,7 +341,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
-	if (DebugThreads) {
+	if (DebugThreads && CurrentThread) {
 		strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command));
 		display_threads();
 	}
@@ -345,7 +360,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	}
 	close(Pipe[1]);
 	ml_value_t *Result = MLNil;
-	CurrentThread->Child = Child;
+	if (CurrentThread) CurrentThread->Child = Child;
 	pthread_mutex_unlock(InterpreterLock);
 	if (Capture) {
 		ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
@@ -372,7 +387,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	}
 	clock_t End = clock();
 	pthread_mutex_lock(InterpreterLock);
-	CurrentThread->Child = 0;
+	if (CurrentThread) CurrentThread->Child = 0;
 	if (EchoCommands) printf("\t\e[33m%f seconds.\e[0m\n", ((double)(End - Start)) / CLOCKS_PER_SEC);
 	if (WIFEXITED(Status)) {
 		if (WEXITSTATUS(Status) != 0) {
@@ -711,6 +726,31 @@ static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
+static ml_value_t *lib_path() {
+	int ExecutablePathLength = wai_getExecutablePath(NULL, 0, NULL);
+	char *ExecutablePath = GC_malloc_atomic(ExecutablePathLength + 1);
+	wai_getExecutablePath(ExecutablePath, ExecutablePathLength + 1, &ExecutablePathLength);
+	ExecutablePath[ExecutablePathLength] = 0;
+	for (int I = ExecutablePathLength - 1; I > 0; --I) {
+		if (ExecutablePath[I] == '/') {
+			ExecutablePath[I] = 0;
+			ExecutablePathLength = I;
+			break;
+		}
+	}
+	int LibPathLength = ExecutablePathLength + strlen("/lib/rabs");
+	char *LibPath = GC_malloc_atomic(LibPathLength + 1);
+	memcpy(LibPath, ExecutablePath, ExecutablePathLength);
+	strcpy(LibPath + ExecutablePathLength, "/lib/rabs");
+	printf("Looking for library path at %s\n", LibPath);
+	struct stat Stat[1];
+	if (lstat(LibPath, Stat) || !S_ISDIR(Stat->st_mode)) {
+		return MLNil;
+	} else {
+		return ml_string(LibPath, LibPathLength);
+	}
+}
+
 static void restart() {
 	cache_close();
 	execv("/proc/self/exe", SavedArgv);
@@ -749,6 +789,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "debug", ml_function(0, debug));
 	stringmap_insert(Globals, "type", ml_function(0, type));
 	stringmap_insert(Globals, "error", ml_function(0, error));
+	stringmap_insert(Globals, "LIBPATH", lib_path());
 
 	ml_method_by_value(ArgifyMethod, NULL, argify_nil, MLListT, MLNilT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, argify_integer, MLListT, MLIntegerT, NULL);
