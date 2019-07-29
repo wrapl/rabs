@@ -28,7 +28,7 @@ extern __thread build_thread_t *CurrentThread;
 
 ml_value_t *rabs_global(const char *Name);
 
-#define CURRENT_VERSION "2.2.1"
+#define CURRENT_VERSION "2.2.2"
 #define WORKING_VERSION "2.2.0"
 
 #endif

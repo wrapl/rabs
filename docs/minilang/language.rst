@@ -103,7 +103,7 @@ Other than declarations, everything else in *Minilang* is an expression (somethi
 Values
 ~~~~~~
 
-The simplest expressions are single values. More information on values in *Minilang* can be found in :doc:`minilang/types`.
+The simplest expressions are single values. More information on values in *Minilang* can be found in :doc:`/minilang/types`.
 
 Nil:
    :mini:`nil`.
@@ -129,18 +129,28 @@ Functions
 
 Functions in *Minilang* are first class values. That means they can be passed to other functions and stored in variables, lists, maps, etc. Functions have access to variables in their surrounding scope when they were created.
 
-The general syntax of a function is :mini:`fun(Arguments) Body`. Calling a function is achieved by the traditional syntax :mini:`name(Arguments)`. 
+The general syntax of a function is :mini:`fun(Arguments) Body`. Calling a function is achieved by the traditional syntax :mini:`Function(Arguments)`. 
 
 .. code-block:: mini
 
    var add := fun(A, B) A + B
+   var sub := fun(A, B) A - B
    
    print('add(2, 3) = {add(2, 3)}\n')
-
-
+   
 .. code-block:: console
 
    add(2, 3) = 5
+
+Note that :mini:`Function` can be a variable containing a function, or any expression which returns a function.
+
+.. code-block:: mini
+
+   var X := (if nil then add else sub end)(10, 3) -- 7
+   
+   var f := fun(A) fun(B) A + B
+   
+   var Y := f(2)(3) -- 5
 
 As a shorthand, the code :mini:`var Name := fun(Arguments) Body` can be written as :mini:`fun Name(Arguments) Body`. Internally, the two forms are identical.
 
@@ -285,3 +295,49 @@ The default step size is :mini:`1` but can be changed with an additional :mini:`
    X = 5
    X = 7
    X = 9
+
+Methods
+~~~~~~~
+
+Internally, *Minilang* treats every value as an object with methods defining their behaviour. More information can be found in :doc:`/minilang/oop`. Method names are first class objects in *Minilang*, and can be created using a colon ``:`` followed by one or more alphanumeric characters, or by using two colons ``::`` followed by one or more symbol characters (``!``, ``@``, ``#``, ``$``, ``%``, ``^``, ``&``, ``*``, ``-``, ``+``, ``=``, ``|``, ``\``, ``~``, `````, ``/``, ``?``, ``<``, ``>`` or ``.``). Note that is currently not possible to mix the two sets of characters in a method name.
+
+.. code-block:: mini
+
+   :put
+   ::+
+
+Methods behave as *atoms*, that is two methods with the same characters internally point to the same object, and are thus identically equal.
+ 
+Methods can be called like any other function, using parentheses after the method.
+
+.. code-block:: mini
+
+   var L := []
+   :put(L, 1, 2, 3)
+   print('L = {L}\n')
+
+.. code-block:: console
+
+   L = 1 2 3
+
+For convenience (i.e. similarity to other OOP languages), method calls can also be written with the first argument before the method. Thus the code above is equivalent to the following:
+
+.. code-block:: mini
+
+   var L := []
+   L:put(1, 2, 3)
+   print('L = {L}\n')
+
+Finally, methods with symbol characters only can be invoked using infix notation. The following are equivalent:
+
+.. code-block:: mini
+
+   ::+(A, B)
+   A + B
+   
+   ::+(A, ::*(B, C))
+   A + (B * C)
+
+.. warning::
+   *Minilang* allows any combination of symbol characters (listed above) to be used as an infix operator. This means there is no operator precedence in *Minilang*. Hence, the parentheses in the last example are required; the expression :mini:`A + B * C` will be evaluated as :mini:`(A + B) * C`.
+

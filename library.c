@@ -1,6 +1,6 @@
 #include "library.h"
 #include "rabs.h"
-#ifdef __MINGW32__
+#ifdef Mingw
 #else
 #include <dlfcn.h>
 #endif
@@ -36,9 +36,10 @@ ml_value_t *library_load(const char *Path, stringmap_t *Globals) {
 #endif
 }
 
-static ml_value_t *library_get(void *Data, int Count, ml_value_t **Args) {
-	library_t *Library = (library_t *)Args[0];
-	const char *Symbol = ml_string_value(Args[1]);
+static ml_value_t *library_get(library_t *Library, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	const char *Symbol = ml_string_value(Args[0]);
 	ml_value_t *Value = stringmap_search(Library->Exports, Symbol);
 	if (!Value) return ml_error("LibraryError", "Symbol %s not exported from %s", Symbol, Library->Path);
 	return Value;
@@ -46,5 +47,5 @@ static ml_value_t *library_get(void *Data, int Count, ml_value_t **Args) {
 
 void library_init() {
 	LibraryT = ml_type(MLAnyT, "library");
-	ml_method_by_name(".", 0, library_get, LibraryT, MLStringT, NULL);
+	LibraryT->call = (void *)library_get;
 }

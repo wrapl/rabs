@@ -12,16 +12,16 @@ if defined("TEST_ERROR") then
 	error("TestError", "Testing error()")
 end
 
-if PLATFORM = "Linux" then
-	csv := include("../lib/csv.so")
+if LIBPATH then
+	csv := include(LIBPATH + "/csv")
 
-	var Csv := (csv."open")("test.csv", "w")
+	var Csv := csv("open")("test.csv", "w")
 	
 	Csv:write(["a", 1, "b", 2])
 	Csv:write(["c", 3, "d", 4])
 	Csv:close
 	
-	Csv := (csv."open")("test.csv", "r")
+	Csv := csv("open")("test.csv", "r")
 	print(Csv:read, "\n")
 	print(Csv:read, "\n")
 	print(Csv:read, "\n")
