@@ -73,21 +73,6 @@ int vfs_resolve_foreach(const char *Path, void *Data, int (*callback)(void *Data
 	return vfs_resolve_foreach0(Mount, Path, Data, callback);
 }
 
-static char *unsolve0(const vmount_t *Mount, const char *Path) {
-	while (Mount) {
-		const char *Suffix = match_prefix(Path, Mount->Target);
-		if (Suffix) {
-			char *Resolved = concat(Mount->Path, Suffix, NULL);
-			struct stat Stat[1];
-			if (stat(Resolved, Stat) == 0) return Resolved;
-			Resolved = unsolve0(Mount->Previous, Resolved);
-			if (Resolved) return Resolved;
-		}
-		Mount = Mount->Previous;
-	}
-	return 0;
-}
-
 char *vfs_unsolve(const char *Path) {
 	const vmount_t *Mount = Mounts;
 	const char *Orig = Path;

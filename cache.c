@@ -72,7 +72,7 @@ void cache_open(const char *RootPath) {
 			printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 			exit(1);
 		}
-		if (!PreviousVersion || strcmp(PreviousVersion, WORKING_VERSION) < 0) {
+		if (strcmp(PreviousVersion, WORKING_VERSION) < 0) {
 			printf("Version error: database was built with version %s but this version of Rabs will only work with version %s or higher. Delete %s to force a clean build.\n", PreviousVersion, WORKING_VERSION, CacheFileName);
 			exit(1);
 		}
@@ -285,10 +285,9 @@ static int cache_target_set_append(target_t *Target, char **Buffer) {
 
 targetset_t *cache_depends_get(target_t *Target) {
 	sqlite3_bind_text(DependsGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	int Total = 0;
 	char *Depends = 0;
 	if (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
-		const char *Text = sqlite3_column_text(DependsGetStatement, 0);
+		const char *Text = (const char *)sqlite3_column_text(DependsGetStatement, 0);
 		int Length = sqlite3_column_bytes(DependsGetStatement, 0);
 		Depends = GC_malloc_atomic(Length);
 		memcpy(Depends, Text, Length);
@@ -315,10 +314,9 @@ void cache_depends_set(target_t *Target, targetset_t *Depends) {
 
 targetset_t *cache_scan_get(target_t *Target) {
 	sqlite3_bind_text(ScanGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	int Total = 0;
 	char *Scans = 0;
 	if (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
-		const char *Text = sqlite3_column_text(ScanGetStatement, 0);
+		const char *Text = (const char *)sqlite3_column_text(ScanGetStatement, 0);
 		int Length = sqlite3_column_bytes(ScanGetStatement, 0);
 		Scans = GC_malloc_atomic(Length);
 		memcpy(Scans, Text, Length);
@@ -513,8 +511,7 @@ ml_value_t *cache_expr_get(target_t *Target) {
 			Result = MLNil;
 			break;
 		case SQLITE_BLOB: {
-			int Length = sqlite3_column_bytes(ExprGetStatement, 0);
-			const char *Buffer = sqlite3_column_blob(ExprGetStatement, 0);
+			const char *Buffer = (const char *)sqlite3_column_blob(ExprGetStatement, 0);
 			cache_expr_value_read(Buffer, &Result);
 			break;
 		}

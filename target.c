@@ -956,7 +956,6 @@ static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
 		target_depends_auto(Depend);
 		return 0;
 	} else if (ml_is(Arg, TargetT)) {
-		target_t *Depend = (target_t *)Arg;
 		target_depends_auto((target_t *)Arg);
 		return 0;
 	} else if (Arg == MLNil) {
@@ -1002,7 +1001,7 @@ void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE])
 		size_t Len = ml_string_length(Value);
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		sha256_update(Ctx, String, Len);
+		sha256_update(Ctx, (unsigned char *)String, Len);
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == MLListT) {
 		SHA256_CTX Ctx[1];
@@ -1020,31 +1019,31 @@ void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE])
 		target_t *Target = (target_t *)Value;
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == MetaTargetT) {
 		target_t *Target = (target_t *)Value;
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == ScanTargetT) {
 		target_t *Target = (target_t *)Value;
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == SymbTargetT) {
 		target_t *Target = (target_t *)Value;
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == ExprTargetT) {
 		target_t *Target = (target_t *)Value;
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
-		sha256_update(Ctx, Target->Id, strlen(Target->Id));
+		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
 		sha256_final(Ctx, Hash);
 	} else {
 		memset(Hash, -1, SHA256_BLOCK_SIZE);
@@ -1205,7 +1204,7 @@ int target_set_parent(target_t *Target, target_t *Parent) {
 		Target->Parent = Parent;
 		//cache_parent_set(Target);
 		if (DependencyGraph) {
-			fprintf(DependencyGraph, "\tT%x -> T%x [color=red];\n", Target, Target->Parent);
+			fprintf(DependencyGraph, "\tT%lx -> T%lx [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
 		}
 	}
 	return 0;
@@ -1217,17 +1216,17 @@ int targetset_print(target_t *Target, void *Data) {
 }
 
 static int target_graph_depends(target_t *Depend, target_t *Target) {
-	fprintf(DependencyGraph, "\tT%x -> T%x;\n", Target, Depend);
+	fprintf(DependencyGraph, "\tT%lx -> T%lx;\n", (uintptr_t)Target, (uintptr_t)Depend);
 	return 0;
 }
 
 static int target_graph_build_depends(target_t *Depend, target_t *Target) {
-	fprintf(DependencyGraph, "\tT%x -> T%x [style=dotted];\n", Target, Depend);
+	fprintf(DependencyGraph, "\tT%lx -> T%lx [style=dotted];\n", (uintptr_t)Target, (uintptr_t)Depend);
 	return 0;
 }
 
 static int target_graph_scans(target_t *Depend, target_t *Target) {
-	fprintf(DependencyGraph, "\tT%x -> T%x [style=dashed];\n", Target, Depend);
+	fprintf(DependencyGraph, "\tT%lx -> T%lx [style=dashed];\n", (uintptr_t)Target, (uintptr_t)Depend);
 	return 0;
 }
 
@@ -1255,10 +1254,9 @@ void target_update(target_t *Target) {
 	//if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updating \e[32m%s\e[0m\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id);
 	if (DebugThreads) display_threads();
 	if (DependencyGraph) {
-		fprintf(DependencyGraph, "\tT%x [label=\"%s\"];\n", Target, Target->Id);
+		fprintf(DependencyGraph, "\tT%lx [label=\"%s\"];\n", (uintptr_t)Target, Target->Id);
 		targetset_foreach(Target->Depends, Target, (void *)target_graph_depends);
 	}
-retry_build:
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
 	unsigned char PreviousBuildHash[SHA256_BLOCK_SIZE];
@@ -1266,11 +1264,10 @@ retry_build:
 	if (Target->Build && Target->Build->Type == MLClosureT) {
 		ml_closure_sha256(Target->Build, BuildHash);
 		int I = 0;
-		for (const unsigned char *P = Target->BuildContext->Path; *P; ++P) {
+		for (const unsigned char *P = (unsigned char *)Target->BuildContext->Path; *P; ++P) {
 			BuildHash[I] ^= *P;
 			I = (I + 1) % SHA256_BLOCK_SIZE;
 		}
-		Target->BuildContext->Path;
 		cache_build_hash_get(Target, PreviousBuildHash);
 		if (memcmp(PreviousBuildHash, BuildHash, SHA256_BLOCK_SIZE)) {
 			//printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
@@ -1289,7 +1286,7 @@ retry_build:
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
 
 	unsigned char Previous[SHA256_BLOCK_SIZE];
-	int LastUpdated, LastChecked, Skipped = 0;
+	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
 	//printf("\e[34m Update \e[32m%s\e[0m last checked at %d\e[0m\n", Target->Id, LastChecked);

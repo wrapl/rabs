@@ -135,7 +135,7 @@ static ml_value_t *load_file(const char *FileName) {
 #endif
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
-	preprocessor_t Preprocessor[1] = {Node, NULL,};
+	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Error);
 	if (setjmp(Preprocessor->Error->Handler)) return Preprocessor->Error->Message;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
@@ -355,7 +355,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 		if (chdir(WorkingDirectory)) exit(-1);
 		close(Pipe[0]);
 		dup2(Pipe[1], STDOUT_FILENO);
-		execl("/bin/sh", "sh", "-c", Command, 0);
+		execl("/bin/sh", "sh", "-c", Command, NULL);
 		exit(-1);
 	}
 	close(Pipe[1]);

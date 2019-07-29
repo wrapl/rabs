@@ -29,7 +29,7 @@ objects = \
 	library.o \
 	whereami.o
 
-CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing \
+CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -Wall \
 	-I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
 LDFLAGS += minilang/libminilang.a -lm
 
