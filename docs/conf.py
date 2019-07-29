@@ -97,7 +97,7 @@ html_static_path = ['_static']
 
 master_doc = 'index'
 
-pygments_style = 'tango'
+pygments_style = 'autumn'
 
 rst_prolog = """
 .. role:: mini(code)
