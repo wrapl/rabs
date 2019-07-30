@@ -4,7 +4,7 @@
 #else
 #include <dlfcn.h>
 #endif
-#include <gc.h>
+#include <gc/gc.h>
 
 static ml_type_t *LibraryT;
 

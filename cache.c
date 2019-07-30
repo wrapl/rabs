@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <gc.h>
+#include <gc/gc.h>
 #include <sys/stat.h>
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))

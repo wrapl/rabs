@@ -29,6 +29,9 @@ struct target_t {
 	TARGET_FIELDS
 };
 
+target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_t **Slot);
+#define target_new(type, Type, Id, Slot) ((type *)target_alloc(sizeof(type), Type, Id, Slot))
+
 extern int StatusUpdates;
 extern int MonitorFiles;
 extern int DebugThreads;
@@ -38,6 +41,9 @@ extern pthread_mutex_t InterpreterLock[1];
 extern ml_type_t *TargetT;
 
 void target_init();
+
+time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
+void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]);
 
 ml_value_t *target_dir_new(void *Data, int Count, ml_value_t **Args);
 ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args);

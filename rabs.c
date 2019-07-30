@@ -770,6 +770,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
 	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
 	stringmap_insert(Globals, "expr", ml_function(0, target_expr_new));
+	// TODO: add functions to register and create udf targets
 	stringmap_insert(Globals, "symbol", ml_function(0, symbol));
 	stringmap_insert(Globals, "include", ml_function(0, include));
 	stringmap_insert(Globals, "context", ml_function(0, context));

@@ -1,6 +1,6 @@
 #include "targetqueue.h"
 #include "minilang/ml_macros.h"
-#include <gc.h>
+#include <gc/gc.h>
 #include <string.h>
 
 target_t **QueueHeap = 0;
