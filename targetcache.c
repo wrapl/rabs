@@ -7,8 +7,6 @@
 #include <stdio.h>
 #include <gc/gc.h>
 
-#define INITIAL_SIZE 1024
-
 typedef struct {
 	target_t *Target;
 	unsigned long Hash;
@@ -17,9 +15,11 @@ typedef struct {
 static size_t SizeA, SpaceA;
 static node_t *NodesA;
 
-void targetcache_init() {
-	SizeA = INITIAL_SIZE;
-	SpaceA = INITIAL_SIZE;
+void targetcache_init(int CacheSize) {
+	int InitialSize = 1;
+	while (InitialSize <= CacheSize) InitialSize *= 2;
+	SizeA = InitialSize;
+	SpaceA = InitialSize;
 	NodesA = anew(node_t, SizeA);
 }
 
@@ -135,4 +135,8 @@ target_t **targetcache_lookup(const char *Id) {
 		SizeA = NewSize;
 	}
 	return 0;
+}
+
+int targetcache_size() {
+	return SizeA;
 }

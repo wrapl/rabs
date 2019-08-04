@@ -12,6 +12,8 @@ struct target_udfs_t {
 
 ml_type_t *UdfsTargetT;
 
+static stringmap_t UdfsTypes[1] = {{STRINGMAP_INIT}};
+
 time_t target_udfs_hash(target_udfs_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	// TODO: write this
 	return 0;
@@ -41,6 +43,13 @@ target_t *target_udfs_create(const char *Id, context_t *BuildContext, target_t *
 	// TODO: write this
 	Target->BuildContext = BuildContext;
 	return (target_t *)Target;
+}
+
+ml_value_t *target_udfs_register(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+
+	return MLNil;
 }
 
 void target_udfs_init() {

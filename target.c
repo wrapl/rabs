@@ -64,7 +64,6 @@ __thread context_t *CurrentContext = 0;
 __thread const char *CurrentDirectory = 0;
 
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
-//static target_t *NextTarget = 0;
 
 static int target_missing(target_t *Target, int LastChecked);
 
@@ -104,26 +103,12 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 	} else if (Arg->Type == MLStringT) {
 		target_t *Depend = target_symb_new(ml_string_value(Arg));
 		targetset_insert(Target->Depends, Depend);
-		//target_priority_increase(Depend, 0);
-		/*target_t *Parent = CurrentTarget;
-		while (Parent) {
-			targetset_insert(Parent->BuildDepends, Depend);
-			Parent = Parent->Parent;
-		}*/
 		if (CurrentTarget) targetset_insert(Target->BuildDepends, Depend);
-		//if (CurrentTarget) Target->Parent = CurrentTarget;
 		return 0;
 	} else if (ml_is(Arg, TargetT)) {
 		target_t *Depend = (target_t *)Arg;
 		targetset_insert(Target->Depends, Depend);
-		//target_priority_increase(Depend, 0);
-		/*target_t *Parent = CurrentTarget;
-		while (Parent) {
-			targetset_insert(Parent->BuildDepends, Depend);
-			Parent = Parent->Parent;
-		}*/
 		if (CurrentTarget) targetset_insert(Target->BuildDepends, Depend);
-		//if (CurrentTarget) Target->Parent = CurrentTarget;
 		return 0;
 	} else if (Arg == MLNil) {
 		return 0;
@@ -152,11 +137,8 @@ ml_value_t *target_get_build(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
-	//printf("target_set_build(%s)\n", Target->Id);
-	//if (Target->Build) return ml_error("ParameterError", "build already defined for %s", Target->Id);
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
-	//if (CurrentTarget) Target->Parent = CurrentTarget;
 	return Args[0];
 }
 
@@ -174,11 +156,6 @@ ml_value_t *target_get_priority(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	return ml_integer(Target->QueuePriority);
 }
-
-
-
-
-
 
 static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
 	if (Arg->Type == MLListT) {
@@ -247,31 +224,7 @@ void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE])
 		sha256_final(Ctx, Hash);
 	} else if (Value->Type == MLClosureT) {
 		ml_closure_sha256(Value, Hash);
-	} else if (Value->Type == FileTargetT) {
-		target_t *Target = (target_t *)Value;
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
-		sha256_final(Ctx, Hash);
-	} else if (Value->Type == MetaTargetT) {
-		target_t *Target = (target_t *)Value;
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
-		sha256_final(Ctx, Hash);
-	} else if (Value->Type == ScanTargetT) {
-		target_t *Target = (target_t *)Value;
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
-		sha256_final(Ctx, Hash);
-	} else if (Value->Type == SymbTargetT) {
-		target_t *Target = (target_t *)Value;
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
-		sha256_final(Ctx, Hash);
-	} else if (Value->Type == ExprTargetT) {
+	} else if (ml_is(Value, TargetT)) {
 		target_t *Target = (target_t *)Value;
 		SHA256_CTX Ctx[1];
 		sha256_init(Ctx);
@@ -337,10 +290,6 @@ int target_print(target_t *Target, void *Data) {
 int target_affect(target_t *Target, target_t *Depend) {
 	--Target->WaitCount;
 	if (Target->LastUpdated == STATE_QUEUED && Target->WaitCount == 0) {
-		//++QueuedTargets;
-		//Target->LastUpdated = STATE_QUEUED;
-		//Target->Next = NextTarget;
-		//NextTarget = Target;
 		targetqueue_insert(Target);
 		pthread_cond_broadcast(TargetAvailable);
 	}
@@ -348,7 +297,6 @@ int target_affect(target_t *Target, target_t *Depend) {
 }
 
 static int target_depends_fn(target_t *Depend, int *DependsLastUpdated) {
-	//printf("\e[34m%s iteration = %d\e[0m\n", Depend->Id, Depend->LastUpdated);
 	if (Depend->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depend->LastUpdated;
 	if (Depend->LastUpdated == CurrentIteration) {
 		if (StatusUpdates) printf("\tUpdating due to \e[32m%s\e[0m\n", Depend->Id);
@@ -405,7 +353,6 @@ int target_insert(target_t *Target, targetset_t *Set) {
 int target_set_parent(target_t *Target, target_t *Parent) {
 	if (!Target->Parent) {
 		Target->Parent = Parent;
-		//cache_parent_set(Target);
 		if (DependencyGraph) {
 			fprintf(DependencyGraph, "\tT%lx -> T%lx [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
 		}
@@ -463,7 +410,6 @@ static int build_scan_target_list(ml_value_t *Depend, targetset_t *Scans) {
 }
 
 void target_update(target_t *Target) {
-	//if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updating \e[32m%s\e[0m\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id);
 	if (DebugThreads) display_threads();
 	if (DependencyGraph) {
 		fprintf(DependencyGraph, "\tT%lx [label=\"%s\"];\n", (uintptr_t)Target, Target->Id);
@@ -482,18 +428,11 @@ void target_update(target_t *Target) {
 		}
 		cache_build_hash_get(Target, PreviousBuildHash);
 		if (memcmp(PreviousBuildHash, BuildHash, SHA256_BLOCK_SIZE)) {
-			//printf("\e[33mUpdating %s due to build function\e[0m\n", Target->Id);
 			DependsLastUpdated = CurrentIteration;
 		}
 	} else {
 		memset(BuildHash, 0, sizeof(SHA256_BLOCK_SIZE));
 	}
-	/*if (Target->Type == ScanTargetT) {
-		targetset_foreach(Target->Depends, Target, (void *)target_set_parent);
-	} else if (Target->Parent) {
-		targetset_foreach(Target->Depends, Target->Parent, (void *)target_set_parent);
-	}
-	targetset_foreach(Target->Depends, Target, (void *)target_queue);*/
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
 
@@ -501,7 +440,6 @@ void target_update(target_t *Target) {
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;
 	cache_hash_get(Target, &LastUpdated, &LastChecked, &FileTime, Previous);
-	//printf("\e[34m Update \e[32m%s\e[0m last checked at %d\e[0m\n", Target->Id, LastChecked);
 	if (DependsLastUpdated <= LastChecked) {
 		targetset_t *Depends = cache_depends_get(Target);
 		if (Depends) {
@@ -520,14 +458,6 @@ void target_update(target_t *Target) {
 	}
 
 	if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
-		//printf("\e[34m rebuilding %s\e[0m\n", Target->Id);
-		/*if (!Target->Build) {
-			if (!Target->Parent) cache_parent_get(Target);
-			if (Target->Parent) {
-				target_rebuild(Target->Parent);
-				goto retry_build;
-			}
-		}*/
 		if (!Target->Build && Target->Parent) {
 			fprintf(stderr, "\e[34mRebuilding %s because of %s\n\e[0m", Target->Parent->Id, Target->Id);
 			target_rebuild(Target->Parent);
@@ -572,17 +502,12 @@ void target_update(target_t *Target) {
 				}
 				targetset_foreach(Scans, Target, (void *)target_queue);
 				targetset_foreach(Scans, Target, (void *)target_wait);
-				//targetset_foreach(Scans, Target, (void *)target_find_leaves0);
-				//targetset_foreach(Scans, Target, (void *)target_set_parent);
 				cache_scan_set(Target, Scans);
 				if (DependencyGraph) {
 					targetset_foreach(Scans, Target, (void *)target_graph_scans);
 				}
-
-				//printf("scans(%s) = \n", Target->Id);
-				//targetset_foreach(Scans, 0, targetset_print);
-				//printf("leaves(%s) = \n", Target->Id);
-				//targetset_foreach(Target->BuildDepends, 0, targetset_print);
+			} else if (Target->Type == UdfsTargetT) {
+				// TODO: write this
 			}
 			cache_build_hash_set(Target, BuildHash);
 
@@ -599,14 +524,8 @@ void target_update(target_t *Target) {
 			targetset_foreach(Scans, Target, (void *)target_set_parent);
 			targetset_foreach(Scans, Target, (void *)target_queue);
 			targetset_foreach(Scans, Target, (void *)target_wait);
-
-			//printf("scans(%s) = \n", Target->Id);
-			//targetset_foreach(Scans, 0, targetset_print);
 		}
 	}
-	/*if (DependencyGraph && Target->Parent) {
-		fprintf(DependencyGraph, "\tT%x -> T%x [color=red];\n", Target, Target->Parent);
-	}*/
 	if (DependencyGraph) {
 		targetset_foreach(Target->BuildDepends, Target, (void *)target_graph_build_depends);
 	}
@@ -615,7 +534,6 @@ void target_update(target_t *Target) {
 		Target->LastUpdated = CurrentIteration;
 		cache_hash_set(Target, FileTime);
 		cache_depends_set(Target, Target->BuildDepends);
-		//if (Target->Parent) cache_parent_set(Target);
 	} else {
 		Target->LastUpdated = LastUpdated;
 		cache_last_check_set(Target, FileTime);
@@ -634,7 +552,6 @@ void target_update(target_t *Target) {
 }
 
 int target_queue(target_t *Target, target_t *Waiter) {
-	//printf("target_queue(%s, %s)\n", Target->Id, Waiter ? Waiter->Id : "<none>");
 	if (Target->LastUpdated > 0) return 0;
 	if (Waiter && targetset_insert(Target->Affects, Waiter)) {
 		Waiter->WaitCount += 1;
@@ -642,19 +559,8 @@ int target_queue(target_t *Target, target_t *Waiter) {
 	if (Target->LastUpdated == STATE_UNCHECKED) {
 		Target->LastUpdated = STATE_QUEUED;
 		++QueuedTargets;
-		/*if (Waiter) {
-			if (Waiter->Type == ScanTargetT) {
-				Target->Parent = Waiter;
-			} else if (Waiter->Parent) {
-				Target->Parent = Waiter->Parent;
-			}
-		}*/
 		targetset_foreach(Target->Depends, Target, (void *)target_queue);
 		if (Target->WaitCount == 0) {
-			//Target->LastUpdated = STATE_QUEUED;
-			//Target->Next = NextTarget;
-			//NextTarget = Target;
-			//printf("target_queue[%d] -> %s\n", Target->QueuePriority, Target->Id);
 			targetqueue_insert(Target);
 			pthread_cond_broadcast(TargetAvailable);
 		}
@@ -665,10 +571,6 @@ int target_queue(target_t *Target, target_t *Waiter) {
 }
 
 int target_wait(target_t *Target, target_t *Waiter) {
-	/*if (Target->LastUpdated == STATE_UNCHECKED) {
-		++QueuedTargets;
-		Target->LastUpdated = STATE_QUEUED;
-	}*/
 	if (Target->LastUpdated == STATE_QUEUED) {
 		target_update(Target);
 	} else while (Target->LastUpdated == STATE_CHECKING) {
@@ -676,7 +578,6 @@ int target_wait(target_t *Target, target_t *Waiter) {
 			CurrentThread->Status = BUILD_WAIT;
 			CurrentThread->Target = Target;
 		}
-		//fprintf(stderr, "\e[31m%s waiting on %s\n\e[0m", Waiter->Id, Target->Id);
 		pthread_cond_wait(TargetUpdated, InterpreterLock);
 	}
 	if (DebugThreads) {
@@ -707,7 +608,6 @@ static void *target_thread_fn(void *Arg) {
 			NextTarget = targetqueue_next();
 		}
 		target_t *Target = NextTarget;
-		//NextTarget = Target->Next;
 		if (Target->LastUpdated == STATE_QUEUED) target_update(Target);
 	}
 	return 0;
@@ -771,7 +671,6 @@ void target_threads_kill() {
 }
 
 void target_init() {
-	targetcache_init();
 	targetqueue_init();
 
 	TargetT = ml_type(MLAnyT, "target");

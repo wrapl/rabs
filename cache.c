@@ -7,6 +7,7 @@
 #include <string.h>
 #include <gc/gc.h>
 #include <sys/stat.h>
+#include <targetcache.h>
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 
@@ -32,6 +33,11 @@ static int version_callback(char *Result, int NumCols, char **Values, char **Nam
 }
 
 static int iteration_callback(int *Result, int NumCols, char **Values, char **Names) {
+	*Result = atoi(Values[0] ?: "0");
+	return 0;
+}
+
+static int cachesize_callback(int *Result, int NumCols, char **Values, char ** Names) {
 	*Result = atoi(Values[0] ?: "0");
 	return 0;
 }
@@ -147,10 +153,22 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
+	int CacheSize = 1024;
+	if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'version\'", (void *)cachesize_callback, &CacheSize, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	targetcache_init(CacheSize);
 	atexit(cache_close);
 }
 
 void cache_close() {
+	char Buffer[100];
+	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('cachesize', '%d')", targetcache_size());
+	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
 	sqlite3_finalize(HashGetStatement);
 	sqlite3_finalize(HashSetStatement);
 	sqlite3_finalize(HashBuildGetStatement);
