@@ -26,7 +26,6 @@ objects = \
 	target_meta.o \
 	target_scan.o \
 	target_symb.o \
-	target_udfs.o \
 	targetcache.o \
 	targetqueue.o \
 	targetset.o \
