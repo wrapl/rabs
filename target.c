@@ -4,7 +4,6 @@
 #include "target_meta.h"
 #include "target_scan.h"
 #include "target_symb.h"
-#include "target_udfs.h"
 #include "rabs.h"
 #include "util.h"
 #include "context.h"
@@ -241,14 +240,12 @@ time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char Previous
 	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == SymbTargetT) return target_symb_hash((target_symb_t *)Target, PreviousTime, PreviousHash);
 	if (Target->Type == ExprTargetT) return target_expr_hash((target_expr_t *)Target, PreviousTime, PreviousHash);
-	if (Target->Type == UdfsTargetT) return target_udfs_hash((target_udfs_t *)Target, PreviousTime, PreviousHash);
 	return 0;
 }
 
 static int target_missing(target_t *Target, int LastChecked) {
 	if (Target->Type == FileTargetT) return target_file_missing((target_file_t *)Target);
 	if (Target->Type == ExprTargetT) return target_expr_missing((target_expr_t *)Target);
-	if (Target->Type == UdfsTargetT) return target_udfs_missing((target_udfs_t *)Target);
 	return 0;
 }
 
@@ -270,9 +267,6 @@ target_t *target_find(const char *Id) {
 	}
 	if (!memcmp(Id, "meta:", 5)) {
 		return target_meta_create(Id, CurrentContext, Slot);
-	}
-	if (!memcmp(Id, "udfs:", 5)) {
-		return target_udfs_create(Id, CurrentContext, Slot);
 	}
 	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
 	return 0;
@@ -506,8 +500,6 @@ void target_update(target_t *Target) {
 				if (DependencyGraph) {
 					targetset_foreach(Scans, Target, (void *)target_graph_scans);
 				}
-			} else if (Target->Type == UdfsTargetT) {
-				// TODO: write this
 			}
 			cache_build_hash_set(Target, BuildHash);
 
@@ -690,6 +682,5 @@ void target_init() {
 	target_meta_init();
 	target_scan_init();
 	target_symb_init();
-	target_udfs_init();
 	atexit(target_threads_kill);
 }
