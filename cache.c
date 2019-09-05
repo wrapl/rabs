@@ -282,8 +282,7 @@ static targetset_t *cache_target_set_parse(char *Id) {
 		char *End = Id + 1;
 		while (*End > '\n') ++End;
 		*End = 0;
-		target_t *Target = target_find(Id);
-		targetset_insert(Set, Target);
+		targetset_insert(Set, target_find(Id, End - Id));
 		Id = End + 1;
 	}
 	return Set;
@@ -499,7 +498,7 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 	case CACHE_EXPR_TARGET: {
 		int Length = *(int32_t *)Buffer;
 		Buffer += 4;
-		*Output = (ml_value_t *)target_find(Buffer);
+		*Output = (ml_value_t *)target_find(Buffer, Length);
 		return Buffer + Length + 1;
 	}
 	}

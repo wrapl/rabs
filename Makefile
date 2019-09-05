@@ -14,10 +14,13 @@ all: $(RABS)
 minilang/libminilang.a: minilang/Makefile minilang/*.c minilang/*.h
 	$(MAKE) -C minilang PLATFORM=$(PLATFORM) libminilang.a
 
+radb/libradb.a: radb/Makefile radb/*.c radb/*.h
+	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a
+
 *.o: *.h minilang/*.h
 
 objects = \
-	cache.o \
+	cache_radb.o \
 	context.o \
 	rabs.o \
 	target.o \
@@ -35,8 +38,8 @@ objects = \
 	whereami.o
 
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -Wall \
-	-I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
-LDFLAGS += minilang/libminilang.a -lm
+	-I. -Iminilang -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
+LDFLAGS += minilang/libminilang.a radb/libradb.a -lm
 
 ifeq ($(PLATFORM), Linux)
 	LDFLAGS += -Wl,--export-dynamic -ldl -lgc -lsqlite3
@@ -72,12 +75,13 @@ else
 $(RABS): Makefile $(objects) *.h minilang/libminilang.a
 	mkdir -p bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
-	strip $@
+	#strip $@
 endif
 	
 
 clean:
 	$(MAKE) -C minilang clean
+	$(MAKE) -C radb clean
 	rm -f $(RABS)
 	rm -f *.o
 

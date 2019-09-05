@@ -30,4 +30,6 @@ void cache_expr_set(target_t *Target, ml_value_t *Value);
 extern int CurrentIteration;
 void cache_bump_iteration();
 
+size_t cache_target_index(const char *Id);
+
 #endif

@@ -27,8 +27,9 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
-	const char *Id = concat("meta:", CurrentContext->Path, "::", Name, NULL);
-	target_t **Slot = targetcache_lookup(Id);
+	char *Id;
+	size_t IdLength = asprintf(&Id, "meta:%s::%s", CurrentContext->Path, Name);
+	target_t **Slot = targetcache_lookup(Id, IdLength);
 	if (!Slot[0]) {
 		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, Slot);
 		Target->Name = Name;

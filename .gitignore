@@ -4,7 +4,9 @@ build.rabs.db*
 /bin/
 *.o
 *.so
+*.dll
 *.a
+*.zip
 *cppcheck*
 /.README.md.html
 /.cproject

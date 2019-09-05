@@ -7,6 +7,78 @@
 #include <stdio.h>
 #include <gc/gc.h>
 
+/*
+typedef struct node_t node_t;
+
+struct node_t {
+	const ml_type_t *Type;
+	node_t *Child[2];
+	uint32_t Byte;
+	uint8_t OtherBits;
+};
+
+static node_t *CacheRoot = 0;
+
+void targetcache_init(int CacheSize) {
+}
+
+target_t **targetcache_lookup(const char *Id, size_t IdLength) {
+	uint8_t *UBytes = (uint8_t *)Id;
+	size_t ULen = IdLength;
+	if (!CacheRoot) return (target_t **)&CacheRoot;
+	node_t *Node = CacheRoot, **Slot = &CacheRoot;
+	while (!Node->Type) {
+		uint8_t C = 0;
+		if (Node->Byte < ULen) C = UBytes[Node->Byte];
+		const int Dir = (1 + (Node->OtherBits | C)) >> 8;
+		Slot = &Node->Child[Dir];
+		Node = *Slot;
+	}
+	uint32_t NewByte, NewOtherBits;
+	uint8_t *VBytes = (uint8_t *)((target_t *)Node)->Id;
+	for (NewByte = 0; NewByte < ULen; ++NewByte) {
+		if (VBytes[NewByte] != UBytes[NewByte]) {
+			NewOtherBits = VBytes[NewByte] ^ UBytes[NewByte];
+			goto different_byte_found;
+		}
+	}
+	if (VBytes[NewByte] != 0) {
+		NewOtherBits = VBytes[NewByte];
+		goto different_byte_found;
+	}
+	return (target_t **)Slot;
+different_byte_found:
+	NewOtherBits |= NewOtherBits >> 1;
+	NewOtherBits |= NewOtherBits >> 2;
+	NewOtherBits |= NewOtherBits >> 4;
+	NewOtherBits = (NewOtherBits & ~(NewOtherBits >> 1)) ^ 255;
+	uint8_t C = VBytes[NewByte];
+	int NewDir = (1 + (NewOtherBits | C)) >> 8;
+	node_t *NewNode = new(node_t);
+	NewNode->Byte = NewByte;
+	NewNode->OtherBits = NewOtherBits;
+	Slot = &NewNode->Child[1 - NewDir];
+	node_t **WhereP = &CacheRoot;
+	for (;;) {
+		node_t *Node = *WhereP;
+		if (Node->Type) break;
+		if (Node->Byte > NewByte) break;
+		if (Node->Byte == NewByte && Node->OtherBits > NewOtherBits) break;
+		uint8_t C = 0;
+		if (Node->Byte < ULen) C = UBytes[Node->Byte];
+		const int Dir = (1 + (Node->OtherBits | C)) >> 8;
+		WhereP = Node->Child + Dir;
+	}
+	NewNode->Child[NewDir] = *WhereP;
+	*WhereP = NewNode;
+	return (target_t **)Slot;
+}
+
+int targetcache_size() {
+	return 0;
+}
+*/
+
 typedef struct {
 	target_t *Target;
 	unsigned long Hash;
@@ -16,7 +88,7 @@ static size_t SizeA, SpaceA;
 static node_t *NodesA;
 
 void targetcache_init(int CacheSize) {
-	int InitialSize = 1;
+	int InitialSize = 16;
 	while (InitialSize <= CacheSize) InitialSize *= 2;
 	SizeA = InitialSize;
 	SpaceA = InitialSize;
@@ -60,7 +132,7 @@ static void sort_nodes(node_t *First, node_t *Last) {
 	if (A + 1 < Last) sort_nodes(A + 1, Last);
 }
 
-target_t **targetcache_lookup(const char *Id) {
+target_t **targetcache_lookup(const char *Id, size_t IdLength) {
 	unsigned long Hash = stringmap_hash(Id);
 	unsigned int Mask = SizeA - 1;
 	for (;;) {
@@ -71,9 +143,16 @@ target_t **targetcache_lookup(const char *Id) {
 			if (!Nodes[Index].Target) break;
 			if (Nodes[Index].Hash < Hash) break;
 			if (Nodes[Index].Hash == Hash) {
-				int Cmp = strcmp(Nodes[Index].Target->Id, Id);
-				if (Cmp == 0) return &Nodes[Index].Target;
-				if (Cmp < 0) break;
+				const unsigned char *A = (unsigned char *)Nodes[Index].Target->Id;
+				const unsigned char *B = (unsigned char *)Id;
+			loop1:
+				if (*A < *B) break;
+				if (!*A) {
+					return &Nodes[Index].Target;
+				}
+				if (*B) {
+					++A; ++B; goto loop1;
+				}
 			}
 			Index += Incr;
 			Index &= Mask;
@@ -103,11 +182,17 @@ target_t **targetcache_lookup(const char *Id) {
 						Nodes[Index].Hash = Hash;
 						break;
 					} else if (Nodes[Index].Hash == Hash) {
-						int Cmp = strcmp(Nodes[Index].Target->Id, Id);
-						if (Cmp < 0) {
+						const unsigned char *A = (unsigned char *)Nodes[Index].Target->Id;
+						const unsigned char *B = (unsigned char *)Id;
+					loop2:
+						if (*A < *B) {
 							OldTarget = Nodes[Index].Target;
 							Nodes[Index].Target = Target;
 							break;
+						}
+						if (!*A) asm("int3");
+						if (*B) {
+							++A; ++B; goto loop2;
 						}
 					}
 				}
@@ -138,5 +223,5 @@ target_t **targetcache_lookup(const char *Id) {
 }
 
 int targetcache_size() {
-	return SizeA;
+	return SizeA - SpaceA;
 }

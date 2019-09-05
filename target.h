@@ -18,6 +18,7 @@
 	targetset_t Affects[1]; \
 	targetset_t Depends[1]; \
 	targetset_t BuildDepends[1]; \
+	size_t CacheIndex; \
 	int WaitCount; \
 	int LastUpdated; \
 	int IdLength; \
@@ -56,8 +57,7 @@ void target_symb_update(const char *Name);
 
 void target_depends_add(target_t *Target, target_t *Depend);
 void target_depends_auto(target_t *Depend);
-target_t *target_find(const char *Id);
-target_t *target_get(const char *Id);
+target_t *target_find(const char *Id, size_t IdLength);
 void target_push(target_t *Target);
 target_t *target_file_check(const char *Path, int Absolute);
 void target_threads_start(int NumThreads);

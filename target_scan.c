@@ -36,8 +36,9 @@ static ml_value_t *target_scan_source(void *Data, int Count, ml_value_t **Args) 
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	target_t *Source = (target_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
-	const char *Id = concat("scan:", Source->Id, "::", Name, NULL);
-	target_t **Slot = targetcache_lookup(Id);
+	char *Id;
+	size_t IdLength = asprintf(&Id, "scan:%s::%s", Source->Id, Name);
+	target_t **Slot = targetcache_lookup(Id, IdLength);
 	if (!Slot[0]) {
 		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Slot);
 		Target->Source = Source;
@@ -57,7 +58,7 @@ target_t *target_scan_create(const char *Id, context_t *BuildContext, target_t *
 	char *ParentId = snew(ParentIdLength + 1);
 	memcpy(ParentId, Id + 5, ParentIdLength);
 	ParentId[ParentIdLength] = 0;
-	Target->Source = target_find(ParentId);
+	Target->Source = target_find(ParentId, ParentIdLength);
 	Target->Name = Name + 2;
 	return (target_t *)Target;
 }

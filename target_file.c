@@ -189,8 +189,9 @@ int target_file_missing(target_file_t *Target) {
 }
 
 target_t *target_file_check(const char *Path, int Absolute) {
-	const char *Id = concat("file:", Path, NULL);
-	target_t **Slot = targetcache_lookup(Id);
+	char *Id;
+	size_t IdLength = asprintf(&Id, "file:%s", Path);
+	target_t **Slot = targetcache_lookup(Id, IdLength);
 	if (!Slot[0]) {
 		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Slot);
 		Target->Absolute = Absolute;

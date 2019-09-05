@@ -24,6 +24,7 @@
 #include <dirent.h>
 #include <ml_file.h>
 #include <limits.h>
+#include <inttypes.h>
 
 #ifdef Linux
 #include "targetwatch.h"
@@ -92,6 +93,7 @@ target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_t **Slo
 	Target->QueuePriority = PRIORITY_INVALID;
 	Target->Depends->Type = TargetSetT;
 	Target->Affects->Type = TargetSetT;
+	Target->CacheIndex = cache_target_index(Id);
 	Slot[0] = Target;
 	return Target;
 }
@@ -249,8 +251,8 @@ static int target_missing(target_t *Target, int LastChecked) {
 	return 0;
 }
 
-target_t *target_find(const char *Id) {
-	target_t **Slot = targetcache_lookup(Id);
+target_t *target_find(const char *Id, size_t IdLength) {
+	target_t **Slot = targetcache_lookup(Id, IdLength);
 	if (Slot[0]) return Slot[0];
 	Id = GC_strdup(Id);
 	if (!memcmp(Id, "file:", 5)) {
@@ -270,10 +272,6 @@ target_t *target_find(const char *Id) {
 	}
 	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
 	return 0;
-}
-
-target_t *target_get(const char *Id) {
-	return *targetcache_lookup(Id);
 }
 
 int target_print(target_t *Target, void *Data) {
@@ -348,7 +346,7 @@ int target_set_parent(target_t *Target, target_t *Parent) {
 	if (!Target->Parent) {
 		Target->Parent = Parent;
 		if (DependencyGraph) {
-			fprintf(DependencyGraph, "\tT%lx -> T%lx [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
+			fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
 		}
 	}
 	return 0;
@@ -360,17 +358,17 @@ int targetset_print(target_t *Target, void *Data) {
 }
 
 static int target_graph_depends(target_t *Depend, target_t *Target) {
-	fprintf(DependencyGraph, "\tT%lx -> T%lx;\n", (uintptr_t)Target, (uintptr_t)Depend);
+	fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR ";\n", (uintptr_t)Target, (uintptr_t)Depend);
 	return 0;
 }
 
 static int target_graph_build_depends(target_t *Depend, target_t *Target) {
-	fprintf(DependencyGraph, "\tT%lx -> T%lx [style=dotted];\n", (uintptr_t)Target, (uintptr_t)Depend);
+	fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [style=dotted];\n", (uintptr_t)Target, (uintptr_t)Depend);
 	return 0;
 }
 
 static int target_graph_scans(target_t *Depend, target_t *Target) {
-	fprintf(DependencyGraph, "\tT%lx -> T%lx [style=dashed];\n", (uintptr_t)Target, (uintptr_t)Depend);
+	fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [style=dashed];\n", (uintptr_t)Target, (uintptr_t)Depend);
 	return 0;
 }
 
@@ -406,7 +404,7 @@ static int build_scan_target_list(ml_value_t *Depend, targetset_t *Scans) {
 void target_update(target_t *Target) {
 	if (DebugThreads) display_threads();
 	if (DependencyGraph) {
-		fprintf(DependencyGraph, "\tT%lx [label=\"%s\"];\n", (uintptr_t)Target, Target->Id);
+		fprintf(DependencyGraph, "\tT%" PRIxPTR " [label=\"%s\"];\n", (uintptr_t)Target, Target->Id);
 		targetset_foreach(Target->Depends, Target, (void *)target_graph_depends);
 	}
 	Target->LastUpdated = STATE_CHECKING;
