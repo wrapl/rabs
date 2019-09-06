@@ -39,15 +39,16 @@ void cache_open(const char *RootPath) {
 	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", NULL);
 	struct stat Stat[1];
 	if (stat(CacheFileName, Stat)) {
-		MetadataStore = string_store_create(concat(CacheFileName, "/metadata", NULL), 16);
+		mkdir(CacheFileName, 0777);
+		MetadataStore = string_store_create(concat(CacheFileName, "/metadata", NULL), 16, 0);
 		string_store_reserve(MetadataStore, METADATA_SIZE);
-		TargetsIndex = string_index_create(concat(CacheFileName, "/targets", NULL));
-		HashStore = string_store_create(concat(CacheFileName, "/hashes", NULL), SHA256_BLOCK_SIZE);
-		HashDetailsStore = string_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_hash_details_t));
-		BuildHashStore = string_store_create(concat(CacheFileName, "/builds", NULL), SHA256_BLOCK_SIZE);
-		DependsStore = string_store_create(concat(CacheFileName, "/depends", NULL), 16);
-		ScansStore = string_store_create(concat(CacheFileName, "/scans", NULL), 16);
-		ExprsStore = string_store_create(concat(CacheFileName, "/exprs", NULL), 16);
+		TargetsIndex = string_index_create(concat(CacheFileName, "/targets", NULL), 4096);
+		HashStore = string_store_create(concat(CacheFileName, "/hashes", NULL), SHA256_BLOCK_SIZE, 4096);
+		HashDetailsStore = string_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_hash_details_t), 1024);
+		BuildHashStore = string_store_create(concat(CacheFileName, "/builds", NULL), SHA256_BLOCK_SIZE, 4096);
+		DependsStore = string_store_create(concat(CacheFileName, "/depends", NULL), 32, 4096);
+		ScansStore = string_store_create(concat(CacheFileName, "/scans", NULL), 128, 524288);
+		ExprsStore = string_store_create(concat(CacheFileName, "/exprs", NULL), 16, 512);
 	} else {
 		MetadataStore = string_store_open(concat(CacheFileName, "/metadata", NULL));
 		TargetsIndex = string_index_open(concat(CacheFileName, "/targets", NULL));
@@ -57,6 +58,9 @@ void cache_open(const char *RootPath) {
 		DependsStore = string_store_open(concat(CacheFileName, "/depends", NULL));
 		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL));
 		ExprsStore = string_store_open(concat(CacheFileName, "/exprs", NULL));
+		uint32_t Temp;
+		string_store_get_value(MetadataStore, CURRENT_ITERATION_INDEX, &Temp);
+		CurrentIteration = Temp;
 	}
 	++CurrentIteration;
 	printf("Rabs version = %s\n", CURRENT_VERSION);
@@ -103,12 +107,19 @@ void cache_bump_iteration() {
 }
 
 void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	cache_hash_details_t Details[1];
-	string_store_get_value(HashDetailsStore, Target->CacheIndex, Details);
-	string_store_get_value(HashStore, Target->CacheIndex, Hash);
-	*LastUpdated = Details->LastUpdated;
-	*LastChecked = Details->LastChecked;
-	*FileTime = Details->FileTime;
+	if (string_store_get_size(HashStore, Target->CacheIndex)) {
+		string_store_get_value(HashStore, Target->CacheIndex, Hash);
+		cache_hash_details_t Details[1];
+		string_store_get_value(HashDetailsStore, Target->CacheIndex, Details);
+		*LastUpdated = Details->LastUpdated;
+		*LastChecked = Details->LastChecked;
+		*FileTime = Details->FileTime;
+	} else {
+		memset(Hash, 0, SHA256_BLOCK_SIZE);
+		*LastUpdated = 0;
+		*LastChecked = 0;
+		*FileTime = 0;
+	}
 }
 
 void cache_hash_set(target_t *Target, time_t FileTime) {
@@ -118,7 +129,11 @@ void cache_hash_set(target_t *Target, time_t FileTime) {
 }
 
 void cache_build_hash_get(target_t *Target, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	string_store_get_value(BuildHashStore, Target->CacheIndex, Hash);
+	if (string_store_get_size(BuildHashStore, Target->CacheIndex)) {
+		string_store_get_value(BuildHashStore, Target->CacheIndex, Hash);
+	} else {
+		memset(Hash, 0, SHA256_BLOCK_SIZE);
+	}
 }
 
 void cache_build_hash_set(target_t *Target, unsigned char BuildHash[SHA256_BLOCK_SIZE]) {
@@ -160,9 +175,13 @@ static int cache_target_set_append(target_t *Target, char **Buffer) {
 
 targetset_t *cache_depends_get(target_t *Target) {
 	size_t Length = string_store_get_size(DependsStore, Target->CacheIndex);
-	char *Buffer = GC_malloc_atomic(Length);
-	string_store_get_value(DependsStore, Target->CacheIndex, Buffer);
-	return cache_target_set_parse(Buffer);
+	if (Length) {
+		char *Buffer = GC_malloc_atomic(Length);
+		string_store_get_value(DependsStore, Target->CacheIndex, Buffer);
+		return cache_target_set_parse(Buffer);
+	} else {
+		return targetset_new();
+	}
 }
 
 void cache_depends_set(target_t *Target, targetset_t *Depends) {
@@ -178,9 +197,13 @@ void cache_depends_set(target_t *Target, targetset_t *Depends) {
 
 targetset_t *cache_scan_get(target_t *Target) {
 	size_t Length = string_store_get_size(ScansStore, Target->CacheIndex);
-	char *Buffer = GC_malloc_atomic(Length);
-	string_store_get_value(ScansStore, Target->CacheIndex, Buffer);
-	return cache_target_set_parse(Buffer);
+	if (Length) {
+		char *Buffer = GC_malloc_atomic(Length);
+		string_store_get_value(ScansStore, Target->CacheIndex, Buffer);
+		return cache_target_set_parse(Buffer);
+	} else {
+		return targetset_new();
+	}
 }
 
 void cache_scan_set(target_t *Target, targetset_t *Scans) {
@@ -344,9 +367,11 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 ml_value_t *cache_expr_get(target_t *Target) {
 	ml_value_t *Result = 0;
 	size_t Length = string_store_get_size(ExprsStore, Target->CacheIndex);
-	char *Buffer = GC_malloc_atomic(Length);
-	string_store_get_value(ExprsStore, Target->CacheIndex, Buffer);
-	cache_expr_value_read(Buffer, &Result);
+	if (Length) {
+		char *Buffer = GC_malloc_atomic(Length);
+		string_store_get_value(ExprsStore, Target->CacheIndex, Buffer);
+		cache_expr_value_read(Buffer, &Result);
+	}
 	return Result;
 }
 
