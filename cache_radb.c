@@ -7,14 +7,14 @@
 #include <gc/gc.h>
 #include <sys/stat.h>
 #include <targetcache.h>
-#include "radb/string_index.h"
-#include "radb/string_store.h"
+#include "radb/radb.h"
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 
 static string_store_t *MetadataStore;
 static string_index_t *TargetsIndex;
-static string_store_t *HashStore, *HashDetailsStore;
+static string_store_t *HashStore;
+static fixed_store_t *HashDetailsStore;
 static string_store_t *BuildHashStore;
 static string_store_t *DependsStore;
 static string_store_t *ScansStore;
@@ -41,10 +41,9 @@ void cache_open(const char *RootPath) {
 	if (stat(CacheFileName, Stat)) {
 		mkdir(CacheFileName, 0777);
 		MetadataStore = string_store_create(concat(CacheFileName, "/metadata", NULL), 16, 0);
-		string_store_reserve(MetadataStore, METADATA_SIZE);
 		TargetsIndex = string_index_create(concat(CacheFileName, "/targets", NULL), 4096);
 		HashStore = string_store_create(concat(CacheFileName, "/hashes", NULL), SHA256_BLOCK_SIZE, 4096);
-		HashDetailsStore = string_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_hash_details_t), 1024);
+		HashDetailsStore = fixed_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_hash_details_t), 1024);
 		BuildHashStore = string_store_create(concat(CacheFileName, "/builds", NULL), SHA256_BLOCK_SIZE, 4096);
 		DependsStore = string_store_create(concat(CacheFileName, "/depends", NULL), 32, 4096);
 		ScansStore = string_store_create(concat(CacheFileName, "/scans", NULL), 128, 524288);
@@ -53,7 +52,7 @@ void cache_open(const char *RootPath) {
 		MetadataStore = string_store_open(concat(CacheFileName, "/metadata", NULL));
 		TargetsIndex = string_index_open(concat(CacheFileName, "/targets", NULL));
 		HashStore = string_store_open(concat(CacheFileName, "/hashes", NULL));
-		HashDetailsStore = string_store_open(concat(CacheFileName, "/details", NULL));
+		HashDetailsStore = fixed_store_open(concat(CacheFileName, "/details", NULL));
 		BuildHashStore = string_store_open(concat(CacheFileName, "/builds", NULL));
 		DependsStore = string_store_open(concat(CacheFileName, "/depends", NULL));
 		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL));
@@ -85,7 +84,7 @@ void cache_close() {
 	string_store_close(MetadataStore);
 	string_index_close(TargetsIndex);
 	string_store_close(HashStore);
-	string_store_close(HashDetailsStore);
+	fixed_store_close(HashDetailsStore);
 	string_store_close(BuildHashStore);
 	string_store_close(DependsStore);
 	string_store_close(ScansStore);
@@ -109,8 +108,7 @@ void cache_bump_iteration() {
 void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	if (string_store_get_size(HashStore, Target->CacheIndex)) {
 		string_store_get_value(HashStore, Target->CacheIndex, Hash);
-		cache_hash_details_t Details[1];
-		string_store_get_value(HashDetailsStore, Target->CacheIndex, Details);
+		cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
 		*LastUpdated = Details->LastUpdated;
 		*LastChecked = Details->LastChecked;
 		*FileTime = Details->FileTime;
@@ -123,8 +121,10 @@ void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t
 }
 
 void cache_hash_set(target_t *Target, time_t FileTime) {
-	cache_hash_details_t Details[1] = {{Target->LastUpdated, CurrentIteration, FileTime}};
-	string_store_set(HashDetailsStore, Target->CacheIndex, Details, sizeof(cache_hash_details_t));
+	cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
+	Details->LastUpdated = Target->LastUpdated;
+	Details->LastChecked = CurrentIteration;
+	Details->FileTime = FileTime;
 	string_store_set(HashStore, Target->CacheIndex, Target->Hash, SHA256_BLOCK_SIZE);
 }
 
@@ -141,8 +141,10 @@ void cache_build_hash_set(target_t *Target, unsigned char BuildHash[SHA256_BLOCK
 }
 
 void cache_last_check_set(target_t *Target, time_t FileTime) {
-	cache_hash_details_t Details[1] = {{Target->LastUpdated, CurrentIteration, FileTime}};
-	string_store_set(HashDetailsStore, Target->CacheIndex, Details, sizeof(cache_hash_details_t));
+	cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
+	Details->LastUpdated = Target->LastUpdated;
+	Details->LastChecked = CurrentIteration;
+	Details->FileTime = FileTime;
 }
 
 static targetset_t *cache_target_set_parse(char *Id) {
@@ -383,12 +385,5 @@ void cache_expr_set(target_t *Target, ml_value_t *Value) {
 }
 
 size_t cache_target_index(const char *Id) {
-	size_t Index = string_index_insert(TargetsIndex, Id);
-	string_store_reserve(HashStore, Index);
-	string_store_reserve(HashDetailsStore, Index);
-	string_store_reserve(BuildHashStore, Index);
-	string_store_reserve(DependsStore, Index);
-	string_store_reserve(ScansStore, Index);
-	string_store_reserve(ExprsStore, Index);
-	return Index;
+	return string_index_insert(TargetsIndex, Id);
 }
