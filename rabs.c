@@ -120,8 +120,17 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 			Node->Source = ml_scanner_source(Preprocessor->Scanner, (ml_source_t){FileName, 0});
 			++Node->Source.Line;
 			Node = Preprocessor->Nodes = NewNode;
+		} else if (Line[Actual - 1] != '\n') {
+			char *NewLine = GC_malloc_atomic(Actual + 1);
+			memcpy(NewLine, Line, Actual);
+			NewLine[Actual] = '\n';
+			NewLine[Actual + 1] = 0;
+			free(Line);
+			return NewLine;
 		} else {
-			const char *NewLine = GC_strdup(Line);
+			char *NewLine = GC_malloc_atomic(Actual);
+			memcpy(NewLine, Line, Actual);
+			NewLine[Actual] = 0;
 			free(Line);
 			return NewLine;
 		}
