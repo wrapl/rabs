@@ -662,6 +662,7 @@ void target_threads_kill() {
 
 void target_init() {
 	targetqueue_init();
+	targetset_ml_init();
 
 	TargetT = ml_type(MLAnyT, "target");
 	SHA256Method = ml_method("sha256");

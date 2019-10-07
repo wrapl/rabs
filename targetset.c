@@ -10,37 +10,23 @@ typedef struct targetset_iter_t {
 	target_t **Current, **End;
 } targetset_iter_t;
 
-static ml_value_t *targetset_iter_current(ml_value_t *Value) {
-	targetset_iter_t *Iter = (targetset_iter_t *)Value;
-	return (ml_value_t *)Iter->Current[0];
+static ml_spawn_t targetset_iter_value(ml_state_t *Caller, targetset_iter_t *Iter) {
+	ML_CONTINUE(Caller, Iter->Current[0]);
 }
 
-static ml_value_t *targetset_iter_next(ml_value_t *Value) {
-	targetset_iter_t *Iter = (targetset_iter_t *)Value;
+static ml_spawn_t targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter) {
 	for (target_t **Current = Iter->Current + 1; Current < Iter->End; ++Current) {
 		if (*Current) {
 			Iter->Current = Current;
-			return Value;
+			ML_CONTINUE(Caller, Iter);
 		}
 	}
-	return MLNil;
+	ML_CONTINUE(Caller, MLNil);
 }
 
-static ml_type_t TargetSetIterT[1] = {{
-	MLTypeT,
-	MLAnyT, "targetset",
-	ml_default_hash,
-	ml_default_call,
-	ml_default_deref,
-	ml_default_assign,
-	ml_default_iterate,
-	targetset_iter_current,
-	targetset_iter_next,
-	ml_default_key
-}};
+static ml_type_t *TargetSetIterT;
 
-static ml_value_t *targetset_iterate(ml_value_t *Value) {
-	targetset_t *Set = (targetset_t *)Value;
+static ml_spawn_t targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
 	target_t **End = Set->Targets + Set->Size;
 	for (target_t **T = Set->Targets; T < End; ++T) {
 		if (*T) {
@@ -48,24 +34,21 @@ static ml_value_t *targetset_iterate(ml_value_t *Value) {
 			Iter->Type = TargetSetIterT;
 			Iter->Current = T;
 			Iter->End = End;
-			return (ml_value_t *)Iter;
+			ML_CONTINUE(Caller, Iter);
 		}
 	}
-	return MLNil;
+	ML_CONTINUE(Caller, MLNil);
 }
 
-ml_type_t TargetSetT[1] = {{
-	MLTypeT,
-	MLAnyT, "targetset",
-	ml_default_hash,
-	ml_default_call,
-	ml_default_deref,
-	ml_default_assign,
-	targetset_iterate,
-	ml_default_current,
-	ml_default_next,
-	ml_default_key
-}};
+ml_type_t *TargetSetT;
+
+void targetset_ml_init() {
+	TargetSetT = ml_type(MLAnyT, "targetset");
+	TargetSetIterT = ml_type(MLAnyT, "targetset-iter");
+	ml_typed_fn_set(TargetSetT, ml_iterate, targetset_iterate);
+	ml_typed_fn_set(TargetSetIterT, ml_iter_next, targetset_iter_next);
+	ml_typed_fn_set(TargetSetIterT, ml_iter_value, targetset_iter_value);
+}
 
 targetset_t *targetset_new() {
 	targetset_t *Set = new(targetset_t);

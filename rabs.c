@@ -140,7 +140,7 @@ static ml_value_t *load_file(const char *FileName) {
 	if (setjmp(Preprocessor->Error->Handler)) return Preprocessor->Error->Message;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
-	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, Preprocessor->Error);
+	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, NULL, Preprocessor->Error);
 	if (Closure->Type == MLErrorT) return Closure;
 	return ml_call(Closure, 0, NULL);
 }
