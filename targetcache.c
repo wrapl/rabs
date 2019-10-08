@@ -1,5 +1,6 @@
 #include "targetcache.h"
 #include "target.h"
+#include "rabs.h"
 #include "minilang/stringmap.h"
 #include "minilang/ml_macros.h"
 #include <stdint.h>
