@@ -375,7 +375,7 @@ size_t cache_target_id_to_index(const char *Id) {
 }
 
 const char *cache_target_index_to_id(size_t Index) {
-	return string_index_get(TargetsIndex, Index);
+	return GC_strdup(string_index_get(TargetsIndex, Index));
 }
 
 size_t cache_target_count() {
