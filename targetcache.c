@@ -43,3 +43,47 @@ target_index_slot targetcache_lookup(const char *Id) {
 	}
 	return (target_index_slot){Cache + Index, Index};
 }
+
+
+target_t *target_find(const char *Id) {
+	target_index_slot R = targetcache_lookup(Id);
+	if (R.Slot[0]) return R.Slot[0];
+	Id = GC_strdup(Id);
+	if (!memcmp(Id, "file:", 5)) {
+		return target_file_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	if (!memcmp(Id, "symb:", 5)) {
+		return target_symb_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	if (!memcmp(Id, "expr:", 5)) {
+		return target_expr_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	if (!memcmp(Id, "scan:", 5)) {
+		return target_scan_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	if (!memcmp(Id, "meta:", 5)) {
+		return target_meta_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
+	return 0;
+}
+
+target_t *target_load(const char *Id, size_t Index, target_t **Slot) {
+	if (!memcmp(Id, "file:", 5)) {
+		return target_file_create(Id, CurrentContext, Index, Slot);
+	}
+	if (!memcmp(Id, "symb:", 5)) {
+		return target_symb_create(Id, CurrentContext, Index, Slot);
+	}
+	if (!memcmp(Id, "expr:", 5)) {
+		return target_expr_create(Id, CurrentContext, Index, Slot);
+	}
+	if (!memcmp(Id, "scan:", 5)) {
+		return target_scan_create(Id, CurrentContext, Index, Slot);
+	}
+	if (!memcmp(Id, "meta:", 5)) {
+		return target_meta_create(Id, CurrentContext, Index, Slot);
+	}
+	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
+	return 0;
+}
