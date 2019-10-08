@@ -190,15 +190,15 @@ int target_file_missing(target_file_t *Target) {
 
 target_t *target_file_check(const char *Path, int Absolute) {
 	char *Id;
-	size_t IdLength = asprintf(&Id, "file:%s", Path);
-	target_t **Slot = targetcache_lookup(Id, IdLength);
-	if (!Slot[0]) {
-		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Slot);
+	asprintf(&Id, "file:%s", Path);
+	target_index_slot R = targetcache_lookup(Id);
+	if (!R.Slot[0]) {
+		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, R.Index, R.Slot);
 		Target->Absolute = Absolute;
 		Target->Path = concat(Path, NULL);
 		Target->BuildContext = CurrentContext;
 	}
-	return Slot[0];
+	return R.Slot[0];
 }
 
 ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
@@ -221,8 +221,8 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
-target_t *target_file_create(const char *Id, context_t *BuildContext, target_t **Slot) {
-	target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Slot);
+target_t *target_file_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
+	target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Index, Slot);
 	Target->Absolute = Id[5] == '/';
 	Target->Path = Id + 5;
 	Target->BuildContext = CurrentContext;

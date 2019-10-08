@@ -61,17 +61,18 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	char *Id;
-	size_t IdLength = asprintf(&Id, "expr:%s::%s", CurrentContext->Path, Name);
-	target_t **Slot = targetcache_lookup(Id, IdLength);
-	if (!Slot[0]) {
-		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
-		Slot[0] = (target_t *)Target;
+	asprintf(&Id, "expr:%s::%s", CurrentContext->Path, Name);
+	target_index_slot R = targetcache_lookup(Id);
+	//target_t **Slot =
+	if (!R.Slot[0]) {
+		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, R.Index, R.Slot);
+		Target->Value = NULL;
 	}
-	return (ml_value_t *)Slot[0];
+	return (ml_value_t *)R.Slot[0];
 }
 
-target_t *target_expr_create(const char *Id, context_t *BuildContext, target_t **Slot) {
-	target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Slot);
+target_t *target_expr_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
+	target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Index, Slot);
 	Target->BuildContext = BuildContext;
 	return (target_t *)Target;
 }

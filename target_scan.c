@@ -37,19 +37,19 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	target_t *Source = (target_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	char *Id;
-	size_t IdLength = asprintf(&Id, "scan:%s::%s", Source->Id, Name);
-	target_t **Slot = targetcache_lookup(Id, IdLength);
-	if (!Slot[0]) {
-		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Slot);
+	asprintf(&Id, "scan:%s::%s", Source->Id, Name);
+	target_index_slot R = targetcache_lookup(Id);
+	if (!R.Slot[0]) {
+		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, R.Index, R.Slot);
 		Target->Source = Source;
 		Target->Name = Name;
 		targetset_insert(Target->Depends, Source);
 	}
-	return (ml_value_t *)Slot[0];
+	return (ml_value_t *)R.Slot[0];
 }
 
-target_t *target_scan_create(const char *Id, context_t *BuildContext, target_t **Slot) {
-	target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Slot);
+target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
+	target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Index, Slot);
 	const char *Name;
 	for (Name = Id + strlen(Id) - 1; --Name > Id + 5;) {
 		if (Name[0] == ':' && Name[1] == ':') break;
@@ -58,7 +58,7 @@ target_t *target_scan_create(const char *Id, context_t *BuildContext, target_t *
 	char *ParentId = snew(ParentIdLength + 1);
 	memcpy(ParentId, Id + 5, ParentIdLength);
 	ParentId[ParentIdLength] = 0;
-	Target->Source = target_find(ParentId, ParentIdLength);
+	Target->Source = target_find(ParentId);
 	Target->Name = Name + 2;
 	return (target_t *)Target;
 }

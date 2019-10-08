@@ -30,8 +30,8 @@ struct target_t {
 	TARGET_FIELDS
 };
 
-target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, target_t **Slot);
-#define target_new(type, Type, Id, Slot) ((type *)target_alloc(sizeof(type), Type, Id, Slot))
+target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, size_t Index, target_t **Slot);
+#define target_new(type, Type, Id, Index, Slot) ((type *)target_alloc(sizeof(type), Type, Id, Index, Slot))
 
 extern int StatusUpdates;
 extern int MonitorFiles;
@@ -57,7 +57,8 @@ void target_symb_update(const char *Name);
 
 void target_depends_add(target_t *Target, target_t *Depend);
 void target_depends_auto(target_t *Depend);
-target_t *target_find(const char *Id, size_t IdLength);
+target_t *target_find(const char *Id);
+target_t *target_load(const char *Id, size_t Index, target_t **Slot);
 void target_push(target_t *Target);
 target_t *target_file_check(const char *Path, int Absolute);
 void target_threads_start(int NumThreads);

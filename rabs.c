@@ -938,7 +938,7 @@ int main(int Argc, char **Argv) {
 
 	context_push("");
 
-	target_t *Iteration = target_find("meta:::ITERATION", strlen("meta:::ITERATION"));
+	target_t *Iteration = target_find("meta:::ITERATION");
 	Iteration->LastUpdated = CurrentIteration;
 	memset(Iteration->Hash, 0, SHA256_BLOCK_SIZE);
 	*(long *)Iteration->Hash = CurrentIteration;
@@ -962,7 +962,7 @@ int main(int Argc, char **Argv) {
 		if (!HasPrefix) {
 			TargetName = concat("meta:", match_prefix(Path, RootPath), "::", TargetName, NULL);
 		}
-		Target = target_find(TargetName, strlen(TargetName));
+		Target = target_find(TargetName);
 		if (!Target) {
 			printf("\e[31mError: invalid target %s\e[0m", TargetName);
 			exit(1);

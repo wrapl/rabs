@@ -25,7 +25,6 @@ int CurrentIteration = 0;
 enum {
 	CURRENT_VERSION_INDEX,
 	CURRENT_ITERATION_INDEX,
-	CACHE_SIZE_INDEX,
 	METADATA_SIZE
 };
 
@@ -48,6 +47,9 @@ void cache_open(const char *RootPath) {
 		DependsStore = string_store_create(concat(CacheFileName, "/depends", NULL), 32, 4096);
 		ScansStore = string_store_create(concat(CacheFileName, "/scans", NULL), 128, 524288);
 		ExprsStore = string_store_create(concat(CacheFileName, "/exprs", NULL), 16, 512);
+	} else if (!S_ISDIR(Stat->st_mode)) {
+		printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
+		exit(1);
 	} else {
 		MetadataStore = string_store_open(concat(CacheFileName, "/metadata", NULL));
 		TargetsIndex = string_index_open(concat(CacheFileName, "/targets", NULL));
@@ -72,15 +74,11 @@ void cache_open(const char *RootPath) {
 		const char Temp[] = CURRENT_VERSION;
 		string_store_set(MetadataStore, CURRENT_VERSION_INDEX, Temp, sizeof(Temp));
 	}
-	uint32_t CacheSize = 1024;
-	string_store_get_value(MetadataStore, CACHE_SIZE_INDEX, &CacheSize);
-	targetcache_init(CacheSize);
+	targetcache_init();
 	atexit(cache_close);
 }
 
 void cache_close() {
-	uint32_t CacheSize = targetcache_size();
-	string_store_set(MetadataStore, CACHE_SIZE_INDEX, &CacheSize, sizeof(uint32_t));
 	string_store_close(MetadataStore);
 	string_index_close(TargetsIndex);
 	string_store_close(HashStore);
@@ -147,38 +145,30 @@ void cache_last_check_set(target_t *Target, time_t FileTime) {
 	Details->FileTime = FileTime;
 }
 
-static targetset_t *cache_target_set_parse(char *Id) {
+static targetset_t *cache_target_set_parse(uint32_t *Indices) {
 	targetset_t *Set = targetset_new();
-	if (!Id) return Set;
-	int Size = strtol(Id, &Id, 10);
+	if (!Indices) return Set;
+	int Size = Indices[0];
 	targetset_init(Set, Size);
-	++Id;
-	while (*Id > '\n') {
-		char *End = Id + 1;
-		while (*End > '\n') ++End;
-		*End = 0;
-		targetset_insert(Set, target_find(Id, End - Id));
-		Id = End + 1;
+	while (--Size >= 0) {
+		size_t Index = *++Indices;
+		target_id_slot R = targetcache_index(Index);
+		target_t *Target = R.Slot[0] ?: target_load(R.Id, Index, R.Slot);
+		targetset_insert(Set, Target);
 	}
 	return Set;
 }
 
-static int cache_target_set_size(target_t *Target, int *Size) {
-	*Size += Target->IdLength + 1;
-	return 0;
-}
-
-static int cache_target_set_append(target_t *Target, char **Buffer) {
-	char *Result = stpcpy(*Buffer, Target->Id);
-	Result[0] = '\n';
-	*Buffer = Result + 1;
+static int cache_target_set_index(target_t *Target, uint32_t **IndexP) {
+	**IndexP = Target->CacheIndex;
+	++*IndexP;
 	return 0;
 }
 
 targetset_t *cache_depends_get(target_t *Target) {
 	size_t Length = string_store_get_size(DependsStore, Target->CacheIndex);
 	if (Length) {
-		char *Buffer = GC_malloc_atomic(Length);
+		uint32_t *Buffer = GC_malloc_atomic(Length);
 		string_store_get_value(DependsStore, Target->CacheIndex, Buffer);
 		return cache_target_set_parse(Buffer);
 	} else {
@@ -187,20 +177,18 @@ targetset_t *cache_depends_get(target_t *Target) {
 }
 
 void cache_depends_set(target_t *Target, targetset_t *Depends) {
-	char LengthBuffer[16];
-	int Size = sprintf(LengthBuffer, "%d\n", Depends->Size - Depends->Space) + 1;
-	targetset_foreach(Depends, &Size, (void *)cache_target_set_size);
-	char *Buffer = snew(Size);
-	char *Next = stpcpy(Buffer, LengthBuffer);
-	targetset_foreach(Depends, &Next, (void *)cache_target_set_append);
-	*Next = '\n';
-	string_store_set(DependsStore, Target->CacheIndex, Buffer, Size);
+	int Size = Depends->Size - Depends->Space;
+	uint32_t *Indices = anew(uint32_t, Size + 1);
+	Indices[0] = Size;
+	uint32_t *IndexP = Indices + 1;
+	targetset_foreach(Depends, &IndexP, (void *)cache_target_set_index);
+	string_store_set(DependsStore, Target->CacheIndex, Indices, (Size + 1) * sizeof(uint32_t));
 }
 
 targetset_t *cache_scan_get(target_t *Target) {
 	size_t Length = string_store_get_size(ScansStore, Target->CacheIndex);
 	if (Length) {
-		char *Buffer = GC_malloc_atomic(Length);
+		uint32_t *Buffer = GC_malloc_atomic(Length);
 		string_store_get_value(ScansStore, Target->CacheIndex, Buffer);
 		return cache_target_set_parse(Buffer);
 	} else {
@@ -209,14 +197,12 @@ targetset_t *cache_scan_get(target_t *Target) {
 }
 
 void cache_scan_set(target_t *Target, targetset_t *Scans) {
-	char LengthBuffer[16];
-	int Size = sprintf(LengthBuffer, "%d\n", Scans->Size - Scans->Space) + 1;
-	targetset_foreach(Scans, &Size, (void *)cache_target_set_size);
-	char *Buffer = snew(Size);
-	char *Next = stpcpy(Buffer, LengthBuffer);
-	targetset_foreach(Scans, &Next, (void *)cache_target_set_append);
-	*Next = '\n';
-	string_store_set(ScansStore, Target->CacheIndex, Buffer, Size);
+	int Size = Scans->Size - Scans->Space;
+	uint32_t *Indices = anew(uint32_t, Size + 1);
+	Indices[0] = Size;
+	uint32_t *IndexP = Indices + 1;
+	targetset_foreach(Scans, &IndexP, (void *)cache_target_set_index);
+	string_store_set(ScansStore, Target->CacheIndex, Indices, (Size + 1) * sizeof(uint32_t));
 }
 
 static int cache_expr_value_size(ml_value_t *Value);
@@ -359,7 +345,7 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 	case CACHE_EXPR_TARGET: {
 		int Length = *(int32_t *)Buffer;
 		Buffer += 4;
-		*Output = (ml_value_t *)target_find(Buffer, Length);
+		*Output = (ml_value_t *)target_find(Buffer);
 		return Buffer + Length + 1;
 	}
 	}
@@ -384,6 +370,14 @@ void cache_expr_set(target_t *Target, ml_value_t *Value) {
 	string_store_set(ExprsStore, Target->CacheIndex, Buffer, Length);
 }
 
-size_t cache_target_index(const char *Id) {
+size_t cache_target_id_to_index(const char *Id) {
 	return string_index_insert(TargetsIndex, Id);
+}
+
+const char *cache_target_index_to_id(size_t Index) {
+	return string_index_get(TargetsIndex, Index);
+}
+
+size_t cache_target_count() {
+	return string_index_count(TargetsIndex);
 }

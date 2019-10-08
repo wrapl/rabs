@@ -34,14 +34,14 @@ time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned cha
 
 target_t *target_symb_new(const char *Name) {
 	char *Id;
-	size_t IdLength = asprintf(&Id, "symb:%s/%s", CurrentContext->Name, Name);
-	target_t **Slot = targetcache_lookup(Id, IdLength);
-	if (!Slot[0]) {
-		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, Slot);
+	asprintf(&Id, "symb:%s/%s", CurrentContext->Name, Name);
+	target_index_slot R = targetcache_lookup(Id);
+	if (!R.Slot[0]) {
+		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, R.Index, R.Slot);
 		Target->Context = CurrentContext;
 		Target->Name = Name;
 	}
-	return Slot[0];
+	return R.Slot[0];
 }
 
 void target_symb_update(const char *Name) {
@@ -60,8 +60,8 @@ void target_symb_update(const char *Name) {
 	}
 }
 
-target_t *target_symb_create(const char *Id, context_t *BuildContext, target_t **Slot) {
-	target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, Slot);
+target_t *target_symb_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
+	target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, Index, Slot);
 	const char *Name;
 	for (Name = Id + strlen(Id); --Name > Id + 5;) {
 		if (*Name == '/') break;

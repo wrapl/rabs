@@ -28,17 +28,17 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
 	char *Id;
-	size_t IdLength = asprintf(&Id, "meta:%s::%s", CurrentContext->Path, Name);
-	target_t **Slot = targetcache_lookup(Id, IdLength);
-	if (!Slot[0]) {
-		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, Slot);
+	asprintf(&Id, "meta:%s::%s", CurrentContext->Path, Name);
+	target_index_slot R = targetcache_lookup(Id);
+	if (!R.Slot[0]) {
+		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, R.Index, R.Slot);
 		Target->Name = Name;
 	}
-	return (ml_value_t *)Slot[0];
+	return (ml_value_t *)R.Slot[0];
 }
 
-target_t *target_meta_create(const char *Id, context_t *BuildContext, target_t **Slot) {
-	target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, Slot);
+target_t *target_meta_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
+	target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, Index, Slot);
 	const char *Name;
 	for (Name = Id + strlen(Id) - 1; --Name > Id + 8;) {
 		if (Name[0] == ':' && Name[1] == ':') break;
