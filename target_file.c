@@ -198,6 +198,7 @@ target_t *target_file_check(const char *Path, int Absolute) {
 		Target->Path = concat(Path, NULL);
 		Target->BuildContext = CurrentContext;
 	}
+	//if (R.Slot[0]->Type->Type != MLTypeT) asm("int3");
 	return R.Slot[0];
 }
 

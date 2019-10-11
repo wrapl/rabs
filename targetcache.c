@@ -20,7 +20,8 @@ void targetcache_init() {
 target_id_slot targetcache_index(size_t Index) {
 	if (Index >= CacheSize) {
 		printf("Growing target cache...\n");
-		size_t NewCacheSize = CacheSize * 2;
+		size_t NewCacheSize = CacheSize;
+		do NewCacheSize *= 2; while (Index >= NewCacheSize);
 		target_t **NewCache = anew(target_t *, NewCacheSize);
 		memcpy(NewCache, Cache, CacheSize * sizeof(target_t *));
 		memset(NewCache + CacheSize, 0, CacheSize * sizeof(target_t *));
@@ -37,6 +38,7 @@ target_index_slot targetcache_lookup(const char *Id) {
 	if (Index >= CacheSize) {
 		printf("Growing target cache...\n");
 		size_t NewCacheSize = CacheSize * 2;
+		do NewCacheSize *= 2; while (Index >= NewCacheSize);
 		target_t **NewCache = anew(target_t *, NewCacheSize);
 		memcpy(NewCache, Cache, CacheSize * sizeof(target_t *));
 		memset(NewCache + CacheSize, 0, CacheSize * sizeof(target_t *));
