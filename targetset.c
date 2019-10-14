@@ -10,11 +10,11 @@ typedef struct targetset_iter_t {
 	target_t **Current, **End;
 } targetset_iter_t;
 
-static ml_spawn_t targetset_iter_value(ml_state_t *Caller, targetset_iter_t *Iter) {
+static ml_value_t *targetset_iter_value(ml_state_t *Caller, targetset_iter_t *Iter) {
 	ML_CONTINUE(Caller, Iter->Current[0]);
 }
 
-static ml_spawn_t targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter) {
+static ml_value_t *targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter) {
 	for (target_t **Current = Iter->Current + 1; Current < Iter->End; ++Current) {
 		if (*Current) {
 			Iter->Current = Current;
@@ -26,7 +26,7 @@ static ml_spawn_t targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter
 
 static ml_type_t *TargetSetIterT;
 
-static ml_spawn_t targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
+static ml_value_t *targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
 	target_t **End = Set->Targets + Set->Size;
 	for (target_t **T = Set->Targets; T < End; ++T) {
 		if (*T) {

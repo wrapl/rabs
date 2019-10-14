@@ -41,6 +41,10 @@ CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -Wall \
 	-I. -Iminilang -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
 LDFLAGS += minilang/libminilang.a radb/libradb.a -lm
 
+ifeq ($(MACHINE), i686)
+	CFLAGS += "-fno-pic"
+endif
+
 ifeq ($(PLATFORM), Linux)
 	LDFLAGS += -Wl,--export-dynamic -ldl -lgc -lsqlite3
 	objects += targetwatch.o
