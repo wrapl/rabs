@@ -42,7 +42,8 @@ CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -Wall \
 LDFLAGS += minilang/libminilang.a radb/libradb.a -lm
 
 ifeq ($(MACHINE), i686)
-	CFLAGS += "-fno-pic"
+	#CFLAGS += "-fno-pic"
+	#LDFLAGS += "-fno-pic"
 endif
 
 ifeq ($(PLATFORM), Linux)
