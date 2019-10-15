@@ -39,15 +39,15 @@ objects = \
 
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -Wall \
 	-I. -Iminilang -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
-LDFLAGS += minilang/libminilang.a radb/libradb.a -lm
+LDFLAGS += minilang/libminilang.a radb/libradb.a -lm -pthread
 
 ifeq ($(MACHINE), i686)
-	#CFLAGS += "-fno-pic"
-	#LDFLAGS += "-fno-pic"
+	CFLAGS += -fno-pic
+	LDFLAGS += -fno-pic
 endif
 
 ifeq ($(PLATFORM), Linux)
-	LDFLAGS += -Wl,--export-dynamic -ldl -lgc -lsqlite3
+	LDFLAGS += -Wl,--dynamic-list=exports.lst -ldl -lgc -lsqlite3
 	objects += targetwatch.o
 endif
 
@@ -70,7 +70,7 @@ ifdef DEBUG
 	CFLAGS += -g
 	LDFLAGS += -g
 else
-	CFLAGS += -O3 -g
+	CFLAGS += -O2 -g
 endif
 
 ifdef DEBUG

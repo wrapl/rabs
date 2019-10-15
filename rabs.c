@@ -766,6 +766,7 @@ static void restart() {
 }
 
 int main(int Argc, char **Argv) {
+	CurrentDirectory = "<random>";
 	SavedArgc = Argc;
 	SavedArgv = Argv;
 	GC_INIT();
