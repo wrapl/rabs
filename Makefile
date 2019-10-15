@@ -74,10 +74,10 @@ else
 endif
 
 ifdef DEBUG
-$(RABS): Makefile $(objects) *.h minilang/libminilang.a radb/libradb.a
+$(RABS): Makefile $(objects) *.h minilang/libminilang.a radb/libradb.a exports.lst
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 else
-$(RABS): Makefile $(objects) *.h minilang/libminilang.a radb/libradb.a
+$(RABS): Makefile $(objects) *.h minilang/libminilang.a radb/libradb.a exports.lst
 	mkdir -p bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 	#strip $@

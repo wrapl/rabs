@@ -538,23 +538,35 @@ ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-static int rmdir_p(char *Buffer, char *End) {
-	if (!Buffer[0]) return -1;
+typedef struct rmdir_t {
+	char *Path;
+	size_t Size;
+} rmdir_t;
+
+static int rmdir_p(rmdir_t *Info, size_t End) {
 	struct stat Stat[1];
 #ifdef __MINGW32__
 	if (stat(Buffer, Stat)) return 0;
 #else
-	if (lstat(Buffer, Stat)) return 0;
+	if (lstat(Info->Path, Stat)) return 0;
 #endif
 	if (S_ISDIR(Stat->st_mode)) {
-		DIR *Dir = opendir(Buffer);
+		DIR *Dir = opendir(Info->Path);
 		if (!Dir) return 1;
-		End[0] = '/';
+		Info->Path[End] = '/';
 		struct dirent *Entry = readdir(Dir);
 		while (Entry) {
 			if (strcmp(Entry->d_name, ".") && strcmp(Entry->d_name, "..")) {
-				char *End2 = stpcpy(End + 1, Entry->d_name);
-				if (rmdir_p(Buffer, End2)) {
+				size_t End2 = End + 1 + strlen(Entry->d_name);
+				if (End2 >= Info->Size) {
+					size_t Size = ((End2 + 64) / 64) * 64;
+					char *Path = snew(Size);
+					memcpy(Path, Info->Path, End + 1);
+					Info->Path = Path;
+					Info->Size = Size;
+				}
+				strcpy(Info->Path + End + 1, Entry->d_name);
+				if (rmdir_p(Info, End2)) {
 					closedir(Dir);
 					return 1;
 				}
@@ -562,10 +574,10 @@ static int rmdir_p(char *Buffer, char *End) {
 			Entry = readdir(Dir);
 		}
 		closedir(Dir);
-		End[0] = 0;
-		if (rmdir(Buffer)) return 1;
+		Info->Path[End] = 0;
+		if (rmdir(Info->Path)) return 1;
 	} else {
-		if (unlink(Buffer)) return 1;
+		if (unlink(Info->Path)) return 1;
 	}
 	return 0;
 }
@@ -578,9 +590,13 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 	} else {
 		Path = concat(RootPath, "/", Target->Path, NULL);
 	}
-	char *Buffer = snew(PATH_MAX);
-	char *End = stpcpy(Buffer, Path);
-	if (rmdir_p(Buffer, End) < 0) {
+	size_t End = strlen(Path);
+	if (!End) return Args[0];
+	size_t Size = ((End + 64) / 64) * 64;
+	char *Buffer = snew(Size);
+	strcpy(Buffer, Path);
+	rmdir_t Info = {Buffer, Size};
+	if (rmdir_p(&Info, End) < 0) {
 		return ml_error("FileError", "error removing file / directory %s", Buffer);
 	}
 	return Args[0];
