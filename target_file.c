@@ -11,8 +11,11 @@
 #include "rabs.h"
 #include "util.h"
 #include "targetcache.h"
-#include "targetwatch.h"
 #include "minilang/ml_file.h"
+
+#ifdef Linux
+#include "targetwatch.h"
+#endif
 
 extern ml_value_t *AppendMethod;
 extern ml_value_t *ArgifyMethod;
@@ -171,9 +174,6 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 		sha256_final(Ctx, Target->Hash);
 	}
 	pthread_mutex_lock(InterpreterLock);
-	/*if (MonitorFiles && !Target->Build) {
-		targetwatch_add(FileName, (target_t *)Target);
-	}*/
 	return Stat->st_mtime;
 }
 
@@ -230,7 +230,9 @@ target_t *target_file_create(const char *Id, context_t *BuildContext, size_t Ind
 }
 
 void target_file_watch(target_file_t *Target) {
+#ifdef Linux
 	if (!Target->Absolute) targetwatch_add(vfs_resolve(Target->Path));
+#endif
 }
 
 ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
