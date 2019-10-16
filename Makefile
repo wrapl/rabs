@@ -70,7 +70,7 @@ ifdef DEBUG
 	CFLAGS += -g
 	LDFLAGS += -g
 else
-	CFLAGS += -O2 -g
+	CFLAGS += -O3 -g
 endif
 
 ifdef DEBUG
