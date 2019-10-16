@@ -1,3 +1,6 @@
 [submodule "minilang"]
 	path = minilang
 	url = https://github.com/wrapl/minilang.git
+[submodule "radb"]
+	path = radb
+	url = https://github.com/rajamukherji/radb.git

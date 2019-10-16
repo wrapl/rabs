@@ -4,7 +4,7 @@
 #include "cache.h"
 #include "target.h"
 #include "stringmap.h"
-#include <gc.h>
+#include <gc/gc.h>
 #include <unistd.h>
 
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};

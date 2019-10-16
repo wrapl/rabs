@@ -25,10 +25,11 @@ struct build_thread_t {
 extern const char *RootPath, *SystemName;
 extern __thread const char *CurrentDirectory;
 extern __thread build_thread_t *CurrentThread;
+extern __thread target_t *CurrentTarget;
 
 ml_value_t *rabs_global(const char *Name);
 
-#define CURRENT_VERSION "2.2.2"
-#define WORKING_VERSION "2.2.0"
+#define CURRENT_VERSION "2.4.1"
+#define WORKING_VERSION "2.4.0"
 
 #endif

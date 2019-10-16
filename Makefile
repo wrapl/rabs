@@ -14,13 +14,21 @@ all: $(RABS)
 minilang/libminilang.a: minilang/Makefile minilang/*.c minilang/*.h
 	$(MAKE) -C minilang PLATFORM=$(PLATFORM) libminilang.a
 
+radb/libradb.a: radb/Makefile radb/*.c radb/*.h
+	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a
+
 *.o: *.h minilang/*.h
 
 objects = \
-	cache.o \
+	cache_radb.o \
 	context.o \
 	rabs.o \
 	target.o \
+	target_expr.o \
+	target_file.o \
+	target_meta.o \
+	target_scan.o \
+	target_symb.o \
 	targetcache.o \
 	targetqueue.o \
 	targetset.o \
@@ -29,12 +37,17 @@ objects = \
 	library.o \
 	whereami.o
 
-CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing \
-	-I. -Iminilang -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
-LDFLAGS += minilang/libminilang.a -lm
+CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -Wall \
+	-I. -Iminilang -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
+LDFLAGS += minilang/libminilang.a radb/libradb.a -lm -pthread
+
+ifeq ($(MACHINE), i686)
+	CFLAGS += -fno-pic
+	LDFLAGS += -fno-pic
+endif
 
 ifeq ($(PLATFORM), Linux)
-	LDFLAGS += -Wl,--export-dynamic -ldl -lgc -lsqlite3
+	LDFLAGS += -Wl,--dynamic-list=exports.lst -ldl -lgc -lsqlite3
 	objects += targetwatch.o
 endif
 
@@ -57,22 +70,23 @@ ifdef DEBUG
 	CFLAGS += -g
 	LDFLAGS += -g
 else
-	CFLAGS += -O3 -g
+	CFLAGS += -O2 -g
 endif
 
 ifdef DEBUG
-$(RABS): Makefile $(objects) *.h minilang/libminilang.a
+$(RABS): Makefile $(objects) *.h minilang/libminilang.a radb/libradb.a exports.lst
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 else
-$(RABS): Makefile $(objects) *.h minilang/libminilang.a
+$(RABS): Makefile $(objects) *.h minilang/libminilang.a radb/libradb.a exports.lst
 	mkdir -p bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
-	strip $@
+	#strip $@
 endif
 	
 
 clean:
 	$(MAKE) -C minilang clean
+	$(MAKE) -C radb clean
 	rm -f $(RABS)
 	rm -f *.o
 

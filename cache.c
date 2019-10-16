@@ -5,8 +5,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <gc.h>
+#include <gc/gc.h>
 #include <sys/stat.h>
+#include <targetcache.h>
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 
@@ -32,6 +33,11 @@ static int version_callback(char *Result, int NumCols, char **Values, char **Nam
 }
 
 static int iteration_callback(int *Result, int NumCols, char **Values, char **Names) {
+	*Result = atoi(Values[0] ?: "0");
+	return 0;
+}
+
+static int cachesize_callback(int *Result, int NumCols, char **Values, char ** Names) {
 	*Result = atoi(Values[0] ?: "0");
 	return 0;
 }
@@ -72,7 +78,7 @@ void cache_open(const char *RootPath) {
 			printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 			exit(1);
 		}
-		if (!PreviousVersion || strcmp(PreviousVersion, WORKING_VERSION) < 0) {
+		if (strcmp(PreviousVersion, WORKING_VERSION) < 0) {
 			printf("Version error: database was built with version %s but this version of Rabs will only work with version %s or higher. Delete %s to force a clean build.\n", PreviousVersion, WORKING_VERSION, CacheFileName);
 			exit(1);
 		}
@@ -147,10 +153,22 @@ void cache_open(const char *RootPath) {
 		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
 		exit(1);
 	}
+	int CacheSize = 1024;
+	if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'version\'", (void *)cachesize_callback, &CacheSize, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
+	targetcache_init(CacheSize);
 	atexit(cache_close);
 }
 
 void cache_close() {
+	char Buffer[100];
+	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('cachesize', '%d')", targetcache_size());
+	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
+		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+		exit(1);
+	}
 	sqlite3_finalize(HashGetStatement);
 	sqlite3_finalize(HashSetStatement);
 	sqlite3_finalize(HashBuildGetStatement);
@@ -264,8 +282,7 @@ static targetset_t *cache_target_set_parse(char *Id) {
 		char *End = Id + 1;
 		while (*End > '\n') ++End;
 		*End = 0;
-		target_t *Target = target_find(Id);
-		targetset_insert(Set, Target);
+		targetset_insert(Set, target_find(Id, End - Id));
 		Id = End + 1;
 	}
 	return Set;
@@ -285,10 +302,9 @@ static int cache_target_set_append(target_t *Target, char **Buffer) {
 
 targetset_t *cache_depends_get(target_t *Target) {
 	sqlite3_bind_text(DependsGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	int Total = 0;
 	char *Depends = 0;
 	if (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
-		const char *Text = sqlite3_column_text(DependsGetStatement, 0);
+		const char *Text = (const char *)sqlite3_column_text(DependsGetStatement, 0);
 		int Length = sqlite3_column_bytes(DependsGetStatement, 0);
 		Depends = GC_malloc_atomic(Length);
 		memcpy(Depends, Text, Length);
@@ -315,10 +331,9 @@ void cache_depends_set(target_t *Target, targetset_t *Depends) {
 
 targetset_t *cache_scan_get(target_t *Target) {
 	sqlite3_bind_text(ScanGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	int Total = 0;
 	char *Scans = 0;
 	if (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
-		const char *Text = sqlite3_column_text(ScanGetStatement, 0);
+		const char *Text = (const char *)sqlite3_column_text(ScanGetStatement, 0);
 		int Length = sqlite3_column_bytes(ScanGetStatement, 0);
 		Scans = GC_malloc_atomic(Length);
 		memcpy(Scans, Text, Length);
@@ -483,7 +498,7 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 	case CACHE_EXPR_TARGET: {
 		int Length = *(int32_t *)Buffer;
 		Buffer += 4;
-		*Output = (ml_value_t *)target_find(Buffer);
+		*Output = (ml_value_t *)target_find(Buffer, Length);
 		return Buffer + Length + 1;
 	}
 	}
@@ -513,8 +528,7 @@ ml_value_t *cache_expr_get(target_t *Target) {
 			Result = MLNil;
 			break;
 		case SQLITE_BLOB: {
-			int Length = sqlite3_column_bytes(ExprGetStatement, 0);
-			const char *Buffer = sqlite3_column_blob(ExprGetStatement, 0);
+			const char *Buffer = (const char *)sqlite3_column_blob(ExprGetStatement, 0);
 			cache_expr_value_read(Buffer, &Result);
 			break;
 		}

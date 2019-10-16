@@ -120,8 +120,17 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 			Node->Source = ml_scanner_source(Preprocessor->Scanner, (ml_source_t){FileName, 0});
 			++Node->Source.Line;
 			Node = Preprocessor->Nodes = NewNode;
+		} else if (Line[Actual - 1] != '\n') {
+			char *NewLine = GC_malloc_atomic(Actual + 1);
+			memcpy(NewLine, Line, Actual);
+			NewLine[Actual] = '\n';
+			NewLine[Actual + 1] = 0;
+			free(Line);
+			return NewLine;
 		} else {
-			const char *NewLine = GC_strdup(Line);
+			char *NewLine = GC_malloc_atomic(Actual);
+			memcpy(NewLine, Line, Actual);
+			NewLine[Actual] = 0;
 			free(Line);
 			return NewLine;
 		}
@@ -135,12 +144,12 @@ static ml_value_t *load_file(const char *FileName) {
 #endif
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
-	preprocessor_t Preprocessor[1] = {Node, NULL,};
+	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Error);
 	if (setjmp(Preprocessor->Error->Handler)) return Preprocessor->Error->Message;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
-	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, Preprocessor->Error);
+	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, NULL, Preprocessor->Error);
 	if (Closure->Type == MLErrorT) return Closure;
 	return ml_call(Closure, 0, NULL);
 }
@@ -355,7 +364,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 		if (chdir(WorkingDirectory)) exit(-1);
 		close(Pipe[0]);
 		dup2(Pipe[1], STDOUT_FILENO);
-		execl("/bin/sh", "sh", "-c", Command, 0);
+		execl("/bin/sh", "sh", "-c", Command, NULL);
 		exit(-1);
 	}
 	close(Pipe[1]);
@@ -757,6 +766,7 @@ static void restart() {
 }
 
 int main(int Argc, char **Argv) {
+	CurrentDirectory = "<random>";
 	SavedArgc = Argc;
 	SavedArgv = Argv;
 	GC_INIT();
@@ -770,6 +780,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
 	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
 	stringmap_insert(Globals, "expr", ml_function(0, target_expr_new));
+	// TODO: add functions to register and create udf targets
 	stringmap_insert(Globals, "symbol", ml_function(0, symbol));
 	stringmap_insert(Globals, "include", ml_function(0, include));
 	stringmap_insert(Globals, "context", ml_function(0, context));
@@ -952,7 +963,7 @@ int main(int Argc, char **Argv) {
 		if (!HasPrefix) {
 			TargetName = concat("meta:", match_prefix(Path, RootPath), "::", TargetName, NULL);
 		}
-		Target = target_get(TargetName);
+		Target = target_find(TargetName);
 		if (!Target) {
 			printf("\e[31mError: invalid target %s\e[0m", TargetName);
 			exit(1);

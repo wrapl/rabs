@@ -6,133 +6,40 @@
 #include <string.h>
 #include <stdio.h>
 #include <gc/gc.h>
+#include <cache.h>
 
-#define INITIAL_SIZE 1024
-
-typedef struct {
-	target_t *Target;
-	unsigned long Hash;
-} node_t;
-
-static size_t SizeA, SpaceA;
-static node_t *NodesA;
+static target_t **Cache;
+static size_t CacheSize = 1;
 
 void targetcache_init() {
-	SizeA = INITIAL_SIZE;
-	SpaceA = INITIAL_SIZE;
-	NodesA = anew(node_t, SizeA);
+	size_t InitialSize = cache_target_count();
+	while (CacheSize < InitialSize) CacheSize *= 2;
+	Cache = anew(target_t *, CacheSize);
 }
 
-static void sort_nodes(node_t *First, node_t *Last) {
-	node_t *A = First;
-	node_t *B = Last;
-	node_t T = *A;
-	node_t P = *B;
-	while (!P.Target) {
-		--B;
-		--Last;
-		if (A == B) return;
-		P = *B;
+target_id_slot targetcache_index(size_t Index) {
+	if (Index >= CacheSize) {
+		size_t NewCacheSize = CacheSize;
+		do NewCacheSize *= 2; while (Index >= NewCacheSize);
+		target_t **NewCache = anew(target_t *, NewCacheSize);
+		memcpy(NewCache, Cache, CacheSize * sizeof(target_t *));
+		CacheSize = NewCacheSize;
+		Cache = NewCache;
 	}
-	while (A != B) {
-		int Cmp;
-		if (T.Target) {
-			if (T.Hash < P.Hash) {
-				Cmp = -1;
-			} else if (T.Hash > P.Hash) {
-				Cmp = 1;
-			} else {
-				Cmp = strcmp(T.Target->Id, P.Target->Id);
-			}
-		} else {
-			Cmp = -1;
-		}
-		if (Cmp > 0) {
-			*A = T;
-			T = *++A;
-		} else {
-			*B = T;
-			T = *--B;
-		}
-	}
-	*A = P;
-	if (First < A - 1) sort_nodes(First, A - 1);
-	if (A + 1 < Last) sort_nodes(A + 1, Last);
+	target_t *Target = Cache[Index];
+	const char *Id = Target ? Target->Id : cache_target_index_to_id(Index);
+	return (target_id_slot){Cache + Index, Id};
 }
 
-target_t **targetcache_lookup(const char *Id) {
-	unsigned long Hash = stringmap_hash(Id);
-	unsigned int Mask = SizeA - 1;
-	for (;;) {
-		unsigned int Incr = ((Hash >> 8) | 1) & Mask;
-		unsigned int Index = Hash & Mask;
-		node_t *Nodes = NodesA;
-		for (;;) {
-			if (!Nodes[Index].Target) break;
-			if (Nodes[Index].Hash < Hash) break;
-			if (Nodes[Index].Hash == Hash) {
-				int Cmp = strcmp(Nodes[Index].Target->Id, Id);
-				if (Cmp == 0) return &Nodes[Index].Target;
-				if (Cmp < 0) break;
-			}
-			Index += Incr;
-			Index &= Mask;
-		}
-		if (SpaceA > (SizeA >> 3)) {
-			--SpaceA;
-			unsigned int Result = Index;
-			target_t *OldTarget = Nodes[Index].Target;
-			Nodes[Index].Target = 0;
-			Nodes[Index].Hash = Hash;
-			while (OldTarget) {
-				target_t *Target = OldTarget;
-				Id = Target->Id;
-				Hash = Target->IdHash;
-				Incr = ((Hash >> 8) | 1) & Mask;
-				for (;;) {
-					Index += Incr;
-					Index &= Mask;
-					if (Index == Result) {
-					} else if (!Nodes[Index].Target) {
-						Nodes[Index].Target = Target;
-						Nodes[Index].Hash = Hash;
-						return &Nodes[Result].Target;
-					} else if (Nodes[Index].Hash < Hash) {
-						OldTarget = Nodes[Index].Target;
-						Nodes[Index].Target = Target;
-						Nodes[Index].Hash = Hash;
-						break;
-					} else if (Nodes[Index].Hash == Hash) {
-						int Cmp = strcmp(Nodes[Index].Target->Id, Id);
-						if (Cmp < 0) {
-							OldTarget = Nodes[Index].Target;
-							Nodes[Index].Target = Target;
-							break;
-						}
-					}
-				}
-			}
-			return &Nodes[Result].Target;
-		}
-		size_t NewSize = SizeA * 2;
-		Mask = NewSize - 1;
-		node_t *NewNodes = anew(node_t, NewSize);
-		sort_nodes(Nodes, Nodes + SizeA - 1);
-		for (node_t *Old = Nodes; Old->Target; ++Old) {
-			target_t *Target = Old->Target;
-			unsigned long NewHash = Target->IdHash;
-			unsigned int NewIncr = ((NewHash >> 8) | 1) & Mask;
-			unsigned int NewIndex = NewHash & Mask;
-			while (NewNodes[NewIndex].Target) {
-				NewIndex += NewIncr;
-				NewIndex &= Mask;
-			}
-			NewNodes[NewIndex].Target = Target;
-			NewNodes[NewIndex].Hash = NewHash;
-		}
-		NodesA = NewNodes;
-		SpaceA += SizeA;
-		SizeA = NewSize;
+target_index_slot targetcache_lookup(const char *Id) {
+	size_t Index = cache_target_id_to_index(Id);
+	if (Index >= CacheSize) {
+		size_t NewCacheSize = CacheSize * 2;
+		do NewCacheSize *= 2; while (Index >= NewCacheSize);
+		target_t **NewCache = anew(target_t *, NewCacheSize);
+		memcpy(NewCache, Cache, CacheSize * sizeof(target_t *));
+		CacheSize = NewCacheSize;
+		Cache = NewCache;
 	}
-	return 0;
+	return (target_index_slot){Cache + Index, Index};
 }

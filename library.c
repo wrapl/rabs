@@ -4,7 +4,7 @@
 #else
 #include <dlfcn.h>
 #endif
-#include <gc.h>
+#include <gc/gc.h>
 
 static ml_type_t *LibraryT;
 
@@ -36,13 +36,12 @@ ml_value_t *library_load(const char *Path, stringmap_t *Globals) {
 #endif
 }
 
-static ml_value_t *library_get(library_t *Library, int Count, ml_value_t **Args) {
-	ML_CHECK_ARG_COUNT(1);
-	ML_CHECK_ARG_TYPE(0, MLStringT);
+static ml_value_t *library_get(ml_state_t *Caller, library_t *Library, int Count, ml_value_t **Args) {
+	ML_CHECKX_ARG_COUNT(1);
+	ML_CHECKX_ARG_TYPE(0, MLStringT);
 	const char *Symbol = ml_string_value(Args[0]);
 	ml_value_t *Value = stringmap_search(Library->Exports, Symbol);
-	if (!Value) return ml_error("LibraryError", "Symbol %s not exported from %s", Symbol, Library->Path);
-	return Value;
+	ML_CONTINUE(Caller, Value ?: ml_error("LibraryError", "Symbol %s not exported from %s", Symbol, Library->Path));
 }
 
 void library_init() {
