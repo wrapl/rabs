@@ -95,8 +95,8 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 		if (!Node->File) {
 			Node->File = fopen(Node->FileName, "r");
 			if (!Node->File) {
-				Preprocessor->Context->Error->Message = ml_error("LoadError", "error opening %s", Node->FileName);
-				longjmp(Preprocessor->Context->Error->Handler, 1);
+				Preprocessor->Context->Error = ml_error("LoadError", "error opening %s", Node->FileName);
+				longjmp(Preprocessor->Context->OnError, 1);
 			}
 		}
 		char *Line = NULL;
@@ -148,7 +148,7 @@ static ml_value_t *load_file(const char *FileName) {
 	Preprocessor->Context->GlobalGet = (ml_getter_t)rabs_ml_global;
 	Preprocessor->Context->Globals = NULL;
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Context);
-	if (setjmp(Preprocessor->Context->Error->Handler)) return Preprocessor->Context->Error->Message;
+	mlc_on_error(Preprocessor->Context) return Preprocessor->Context->Error;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
 	ml_value_t *Closure = ml_compile(Expr, NULL, Preprocessor->Context);

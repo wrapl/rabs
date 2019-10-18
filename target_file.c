@@ -14,6 +14,7 @@
 #include "minilang/ml_file.h"
 
 #ifdef Linux
+#include <sys/sendfile.h>
 #include "targetwatch.h"
 #endif
 
@@ -432,14 +433,23 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 	}
 	int SourceFile = open(SourcePath, O_RDONLY);
 	if (SourceFile < 0) return ml_error("FileError", "could not open source %s", SourcePath);
+	struct stat Stat[1];
+	if (fstat(SourceFile, Stat)) {
+		close(SourceFile);
+		return ml_error("FileError", "could not open get source details %s", SourcePath);
+	}
 	int DestFile = open(DestPath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IRGRP| S_IROTH | S_IWUSR | S_IWGRP| S_IWOTH);
 	if (DestFile < 0) {
 		close(SourceFile);
 		return ml_error("FileError", "could not open destination %s", DestPath);
 	}
+#ifdef Linux
+	int Length = sendfile(DestFile, SourceFile, NULL, Stat->st_size);
+#else
 	char *Buffer = snew(4096);
 	int Length;
 	while ((Length = read(SourceFile, Buffer, 4096)) > 0 && write(DestFile, Buffer, Length) > 0);
+#endif
 	close(SourceFile);
 	close(DestFile);
 	if (Length < 0) return ml_error("FileError", "file copy failed");
