@@ -86,7 +86,7 @@ struct preprocessor_node_t {
 typedef struct preprocessor_t {
 	preprocessor_node_t *Nodes;
 	mlc_scanner_t *Scanner;
-	mlc_error_t Error[1];
+	mlc_context_t Context[1];
 } preprocessor_t;
 
 static const char *preprocessor_read(preprocessor_t *Preprocessor) {
@@ -95,8 +95,8 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 		if (!Node->File) {
 			Node->File = fopen(Node->FileName, "r");
 			if (!Node->File) {
-				Preprocessor->Error->Message = ml_error("LoadError", "error opening %s", Node->FileName);
-				longjmp(Preprocessor->Error->Handler, 1);
+				Preprocessor->Context->Error->Message = ml_error("LoadError", "error opening %s", Node->FileName);
+				longjmp(Preprocessor->Context->Error->Handler, 1);
 			}
 		}
 		char *Line = NULL;
@@ -145,11 +145,13 @@ static ml_value_t *load_file(const char *FileName) {
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
-	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Error);
-	if (setjmp(Preprocessor->Error->Handler)) return Preprocessor->Error->Message;
+	Preprocessor->Context->GlobalGet = (ml_getter_t)rabs_ml_global;
+	Preprocessor->Context->Globals = NULL;
+	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Context);
+	if (setjmp(Preprocessor->Context->Error->Handler)) return Preprocessor->Context->Error->Message;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
-	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, NULL, Preprocessor->Error);
+	ml_value_t *Closure = ml_compile(Expr, NULL, Preprocessor->Context);
 	if (Closure->Type == MLErrorT) return Closure;
 	return ml_call(Closure, 0, NULL);
 }
