@@ -345,7 +345,12 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 	case CACHE_EXPR_TARGET: {
 		int Length = *(int32_t *)Buffer;
 		Buffer += 4;
-		*Output = (ml_value_t *)target_find(Buffer);
+		target_t *Target = target_find(Buffer);
+		if (!Target) {
+			printf("\e[31mError: target not defined: %s\e[0m\n", Buffer);
+			exit(1);
+		}
+		*Output = (ml_value_t *)Target;
 		return Buffer + Length + 1;
 	}
 	}
@@ -372,6 +377,10 @@ void cache_expr_set(target_t *Target, ml_value_t *Value) {
 
 size_t cache_target_id_to_index(const char *Id) {
 	return string_index_insert(TargetsIndex, Id);
+}
+
+size_t cache_target_id_to_index_existing(const char *Id) {
+	return string_index_search(TargetsIndex, Id);
 }
 
 const char *cache_target_index_to_id(size_t Index) {

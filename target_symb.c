@@ -35,7 +35,7 @@ time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned cha
 target_t *target_symb_new(const char *Name) {
 	char *Id;
 	asprintf(&Id, "symb:%s/%s", CurrentContext->Name, Name);
-	target_index_slot R = targetcache_lookup(Id);
+	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
 		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, R.Index, R.Slot);
 		Target->Context = CurrentContext;

@@ -31,8 +31,22 @@ target_id_slot targetcache_index(size_t Index) {
 	return (target_id_slot){Cache + Index, Id};
 }
 
-target_index_slot targetcache_lookup(const char *Id) {
+target_index_slot targetcache_insert(const char *Id) {
 	size_t Index = cache_target_id_to_index(Id);
+	if (Index >= CacheSize) {
+		size_t NewCacheSize = CacheSize * 2;
+		do NewCacheSize *= 2; while (Index >= NewCacheSize);
+		target_t **NewCache = anew(target_t *, NewCacheSize);
+		memcpy(NewCache, Cache, CacheSize * sizeof(target_t *));
+		CacheSize = NewCacheSize;
+		Cache = NewCache;
+	}
+	return (target_index_slot){Cache + Index, Index};
+}
+
+target_index_slot targetcache_search(const char *Id) {
+	size_t Index = cache_target_id_to_index_existing(Id);
+	if (Index == 0xFFFFFFFF) return (target_index_slot){NULL, Index};
 	if (Index >= CacheSize) {
 		size_t NewCacheSize = CacheSize * 2;
 		do NewCacheSize *= 2; while (Index >= NewCacheSize);

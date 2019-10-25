@@ -709,6 +709,15 @@ static ml_value_t *ml_setenv(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
+static ml_value_t *ml_target_find(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	const char *Id = ml_string_value(Args[0]);
+	target_t *Target = target_find(Id);
+	if (!Target) return ml_error("ValueError", "Target %s not found", Id);
+	return (ml_value_t *)Target;
+}
+
 static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
@@ -779,6 +788,7 @@ int main(int Argc, char **Argv) {
 	CmdifyMethod = ml_method("cmdify");
 	stringmap_insert(Globals, "vmount", ml_function(0, vmount));
 	stringmap_insert(Globals, "subdir", ml_function(0, subdir));
+	stringmap_insert(Globals, "target", ml_function(0, ml_target_find));
 	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
 	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
 	stringmap_insert(Globals, "expr", ml_function(0, target_expr_new));
@@ -967,7 +977,7 @@ int main(int Argc, char **Argv) {
 		}
 		Target = target_find(TargetName);
 		if (!Target) {
-			printf("\e[31mError: invalid target %s\e[0m", TargetName);
+			printf("\e[31mError: target not defined: %s\e[0m\n", TargetName);
 			exit(1);
 		}
 	} else {

@@ -141,10 +141,11 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 	pthread_mutex_unlock(InterpreterLock);
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
-		printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
-		pthread_mutex_lock(InterpreterLock);
-		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
-		return PreviousTime;
+		printf("\e[31mError: rule failed to build: %s\e[0m\n", FileName);
+		exit(1);
+		//pthread_mutex_lock(InterpreterLock);
+		//memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
+		//return PreviousTime;
 	}
 	if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
@@ -192,7 +193,7 @@ int target_file_missing(target_file_t *Target) {
 target_t *target_file_check(const char *Path, int Absolute) {
 	char *Id;
 	asprintf(&Id, "file:%s", Path);
-	target_index_slot R = targetcache_lookup(Id);
+	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
 		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, R.Index, R.Slot);
 		Target->Absolute = Absolute;
