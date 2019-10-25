@@ -58,6 +58,7 @@ void target_symb_update(const char *Name);
 void target_depends_add(target_t *Target, target_t *Depend);
 void target_depends_auto(target_t *Depend);
 target_t *target_find(const char *Id);
+target_t *target_create(const char *Id);
 target_t *target_load(const char *Id, size_t Index, target_t **Slot);
 void target_push(target_t *Target);
 target_t *target_file_check(const char *Path, int Absolute);

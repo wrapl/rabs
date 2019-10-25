@@ -951,7 +951,7 @@ int main(int Argc, char **Argv) {
 
 	context_push("");
 
-	target_t *Iteration = target_find("meta:::ITERATION");
+	target_t *Iteration = target_create("meta:::ITERATION");
 	Iteration->LastUpdated = CurrentIteration;
 	memset(Iteration->Hash, 0, SHA256_BLOCK_SIZE);
 	*(long *)Iteration->Hash = CurrentIteration;
