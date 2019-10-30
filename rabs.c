@@ -837,6 +837,11 @@ int main(int Argc, char **Argv) {
 	ml_file_init(Globals);
 	library_init();
 
+	struct sigaction Action[1];
+	memset(Action, 0, sizeof(struct sigaction));
+	Action->sa_handler = exit;
+	sigaction(SIGINT, Action, NULL);
+
 	const char *TargetName = 0;
 	int NumThreads = 1;
 	int InteractiveMode = 0;
