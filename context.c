@@ -39,6 +39,7 @@ context_t *context_push(const char *Path) {
 	stringmap_insert(Context->Locals, "BUILDDIR", BuildDir);
 	stringmap_insert(Context->Locals, "PATH", BuildDir);
 	stringmap_insert(Context->Locals, "CONTEXT", Context);
+	stringmap_insert(Context->Locals, "PARENT", Context->Parent ?: MLNil);
 	return Context;
 }
 
@@ -52,7 +53,7 @@ context_t *context_scope(const char *Name) {
 	Context->Default = Context->Parent->Default;
 	Context->Locals[0] = (stringmap_t)STRINGMAP_INIT;
 	stringmap_insert(Context->Locals, "CONTEXT", Context);
-	stringmap_insert(ContextCache, Context->Name, Context);
+	stringmap_insert(Context->Locals, "PARENT", Context->Parent);
 	return Context;
 }
 
