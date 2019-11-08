@@ -141,9 +141,9 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 	pthread_mutex_unlock(InterpreterLock);
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
+		pthread_mutex_lock(InterpreterLock);
 		printf("\e[31mError: rule failed to build: %s\e[0m\n", FileName);
 		exit(1);
-		//pthread_mutex_lock(InterpreterLock);
 		//memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
 		//return PreviousTime;
 	}
