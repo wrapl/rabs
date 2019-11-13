@@ -10,7 +10,8 @@ typedef struct {target_t **Slot; size_t Index;} target_index_slot;
 
 void targetcache_init();
 target_id_slot targetcache_index(size_t Index);
-target_index_slot targetcache_lookup(const char *Id);
+target_index_slot targetcache_insert(const char *Id);
+target_index_slot targetcache_search(const char *Id);
 int targetcache_size();
 
 #endif

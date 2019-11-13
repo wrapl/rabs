@@ -86,7 +86,7 @@ struct preprocessor_node_t {
 typedef struct preprocessor_t {
 	preprocessor_node_t *Nodes;
 	mlc_scanner_t *Scanner;
-	mlc_error_t Error[1];
+	mlc_context_t Context[1];
 } preprocessor_t;
 
 static const char *preprocessor_read(preprocessor_t *Preprocessor) {
@@ -95,8 +95,8 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 		if (!Node->File) {
 			Node->File = fopen(Node->FileName, "r");
 			if (!Node->File) {
-				Preprocessor->Error->Message = ml_error("LoadError", "error opening %s", Node->FileName);
-				longjmp(Preprocessor->Error->Handler, 1);
+				Preprocessor->Context->Error = ml_error("LoadError", "error opening %s", Node->FileName);
+				longjmp(Preprocessor->Context->OnError, 1);
 			}
 		}
 		char *Line = NULL;
@@ -145,11 +145,13 @@ static ml_value_t *load_file(const char *FileName) {
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
-	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Error);
-	if (setjmp(Preprocessor->Error->Handler)) return Preprocessor->Error->Message;
+	Preprocessor->Context->GlobalGet = (ml_getter_t)rabs_ml_global;
+	Preprocessor->Context->Globals = NULL;
+	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Context);
+	mlc_on_error(Preprocessor->Context) return Preprocessor->Context->Error;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
-	ml_value_t *Closure = ml_compile(Expr, rabs_ml_global, NULL, NULL, Preprocessor->Error);
+	ml_value_t *Closure = ml_compile(Expr, NULL, Preprocessor->Context);
 	if (Closure->Type == MLErrorT) return Closure;
 	return ml_call(Closure, 0, NULL);
 }
@@ -707,6 +709,15 @@ static ml_value_t *ml_setenv(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
+static ml_value_t *ml_target_find(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	const char *Id = ml_string_value(Args[0]);
+	target_t *Target = target_find(Id);
+	if (!Target) return ml_error("ValueError", "Target %s not found", Id);
+	return (ml_value_t *)Target;
+}
+
 static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
@@ -777,6 +788,7 @@ int main(int Argc, char **Argv) {
 	CmdifyMethod = ml_method("cmdify");
 	stringmap_insert(Globals, "vmount", ml_function(0, vmount));
 	stringmap_insert(Globals, "subdir", ml_function(0, subdir));
+	stringmap_insert(Globals, "target", ml_function(0, ml_target_find));
 	stringmap_insert(Globals, "file", ml_function(0, target_file_new));
 	stringmap_insert(Globals, "meta", ml_function(0, target_meta_new));
 	stringmap_insert(Globals, "expr", ml_function(0, target_expr_new));
@@ -824,6 +836,11 @@ int main(int Argc, char **Argv) {
 	ml_iterfns_init(Globals);
 	ml_file_init(Globals);
 	library_init();
+
+	struct sigaction Action[1];
+	memset(Action, 0, sizeof(struct sigaction));
+	Action->sa_handler = exit;
+	sigaction(SIGINT, Action, NULL);
 
 	const char *TargetName = 0;
 	int NumThreads = 1;
@@ -939,7 +956,7 @@ int main(int Argc, char **Argv) {
 
 	context_push("");
 
-	target_t *Iteration = target_find("meta:::ITERATION");
+	target_t *Iteration = target_create("meta:::ITERATION");
 	Iteration->LastUpdated = CurrentIteration;
 	memset(Iteration->Hash, 0, SHA256_BLOCK_SIZE);
 	*(long *)Iteration->Hash = CurrentIteration;
@@ -965,7 +982,7 @@ int main(int Argc, char **Argv) {
 		}
 		Target = target_find(TargetName);
 		if (!Target) {
-			printf("\e[31mError: invalid target %s\e[0m", TargetName);
+			printf("\e[31mError: target not defined: %s\e[0m\n", TargetName);
 			exit(1);
 		}
 	} else {

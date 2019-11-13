@@ -38,7 +38,7 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Name = ml_string_value(Args[1]);
 	char *Id;
 	asprintf(&Id, "scan:%s::%s", Source->Id, Name);
-	target_index_slot R = targetcache_lookup(Id);
+	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
 		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, R.Index, R.Slot);
 		Target->Source = Source;
@@ -59,6 +59,10 @@ target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Ind
 	memcpy(ParentId, Id + 5, ParentIdLength);
 	ParentId[ParentIdLength] = 0;
 	Target->Source = target_find(ParentId);
+	if (!Target->Source) {
+		printf("\e[31mError: target not defined: %s\e[0m\n", ParentId);
+		exit(1);
+	}
 	Target->Name = Name + 2;
 	return (target_t *)Target;
 }

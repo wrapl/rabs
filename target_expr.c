@@ -62,7 +62,7 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Name = ml_string_value(Args[0]);
 	char *Id;
 	asprintf(&Id, "expr:%s::%s", CurrentContext->Path, Name);
-	target_index_slot R = targetcache_lookup(Id);
+	target_index_slot R = targetcache_insert(Id);
 	//target_t **Slot =
 	if (!R.Slot[0]) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, R.Index, R.Slot);

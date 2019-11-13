@@ -43,7 +43,7 @@ static ml_value_t *targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
 ml_type_t *TargetSetT;
 
 void targetset_ml_init() {
-	TargetSetT = ml_type(MLAnyT, "targetset");
+	TargetSetT = ml_type(MLIteratableT, "targetset");
 	TargetSetIterT = ml_type(MLAnyT, "targetset-iter");
 	ml_typed_fn_set(TargetSetT, ml_iterate, targetset_iterate);
 	ml_typed_fn_set(TargetSetIterT, ml_iter_next, targetset_iter_next);

@@ -31,6 +31,7 @@ extern int CurrentIteration;
 void cache_bump_iteration();
 
 size_t cache_target_id_to_index(const char *Id);
+size_t cache_target_id_to_index_existing(const char *Id);
 const char *cache_target_index_to_id(size_t Index);
 size_t cache_target_count();
 

@@ -14,6 +14,7 @@
 #include "minilang/ml_file.h"
 
 #ifdef Linux
+#include <sys/sendfile.h>
 #include "targetwatch.h"
 #endif
 
@@ -140,10 +141,11 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 	pthread_mutex_unlock(InterpreterLock);
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
-		printf("\e[31mWarning: rule failed to build: %s\e[0m\n", FileName);
 		pthread_mutex_lock(InterpreterLock);
-		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
-		return PreviousTime;
+		printf("\e[31mError: rule failed to build: %s\e[0m\n", FileName);
+		exit(1);
+		//memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
+		//return PreviousTime;
 	}
 	if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
@@ -191,7 +193,7 @@ int target_file_missing(target_file_t *Target) {
 target_t *target_file_check(const char *Path, int Absolute) {
 	char *Id;
 	asprintf(&Id, "file:%s", Path);
-	target_index_slot R = targetcache_lookup(Id);
+	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
 		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, R.Index, R.Slot);
 		Target->Absolute = Absolute;
@@ -432,14 +434,23 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 	}
 	int SourceFile = open(SourcePath, O_RDONLY);
 	if (SourceFile < 0) return ml_error("FileError", "could not open source %s", SourcePath);
+	struct stat Stat[1];
+	if (fstat(SourceFile, Stat)) {
+		close(SourceFile);
+		return ml_error("FileError", "could not open get source details %s", SourcePath);
+	}
 	int DestFile = open(DestPath, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IRGRP| S_IROTH | S_IWUSR | S_IWGRP| S_IWOTH);
 	if (DestFile < 0) {
 		close(SourceFile);
 		return ml_error("FileError", "could not open destination %s", DestPath);
 	}
+#ifdef Linux
+	int Length = sendfile(DestFile, SourceFile, NULL, Stat->st_size);
+#else
 	char *Buffer = snew(4096);
 	int Length;
 	while ((Length = read(SourceFile, Buffer, 4096)) > 0 && write(DestFile, Buffer, Length) > 0);
+#endif
 	close(SourceFile);
 	close(DestFile);
 	if (Length < 0) return ml_error("FileError", "file copy failed");

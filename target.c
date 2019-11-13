@@ -158,6 +158,11 @@ ml_value_t *target_get_priority(void *Data, int Count, ml_value_t **Args) {
 	return ml_integer(Target->QueuePriority);
 }
 
+ml_value_t *target_get_scans(void *Data, int Count, ml_value_t **Args) {
+	target_t *Target = (target_t *)Args[0];
+	return (ml_value_t *)cache_scan_get(Target);
+}
+
 static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
 	if (Arg->Type == MLListT) {
 		return ml_list_foreach(Arg, 0, (void *)target_depends_auto_single);
@@ -252,7 +257,31 @@ static int target_missing(target_t *Target, int LastChecked) {
 }
 
 target_t *target_find(const char *Id) {
-	target_index_slot R = targetcache_lookup(Id);
+	target_index_slot R = targetcache_search(Id);
+	if (!R.Slot) return NULL;
+	if (R.Slot[0]) return R.Slot[0];
+	Id = GC_strdup(Id);
+	if (!memcmp(Id, "file:", 5)) {
+		return target_file_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	if (!memcmp(Id, "symb:", 5)) {
+		return target_symb_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	if (!memcmp(Id, "expr:", 5)) {
+		return target_expr_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	if (!memcmp(Id, "scan:", 5)) {
+		return target_scan_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	if (!memcmp(Id, "meta:", 5)) {
+		return target_meta_create(Id, CurrentContext, R.Index, R.Slot);
+	}
+	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
+	return 0;
+}
+
+target_t *target_create(const char *Id) {
+	target_index_slot R = targetcache_insert(Id);
 	if (R.Slot[0]) return R.Slot[0];
 	Id = GC_strdup(Id);
 	if (!memcmp(Id, "file:", 5)) {
@@ -696,6 +725,7 @@ void target_init() {
 	ml_method_by_name("depends", 0, target_get_depends, TargetT, NULL);
 	ml_method_by_name("affects", 0, target_get_affects, TargetT, NULL);
 	ml_method_by_name("priority", 0, target_get_priority, TargetT, NULL);
+	ml_method_by_name("scans", 0, target_get_scans, ScanTargetT, NULL);
 	target_expr_init();
 	target_file_init();
 	target_meta_init();

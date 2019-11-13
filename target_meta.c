@@ -29,7 +29,7 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Name = ml_string_value(Args[0]);
 	char *Id;
 	asprintf(&Id, "meta:%s::%s", CurrentContext->Path, Name);
-	target_index_slot R = targetcache_lookup(Id);
+	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
 		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, R.Index, R.Slot);
 		Target->Name = Name;
