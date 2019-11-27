@@ -216,7 +216,7 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Relative = match_prefix(Path, RootPath);
 	target_t *Target;
 	if (Relative) {
-		Target = target_file_check(Relative + 1, 0);
+		Target = target_file_check(Relative + (Relative[0] == '/'), 0);
 	} else {
 		Target = target_file_check(Path, 1);
 	}
