@@ -141,9 +141,9 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 	pthread_mutex_unlock(InterpreterLock);
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
+		pthread_mutex_lock(InterpreterLock);
 		printf("\e[31mError: rule failed to build: %s\e[0m\n", FileName);
 		exit(1);
-		//pthread_mutex_lock(InterpreterLock);
 		//memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
 		//return PreviousTime;
 	}
@@ -216,7 +216,7 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	const char *Relative = match_prefix(Path, RootPath);
 	target_t *Target;
 	if (Relative) {
-		Target = target_file_check(Relative + 1, 0);
+		Target = target_file_check(Relative + (Relative[0] == '/'), 0);
 	} else {
 		Target = target_file_check(Path, 1);
 	}
