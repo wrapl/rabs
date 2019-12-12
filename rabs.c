@@ -962,6 +962,7 @@ int main(int Argc, char **Argv) {
 	*(long *)Iteration->Hash = CurrentIteration;
 	Iteration->Hash[SHA256_BLOCK_SIZE - 1] = 1;
 	context_symb_set(CurrentContext, "ITERATION", (ml_value_t *)Iteration);
+	context_symb_set(CurrentContext, "ROOT", (ml_value_t *)CurrentContext);
 
 	if (!InteractiveMode) target_threads_start(NumThreads);
 
