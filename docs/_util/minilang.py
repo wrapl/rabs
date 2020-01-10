@@ -17,7 +17,8 @@ class MinilangLexer(RegexLexer):
 				"while", "until", "exit", "next", "for", "all",
 				"in", "is", "fun", "return", "suspend", "ret",
 				"susp", "with", "do", "on", "nil", "and", "or",
-				"not", "old", "def", "var", "to"
+				"not", "old", "def", "var", "to", "let", "def",
+				"each"
 			), suffix = r'\b'), Keyword),
 			(r'-?[0-9]+(\.[0-9]*)?((e|E)-?[0-9]+)?', Number),
 			(r'-?\.[0-9]+((e|E)-?[0-9]+)?', Number),
@@ -26,11 +27,11 @@ class MinilangLexer(RegexLexer):
 			('\(', Operator, 'brackets'),
 			('\{', Operator, 'braces'),
 			(r':[A-Za-z_]+', Name.Function),
-			(r'::[!@#$%^&*+=|\\~`/?<>.-]+', Name.Function),
 			(r'--.*\n', Comment),
-			(r'\s+', Text),
+			(r'\s+', Whitespace),
 			(r'[A-Za-z_][A-Za-z0-9_]*', Text),
 			(':=', Operator),
+			('::', Operator),
 			(',', Operator),
 			(';', Operator),
 			(']', Operator),
