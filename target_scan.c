@@ -8,7 +8,7 @@
 #include <gc/gc.h>
 
 struct target_scan_t {
-	TARGET_FIELDS
+	target_t Base;
 	const char *Name;
 	target_t *Source;
 	targetset_t *Scans;
@@ -24,7 +24,7 @@ static int depends_hash_fn(target_t *Depend, unsigned char Hash[SHA256_BLOCK_SIZ
 
 time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	targetset_t *Scans = cache_scan_get((target_t *)Target);
-	if (Scans) targetset_foreach(Scans, Target->Hash, (void *)depends_hash_fn);
+	if (Scans) targetset_foreach(Scans, Target->Base.Hash, (void *)depends_hash_fn);
 	return 0;
 }
 
@@ -43,7 +43,7 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, R.Index, R.Slot);
 		Target->Source = Source;
 		Target->Name = Name;
-		targetset_insert(Target->Depends, Source);
+		targetset_insert(Target->Base.Depends, Source);
 	}
 	return (ml_value_t *)R.Slot[0];
 }

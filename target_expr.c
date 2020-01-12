@@ -47,7 +47,7 @@ static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Arg
 }
 
 time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
-	target_value_hash(Target->Value, Target->Hash);
+	target_value_hash(Target->Value, Target->Base.Hash);
 	return 0;
 }
 
@@ -73,7 +73,7 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 
 target_t *target_expr_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
 	target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, Index, Slot);
-	Target->BuildContext = BuildContext;
+	Target->Base.BuildContext = BuildContext;
 	return (target_t *)Target;
 }
 

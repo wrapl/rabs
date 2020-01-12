@@ -8,7 +8,7 @@
 #include <gc/gc.h>
 
 struct target_symb_t {
-	TARGET_FIELDS
+	target_t Base;
 	const char *Name;
 	context_t *Context;
 };
@@ -28,7 +28,7 @@ static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 
 time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	ml_value_t *Value = context_symb_get(Target->Context, Target->Name) ?: MLNil;
-	target_value_hash(Value, Target->Hash);
+	target_value_hash(Value, Target->Base.Hash);
 	return 0;
 }
 

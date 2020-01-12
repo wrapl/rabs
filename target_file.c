@@ -23,7 +23,7 @@ extern ml_value_t *ArgifyMethod;
 extern ml_value_t *CmdifyMethod;
 
 struct target_file_t {
-	TARGET_FIELDS
+	target_t Base;
 	int Absolute;
 	const char *Path;
 };
@@ -148,15 +148,15 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 		//return PreviousTime;
 	}
 	if (Stat->st_mtime == PreviousTime) {
-		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
+		memcpy(Target->Base.Hash, PreviousHash, SHA256_BLOCK_SIZE);
 	} else if (S_ISDIR(Stat->st_mode)) {
-		memset(Target->Hash, 0xD0, SHA256_BLOCK_SIZE);
+		memset(Target->Base.Hash, 0xD0, SHA256_BLOCK_SIZE);
 #if defined(__APPLE__)
 		memcpy(Target->Hash, &Stat->st_mtimespec, sizeof(Stat->st_mtimespec));
 #elif defined(__MINGW32__)
 		memcpy(Target->Hash, &Stat->st_mtime, sizeof(Stat->st_mtime));
 #else
-		memcpy(Target->Hash, &Stat->st_mtim, sizeof(Stat->st_mtim));
+		memcpy(Target->Base.Hash, &Stat->st_mtim, sizeof(Stat->st_mtim));
 #endif
 	} else {
 		int File = open(FileName, 0, O_RDONLY);
@@ -173,7 +173,7 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 			sha256_update(Ctx, Buffer, Count);
 		}
 		close(File);
-		sha256_final(Ctx, Target->Hash);
+		sha256_final(Ctx, Target->Base.Hash);
 	}
 	pthread_mutex_lock(InterpreterLock);
 	return Stat->st_mtime;
@@ -198,7 +198,7 @@ target_t *target_file_check(const char *Path, int Absolute) {
 		target_file_t *Target = target_new(target_file_t, FileTargetT, Id, R.Index, R.Slot);
 		Target->Absolute = Absolute;
 		Target->Path = concat(Path, NULL);
-		Target->BuildContext = CurrentContext;
+		Target->Base.BuildContext = CurrentContext;
 	}
 	return R.Slot[0];
 }
@@ -227,7 +227,7 @@ target_t *target_file_create(const char *Id, context_t *BuildContext, size_t Ind
 	target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Index, Slot);
 	Target->Absolute = Id[5] == '/';
 	Target->Path = Id + 5;
-	Target->BuildContext = CurrentContext;
+	Target->Base.BuildContext = CurrentContext;
 	return (target_t *)Target;
 }
 
@@ -403,7 +403,7 @@ ml_value_t *target_file_relative(void *Data, int Count, ml_value_t **Args) {
 
 ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
-	if (Target->Build /*&& Target->Build->Type == MLClosureT*/) return (ml_value_t *)Target;
+	if (Target->Base.Build /*&& Target->Build->Type == MLClosureT*/) return (ml_value_t *)Target;
 	const char *FileName;
 	if (Target->Absolute) {
 		FileName = Target->Path;

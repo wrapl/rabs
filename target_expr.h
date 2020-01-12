@@ -7,7 +7,7 @@
 typedef struct target_expr_t target_expr_t;
 
 struct target_expr_t {
-	TARGET_FIELDS
+	target_t Base;
 	ml_value_t *Value;
 };
 
