@@ -9,25 +9,22 @@
 #include "sha256.h"
 #include "minilang.h"
 
-#define TARGET_FIELDS \
-	const ml_type_t *Type; \
-	target_t *PriorityAdjustNext, *Parent; \
-	ml_value_t *Build; \
-	struct context_t *BuildContext; \
-	const char *Id; \
-	targetset_t Affects[1]; \
-	targetset_t Depends[1]; \
-	targetset_t BuildDepends[1]; \
-	size_t CacheIndex; \
-	int WaitCount; \
-	int LastUpdated; \
-	int IdLength; \
-	int QueueIndex, QueuePriority; \
-	unsigned long IdHash; \
-	unsigned char Hash[SHA256_BLOCK_SIZE];
-
 struct target_t {
-	TARGET_FIELDS
+	const ml_type_t *Type;
+	target_t *PriorityAdjustNext, *Parent;
+	ml_value_t *Build;
+	struct context_t *BuildContext;
+	const char *Id;
+	targetset_t Affects[1];
+	targetset_t Depends[1];
+	targetset_t BuildDepends[1];
+	size_t CacheIndex;
+	int WaitCount;
+	int LastUpdated;
+	int IdLength;
+	int QueueIndex, QueuePriority;
+	unsigned long IdHash;
+	unsigned char Hash[SHA256_BLOCK_SIZE];
 };
 
 target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, size_t Index, target_t **Slot);

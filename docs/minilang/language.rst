@@ -47,7 +47,13 @@ This produces the following output:
 Declarations
 ------------
 
-All variables must be declared in *Minilang* using :mini:`var`. Variables are visible within their scope and any nested scopes, including nested functions, unless they are shadowed by another declaration. Before assignment, variables have the value :mini:`nil`. Optionally, a variable can be initialized when it is declared. Note that variables can be referenced within their scope before their declaration, but they will have the value :mini:`nil` before their initialization.
+There are 3 types of declaration in *Minilang*:
+
+#. Variable declarations using :mini:`var Name := Expression`. Variables can be reassigned using :mini:`Name :=  Expression`. Here :mini:`:= Expression` may be omitted in the declaration in which case initial value of :mini:`Name` will be :mini:`nil`.
+#. Value declarations using :mini:`let Name := Expression`. Values cannot be reassigned and hence :mini:`:= Expression` is required. :mini:`Expression` is evaluated once during execution. 
+#. Constant declarations using :mini:`def Name := Expression`. Constants cannot be reassigned and hence :mini:`:= Expression` is required. Unlike values declared with :mini:`let`, constants declared with :mini:`def` are evaluated at compile time and inlined into the rest of the code. Consequently, :mini:`Expression` can only contain constant values such as numbers, strings, function calls as well as references to other constants.
+ 
+All identifiers in *Minilang* are visible within their scope and any nested scopes, including nested functions, unless they are shadowed by another declaration.
 
 .. code-block:: mini
 
@@ -108,7 +114,7 @@ The simplest expressions are single values. More information on values in *Minil
 Nil:
    :mini:`nil`.
 Integers:
-   :mini:`1`, :mini:`-257`. Note that the leading ``-`` is parsed as part of a negative number, so that :mini:`2-1` will be parsed as ``2 -1`` (and be invalid syntax) and not ``2 - 1``.
+   :mini:`1`, :mini:`-257`. Note that the leading ``-`` is parsed as part of a negative number, so that :mini:`2-1` (with no spaces) will be parsed as ``2 -1`` (and be invalid syntax) and not ``2 - 1``.
 Reals:
    :mini:`1.2`, :mini:`.13`, :mini:`-1.3e5`.
 Strings:

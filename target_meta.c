@@ -7,7 +7,7 @@
 #include "targetcache.h"
 
 struct target_meta_t {
-	TARGET_FIELDS
+	target_t Base;
 	const char *Name;
 };
 
@@ -15,10 +15,10 @@ ml_type_t *MetaTargetT;
 
 time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (DependsLastUpdated == CurrentIteration) {
-		memset(Target->Hash, 0, SHA256_BLOCK_SIZE);
-		memcpy(Target->Hash, &DependsLastUpdated, sizeof(DependsLastUpdated));
+		memset(Target->Base.Hash, 0, SHA256_BLOCK_SIZE);
+		memcpy(Target->Base.Hash, &DependsLastUpdated, sizeof(DependsLastUpdated));
 	} else {
-		memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
+		memcpy(Target->Base.Hash, PreviousHash, SHA256_BLOCK_SIZE);
 	}
 	return 0;
 }
@@ -44,7 +44,7 @@ target_t *target_meta_create(const char *Id, context_t *BuildContext, size_t Ind
 		if (Name[0] == ':' && Name[1] == ':') break;
 	}
 	Target->Name = Name;
-	Target->BuildContext = BuildContext;
+	Target->Base.BuildContext = BuildContext;
 	return (target_t *)Target;
 }
 
