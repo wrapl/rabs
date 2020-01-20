@@ -148,7 +148,7 @@ static ml_value_t *load_file(const char *FileName) {
 	Preprocessor->Context->GlobalGet = (ml_getter_t)rabs_ml_global;
 	Preprocessor->Context->Globals = NULL;
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Context);
-	mlc_on_error(Preprocessor->Context) return Preprocessor->Context->Error;
+	MLC_ON_ERROR(Preprocessor->Context) return Preprocessor->Context->Error;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
 	ml_value_t *Closure = ml_compile(Expr, NULL, Preprocessor->Context);
