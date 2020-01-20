@@ -14,7 +14,7 @@ struct targetset_t {
 
 extern ml_type_t *TargetSetT;
 
-#define TARGETSET_INIT {TargetSetT, 0,}
+#define TARGETSET_INIT {TargetSetT, NULL, 0, 0}
 
 void targetset_ml_init();
 

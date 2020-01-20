@@ -14,17 +14,15 @@ static size_t CacheSize = 1;
 void targetcache_init() {
 	size_t InitialSize = cache_target_count();
 	while (CacheSize < InitialSize) CacheSize *= 2;
-	Cache = anew(target_t *, CacheSize);
+	Cache = (target_t **)GC_MALLOC_IGNORE_OFF_PAGE(CacheSize * sizeof(target_t *));
 }
 
 target_id_slot targetcache_index(size_t Index) {
 	if (Index >= CacheSize) {
 		size_t NewCacheSize = CacheSize;
 		do NewCacheSize *= 2; while (Index >= NewCacheSize);
-		target_t **NewCache = anew(target_t *, NewCacheSize);
-		memcpy(NewCache, Cache, CacheSize * sizeof(target_t *));
+		Cache = (target_t **)GC_REALLOC(Cache, NewCacheSize * sizeof(target_t *));
 		CacheSize = NewCacheSize;
-		Cache = NewCache;
 	}
 	target_t *Target = Cache[Index];
 	const char *Id = Target ? Target->Id : cache_target_index_to_id(Index);
@@ -36,10 +34,8 @@ target_index_slot targetcache_insert(const char *Id) {
 	if (Index >= CacheSize) {
 		size_t NewCacheSize = CacheSize * 2;
 		do NewCacheSize *= 2; while (Index >= NewCacheSize);
-		target_t **NewCache = anew(target_t *, NewCacheSize);
-		memcpy(NewCache, Cache, CacheSize * sizeof(target_t *));
+		Cache = (target_t **)GC_REALLOC(Cache, NewCacheSize * sizeof(target_t *));
 		CacheSize = NewCacheSize;
-		Cache = NewCache;
 	}
 	return (target_index_slot){Cache + Index, Index};
 }
@@ -50,10 +46,8 @@ target_index_slot targetcache_search(const char *Id) {
 	if (Index >= CacheSize) {
 		size_t NewCacheSize = CacheSize * 2;
 		do NewCacheSize *= 2; while (Index >= NewCacheSize);
-		target_t **NewCache = anew(target_t *, NewCacheSize);
-		memcpy(NewCache, Cache, CacheSize * sizeof(target_t *));
+		Cache = (target_t **)GC_REALLOC(Cache, NewCacheSize * sizeof(target_t *));
 		CacheSize = NewCacheSize;
-		Cache = NewCache;
 	}
 	return (target_index_slot){Cache + Index, Index};
 }
