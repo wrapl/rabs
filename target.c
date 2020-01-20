@@ -44,7 +44,7 @@ int StatusUpdates = 0;
 int MonitorFiles = 0;
 int DebugThreads = 0;
 int WatchMode = 0;
-FILE *DependencyGraph = 0;
+FILE *DependencyGraph = NULL;
 
 pthread_mutex_t InterpreterLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
@@ -52,23 +52,19 @@ static pthread_cond_t TargetUpdated[1] = {PTHREAD_COND_INITIALIZER};
 
 static ml_value_t *SHA256Method;
 static ml_value_t *MissingMethod;
-extern ml_value_t *StringMethod;
-extern ml_value_t *AppendMethod;
-extern ml_value_t *ArgifyMethod;
-extern ml_value_t *CmdifyMethod;
 
 ml_type_t *TargetT;
 
-__thread target_t *CurrentTarget = 0;
-__thread context_t *CurrentContext = 0;
-__thread const char *CurrentDirectory = 0;
+__thread target_t *CurrentTarget = NULL;
+__thread context_t *CurrentContext = NULL;
+__thread const char *CurrentDirectory = NULL;
 
 static int QueuedTargets = 0, BuiltTargets = 0, NumTargets = 0;
 
 static int target_missing(target_t *Target, int LastChecked);
 
-static build_thread_t *BuildThreads = 0;
-__thread build_thread_t *CurrentThread = 0;
+static build_thread_t *BuildThreads = NULL;
+__thread build_thread_t *CurrentThread = NULL;
 static int RunningThreads = 0, LastThread = 0;
 
 void target_depends_auto(target_t *Depend) {
@@ -86,8 +82,8 @@ target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, size_t Index, 
 	Target->Id = Id;
 	Target->IdLength = strlen(Id);
 	Target->IdHash = stringmap_hash(Id);
-	Target->Build = 0;
-	Target->Parent = 0;
+	Target->Build = NULL;
+	Target->Parent = NULL;
 	Target->LastUpdated = STATE_UNCHECKED;
 	Target->QueueIndex = -1;
 	Target->QueuePriority = PRIORITY_INVALID;
@@ -117,7 +113,7 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 	return 1;
 }
 
-ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	for (int I = 1; I < Count; ++I) {
 		int Error = target_depends_single(Args[I], Target);
@@ -126,46 +122,48 @@ ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-ml_value_t *target_get_id(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_get_id(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	return ml_string(Target->Id, -1);
 }
 
-ml_value_t *target_get_build(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_get_build(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	return Target->Build ?: MLNil;
 }
 
-ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
 	return Args[0];
 }
 
-ml_value_t *target_get_depends(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_get_depends(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	return (ml_value_t *)Target->Depends;
 }
 
-ml_value_t *target_get_affects(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_get_affects(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	return (ml_value_t *)Target->Affects;
 }
 
-ml_value_t *target_get_priority(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_get_priority(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	return ml_integer(Target->QueuePriority);
 }
 
-ml_value_t *target_get_scans(void *Data, int Count, ml_value_t **Args) {
+static ml_value_t *target_get_scans(void *Data, int Count, ml_value_t **Args) {
 	target_t *Target = (target_t *)Args[0];
 	return (ml_value_t *)cache_scan_get(Target);
 }
 
 static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
 	if (Arg->Type == MLListT) {
-		return ml_list_foreach(Arg, 0, (void *)target_depends_auto_single);
+		ML_LIST_FOREACH(Arg, Node) {
+			if (target_depends_auto_single(Node->Value, NULL)) return 1;
+		}
 	} else if (Arg->Type == MLStringT) {
 		target_t *Depend = target_symb_new(ml_string_value(Arg));
 		target_depends_auto(Depend);
@@ -180,7 +178,7 @@ static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
 }
 
 ml_value_t *target_depends_auto_value(void *Data, int Count, ml_value_t **Args) {
-	for (int I = 0; I < Count; ++I) target_depends_auto_single(Args[I], 0);
+	for (int I = 0; I < Count; ++I) target_depends_auto_single(Args[I], NULL);
 	return MLNil;
 }
 
@@ -277,7 +275,7 @@ target_t *target_find(const char *Id) {
 		return target_meta_create(Id, CurrentContext, R.Index, R.Slot);
 	}
 	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
-	return 0;
+	return NULL;
 }
 
 target_t *target_create(const char *Id) {
@@ -300,7 +298,7 @@ target_t *target_create(const char *Id) {
 		return target_meta_create(Id, CurrentContext, R.Index, R.Slot);
 	}
 	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
-	return 0;
+	return NULL;
 }
 
 target_t *target_load(const char *Id, size_t Index, target_t **Slot) {
@@ -320,15 +318,15 @@ target_t *target_load(const char *Id, size_t Index, target_t **Slot) {
 		return target_meta_create(Id, CurrentContext, Index, Slot);
 	}
 	fprintf(stderr, "internal error: unknown target type: %s\n", Id);
-	return 0;
+	return NULL;
 }
 
-int target_print(target_t *Target, void *Data) {
+static int target_print(target_t *Target, void *Data) {
 	printf("%s\n", Target->Id);
 	return 0;
 }
 
-int target_affect(target_t *Target, target_t *Depend) {
+static int target_affect(target_t *Target, target_t *Depend) {
 	--Target->WaitCount;
 	if (Target->LastUpdated == STATE_QUEUED && Target->WaitCount == 0) {
 		targetqueue_insert(Target);
@@ -370,28 +368,28 @@ static void target_rebuild(target_t *Target) {
 	}
 }
 
-int target_find_leaves0(target_t *Target, target_t *Parent);
+static int target_find_leaves0(target_t *Target, target_t *Parent);
 
-int target_find_leaves(target_t *Target, target_t *Parent) {
+static int target_find_leaves(target_t *Target, target_t *Parent) {
 	if (Target->Parent == Parent) targetset_insert(Parent->BuildDepends, Target);
 	targetset_foreach(Target->Depends, Parent, (void *)target_find_leaves);
 	targetset_foreach(Target->BuildDepends, Parent, (void *)target_find_leaves0);
 	return 0;
 }
 
-int target_find_leaves0(target_t *Target, target_t *Parent) {
+static int target_find_leaves0(target_t *Target, target_t *Parent) {
 	if (Target->Parent == Parent) targetset_insert(Parent->BuildDepends, Target);
 	targetset_foreach(Target->Depends, Parent, (void *)target_find_leaves);
 	targetset_foreach(Target->BuildDepends, Parent, (void *)target_find_leaves0);
 	return 0;
 }
 
-int target_insert(target_t *Target, targetset_t *Set) {
+static int target_insert(target_t *Target, targetset_t *Set) {
 	targetset_insert(Set, Target);
 	return 0;
 }
 
-int target_set_parent(target_t *Target, target_t *Parent) {
+static int target_set_parent(target_t *Target, target_t *Parent) {
 	if (!Target->Parent) {
 		Target->Parent = Parent;
 		if (DependencyGraph) {
@@ -401,7 +399,7 @@ int target_set_parent(target_t *Target, target_t *Parent) {
 	return 0;
 }
 
-int targetset_print(target_t *Target, void *Data) {
+static int targetset_print(target_t *Target, void *Data) {
 	printf("\t%s\n", Target->Id);
 	return 0;
 }
@@ -421,7 +419,7 @@ static int target_graph_scans(target_t *Depend, target_t *Target) {
 	return 0;
 }
 
-void display_threads() {
+void display_threads(void) {
 	printf("\e[s\e[H\e[K");
 	for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
 		if (Thread == CurrentThread) printf("\e[32m");
@@ -450,7 +448,7 @@ static int build_scan_target_list(ml_value_t *Depend, targetset_t *Scans) {
 	return 0;
 }
 
-void target_update(target_t *Target) {
+static void target_update(target_t *Target) {
 	if (DebugThreads) display_threads();
 	if (DependencyGraph) {
 		fprintf(DependencyGraph, "\tT%" PRIxPTR " [label=\"%s\"];\n", (uintptr_t)Target, Target->Id);
@@ -458,7 +456,6 @@ void target_update(target_t *Target) {
 	}
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
-	unsigned char PreviousBuildHash[SHA256_BLOCK_SIZE];
 	unsigned char BuildHash[SHA256_BLOCK_SIZE];
 	if (Target->Build && Target->Build->Type == MLClosureT) {
 		ml_closure_sha256(Target->Build, BuildHash);
@@ -467,12 +464,13 @@ void target_update(target_t *Target) {
 			BuildHash[I] ^= *P;
 			I = (I + 1) % SHA256_BLOCK_SIZE;
 		}
+		unsigned char PreviousBuildHash[SHA256_BLOCK_SIZE];
 		cache_build_hash_get(Target, PreviousBuildHash);
 		if (memcmp(PreviousBuildHash, BuildHash, SHA256_BLOCK_SIZE)) {
 			DependsLastUpdated = CurrentIteration;
 		}
 	} else {
-		memset(BuildHash, 0, sizeof(SHA256_BLOCK_SIZE));
+		memset(BuildHash, 0, SHA256_BLOCK_SIZE);
 	}
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
@@ -502,10 +500,10 @@ void target_update(target_t *Target) {
 		if (!Target->Build && Target->Parent) {
 			fprintf(stderr, "\e[34mRebuilding %s because of %s\n\e[0m", Target->Parent->Id, Target->Id);
 			target_rebuild(Target->Parent);
-			Target->Parent = 0;
+			Target->Parent = NULL;
 			Target->LastUpdated = STATE_UNCHECKED;
 			--QueuedTargets;
-			target_queue(Target, 0);
+			target_queue(Target, NULL);
 			return;
 		}
 		if (DebugThreads) {
@@ -640,7 +638,7 @@ static void *target_thread_fn(void *Arg) {
 			if (--RunningThreads == 0) {
 				pthread_cond_signal(TargetAvailable);
 				pthread_mutex_unlock(InterpreterLock);
-				return 0;
+				return NULL;
 			}
 			pthread_cond_wait(TargetAvailable, InterpreterLock);
 			++RunningThreads;
@@ -649,7 +647,7 @@ static void *target_thread_fn(void *Arg) {
 		target_t *Target = NextTarget;
 		if (Target->LastUpdated == STATE_QUEUED) target_update(Target);
 	}
-	return 0;
+	return NULL;
 }
 
 void target_threads_start(int NumThreads) {
@@ -663,7 +661,7 @@ void target_threads_start(int NumThreads) {
 		build_thread_t *BuildThread = (build_thread_t *)GC_malloc_uncollectable(sizeof(build_thread_t));
 		BuildThread->Id = LastThread;
 		BuildThread->Status = BUILD_IDLE;
-		pthread_create(&BuildThread->Handle, 0, target_thread_fn, BuildThread);
+		pthread_create(&BuildThread->Handle, NULL, target_thread_fn, BuildThread);
 		BuildThread->Next = BuildThreads;
 		BuildThreads = BuildThread;
 	}
@@ -690,15 +688,15 @@ void target_interactive_start(int NumThreads) {
 
 void target_threads_wait(target_t *Target) {
 	--RunningThreads;
-	target_queue(Target, 0);
+	target_queue(Target, NULL);
 	pthread_mutex_unlock(InterpreterLock);
 	while (BuildThreads) {
-		pthread_join(BuildThreads->Handle, 0);
+		pthread_join(BuildThreads->Handle, NULL);
 		BuildThreads = BuildThreads->Next;
 	}
 }
 
-void target_threads_kill() {
+static void target_threads_kill(void) {
 	for (build_thread_t *Thread = BuildThreads; Thread; Thread = Thread->Next) {
 		if (Thread->Child) {
 			fprintf(stderr, "\e[31mKilling child process %d\n\e[0m", Thread->Child);
@@ -709,23 +707,23 @@ void target_threads_kill() {
 	}
 }
 
-void target_init() {
+void target_init(void) {
 	targetqueue_init();
 	targetset_ml_init();
 
 	TargetT = ml_type(MLAnyT, "target");
 	SHA256Method = ml_method("sha256");
 	MissingMethod = ml_method("missing");
-	ml_method_by_name("[]", 0, target_depend, TargetT, MLAnyT, NULL);
-	ml_method_by_name("scan", 0, target_scan_new, TargetT, NULL);
-	ml_method_by_name("=>", 0, target_set_build, TargetT, MLAnyT, NULL);
-	ml_method_by_name("id", 0, target_get_id, TargetT, NULL);
-	ml_method_by_name("build", 0, target_get_build, TargetT, NULL);
-	ml_method_by_name("build", 0, target_set_build, TargetT, MLAnyT, NULL);
-	ml_method_by_name("depends", 0, target_get_depends, TargetT, NULL);
-	ml_method_by_name("affects", 0, target_get_affects, TargetT, NULL);
-	ml_method_by_name("priority", 0, target_get_priority, TargetT, NULL);
-	ml_method_by_name("scans", 0, target_get_scans, ScanTargetT, NULL);
+	ml_method_by_name("[]", NULL, target_depend, TargetT, MLAnyT, NULL);
+	ml_method_by_name("scan", NULL, target_scan_new, TargetT, NULL);
+	ml_method_by_name("=>", NULL, target_set_build, TargetT, MLAnyT, NULL);
+	ml_method_by_name("id", NULL, target_get_id, TargetT, NULL);
+	ml_method_by_name("build", NULL, target_get_build, TargetT, NULL);
+	ml_method_by_name("build", NULL, target_set_build, TargetT, MLAnyT, NULL);
+	ml_method_by_name("depends", NULL, target_get_depends, TargetT, NULL);
+	ml_method_by_name("affects", NULL, target_get_affects, TargetT, NULL);
+	ml_method_by_name("priority", NULL, target_get_priority, TargetT, NULL);
+	ml_method_by_name("scans", NULL, target_get_scans, ScanTargetT, NULL);
 	target_expr_init();
 	target_file_init();
 	target_meta_init();

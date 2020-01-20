@@ -20,7 +20,7 @@ radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 *.o: *.h minilang/*.h
 
 objects = \
-	cache_radb.o \
+	cache.o \
 	context.o \
 	rabs.o \
 	target.o \

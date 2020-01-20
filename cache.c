@@ -1,361 +1,208 @@
 #include "cache.h"
 #include "util.h"
 #include "rabs.h"
-#include <sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <gc/gc.h>
 #include <sys/stat.h>
 #include <targetcache.h>
+#include "radb/radb.h"
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 
-static sqlite3 *Cache;
-static sqlite3_stmt *HashGetStatement;
-static sqlite3_stmt *HashSetStatement;
-static sqlite3_stmt *HashBuildGetStatement;
-static sqlite3_stmt *HashBuildSetStatement;
-static sqlite3_stmt *LastCheckSetStatement;
-//static sqlite3_stmt *ParentGetStatement;
-//static sqlite3_stmt *ParentSetStatement;
-static sqlite3_stmt *DependsGetStatement;
-static sqlite3_stmt *DependsSetStatement;
-static sqlite3_stmt *ScanGetStatement;
-static sqlite3_stmt *ScanSetStatement;
-static sqlite3_stmt *ExprGetStatement;
-static sqlite3_stmt *ExprSetStatement;
+static string_store_t *MetadataStore;
+static string_index_t *TargetsIndex;
+static string_store_t *HashStore;
+static fixed_store_t *HashDetailsStore;
+static string_store_t *BuildHashStore;
+static string_store_t *DependsStore;
+static string_store_t *ScansStore;
+static string_store_t *ExprsStore;
+
 int CurrentIteration = 0;
 
-static int version_callback(char *Result, int NumCols, char **Values, char **Names) {
-	strcpy(Result, Values[0] ?: "0.0.0");
-	return 0;
-}
+enum {
+	CURRENT_VERSION_INDEX,
+	CURRENT_ITERATION_INDEX,
+	METADATA_SIZE
+};
 
-static int iteration_callback(int *Result, int NumCols, char **Values, char **Names) {
-	*Result = atoi(Values[0] ?: "0");
-	return 0;
-}
-
-static int cachesize_callback(int *Result, int NumCols, char **Values, char ** Names) {
-	*Result = atoi(Values[0] ?: "0");
-	return 0;
-}
+typedef struct cache_hash_details_t {
+	uint32_t LastUpdated;
+	uint32_t LastChecked;
+	time_t FileTime;
+} cache_hash_details_t;
 
 void cache_open(const char *RootPath) {
-	sqlite3_config(SQLITE_CONFIG_SINGLETHREAD);
 	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", NULL);
 	struct stat Stat[1];
-	int CreateCache = !!stat(CacheFileName, Stat);
-	if (sqlite3_open_v2(CacheFileName, &Cache, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
+	if (stat(CacheFileName, Stat)) {
+		mkdir(CacheFileName, 0777);
+		MetadataStore = string_store_create(concat(CacheFileName, "/metadata", NULL), 16, 0);
+		TargetsIndex = string_index_create(concat(CacheFileName, "/targets", NULL), 4096);
+		HashStore = string_store_create(concat(CacheFileName, "/hashes", NULL), SHA256_BLOCK_SIZE, 4096);
+		HashDetailsStore = fixed_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_hash_details_t), 1024);
+		BuildHashStore = string_store_create(concat(CacheFileName, "/builds", NULL), SHA256_BLOCK_SIZE, 4096);
+		DependsStore = string_store_create(concat(CacheFileName, "/depends", NULL), 32, 4096);
+		ScansStore = string_store_create(concat(CacheFileName, "/scans", NULL), 128, 524288);
+		ExprsStore = string_store_create(concat(CacheFileName, "/exprs", NULL), 16, 512);
+	} else if (!S_ISDIR(Stat->st_mode)) {
+		printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
 		exit(1);
-	}
-	sqlite3_exec(Cache,
-		"PRAGMA locking_mode = EXCLUSIVE;"
-		"PRAGMA journal_mode = MEMORY;"
-		"PRAGMA synchronous = OFF;",
-		0, 0, 0
-	);
-	if (CreateCache) {
-		if (sqlite3_exec(Cache,
-			"CREATE TABLE info(key TEXT PRIMARY KEY, value);"
-			"INSERT INTO info(key, value) VALUES('version', '" CURRENT_VERSION "');"
-			"CREATE TABLE hashes(id TEXT PRIMARY KEY, last_updated INTEGER, last_checked INTEGER, hash BLOB, file_time INTEGER);"
-			//"CREATE TABLE parents(id TEXT PRIMARY KEY, parent TEXT);"
-			"CREATE TABLE builds(id TEXT PRIMARY KEY, build BLOB);"
-			"CREATE TABLE scans(id TEXT PRIMARY KEY, scan TEXT);"
-			"CREATE TABLE depends(id TEXT PRIMARY KEY, depend TEXT);"
-			"CREATE TABLE exprs(id TEXT PRIMARY KEY, value TEXT);",
-			0, 0, 0) != SQLITE_OK
-		) {
-			printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-			exit(1);
-		}
 	} else {
-		char PreviousVersion[10] = {'0', '.', '0', '.', '0', 0,};
-		if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'version\'", (void *)version_callback, &PreviousVersion, 0) != SQLITE_OK) {
-			printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-			exit(1);
-		}
-		if (strcmp(PreviousVersion, WORKING_VERSION) < 0) {
-			printf("Version error: database was built with version %s but this version of Rabs will only work with version %s or higher. Delete %s to force a clean build.\n", PreviousVersion, WORKING_VERSION, CacheFileName);
-			exit(1);
-		}
-		if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'iteration\'", (void *)iteration_callback, &CurrentIteration, 0) != SQLITE_OK) {
-			printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-			exit(1);
-		}
-	}
-	if (sqlite3_prepare_v2(Cache, "SELECT hash, last_updated, last_checked, file_time FROM hashes WHERE id = ?", -1, &HashGetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "REPLACE INTO hashes(id, hash, last_updated, last_checked, file_time) VALUES(?, ?, ?, ?, ?)", -1, &HashSetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	/*if (sqlite3_prepare_v2(Cache, "SELECT parent FROM parents WHERE id = ?", -1, &ParentGetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "REPLACE INTO parents(id, parent) VALUES(?, ?)", -1, &ParentSetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}*/
-	if (sqlite3_prepare_v2(Cache, "SELECT build FROM builds WHERE id = ?", -1, &HashBuildGetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "REPLACE INTO builds(id, build) VALUES(?, ?)", -1, &HashBuildSetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "UPDATE hashes SET last_checked = ?, file_time = ? WHERE id = ?", -1, &LastCheckSetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "SELECT scan FROM scans WHERE id = ?", -1, &ScanGetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "REPLACE INTO scans(id, scan) VALUES(?, ?)", -1, &ScanSetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "SELECT depend FROM depends WHERE id = ?", -1, &DependsGetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "REPLACE INTO depends(id, depend) VALUES(?, ?)", -1, &DependsSetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "SELECT value FROM exprs WHERE id = ?", -1, &ExprGetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	if (sqlite3_prepare_v2(Cache, "REPLACE INTO exprs(id, value) VALUES(?, ?)", -1, &ExprSetStatement, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
+		MetadataStore = string_store_open(concat(CacheFileName, "/metadata", NULL));
+		TargetsIndex = string_index_open(concat(CacheFileName, "/targets", NULL));
+		HashStore = string_store_open(concat(CacheFileName, "/hashes", NULL));
+		HashDetailsStore = fixed_store_open(concat(CacheFileName, "/details", NULL));
+		BuildHashStore = string_store_open(concat(CacheFileName, "/builds", NULL));
+		DependsStore = string_store_open(concat(CacheFileName, "/depends", NULL));
+		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL));
+		ExprsStore = string_store_open(concat(CacheFileName, "/exprs", NULL));
+		uint32_t Temp;
+		string_store_get_value(MetadataStore, CURRENT_ITERATION_INDEX, &Temp);
+		CurrentIteration = Temp;
 	}
 	++CurrentIteration;
 	printf("Rabs version = %s\n", CURRENT_VERSION);
 	printf("Build iteration = %d\n", CurrentIteration);
-	char Buffer[100];
-	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', '%s')", CURRENT_VERSION);
-	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
+	{
+		uint32_t Temp = CurrentIteration;
+		string_store_set(MetadataStore, CURRENT_ITERATION_INDEX, &Temp, sizeof(uint32_t));
 	}
-	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('iteration', %d)", CurrentIteration);
-	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
+	{
+		const char Temp[] = CURRENT_VERSION;
+		string_store_set(MetadataStore, CURRENT_VERSION_INDEX, Temp, sizeof(Temp));
 	}
-	int CacheSize = 1024;
-	if (sqlite3_exec(Cache, "SELECT value FROM info WHERE key = \'version\'", (void *)cachesize_callback, &CacheSize, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	targetcache_init(CacheSize);
+	targetcache_init();
 	atexit(cache_close);
 }
 
 void cache_close() {
-	char Buffer[100];
-	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('cachesize', '%d')", targetcache_size());
-	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
-	}
-	sqlite3_finalize(HashGetStatement);
-	sqlite3_finalize(HashSetStatement);
-	sqlite3_finalize(HashBuildGetStatement);
-	sqlite3_finalize(HashBuildSetStatement);
-	sqlite3_finalize(LastCheckSetStatement);
-	sqlite3_finalize(DependsGetStatement);
-	sqlite3_finalize(DependsSetStatement);
-	sqlite3_finalize(ScanGetStatement);
-	sqlite3_finalize(ScanSetStatement);
-	sqlite3_finalize(ExprGetStatement);
-	sqlite3_finalize(ExprSetStatement);
-	sqlite3_close(Cache);
+	string_store_close(MetadataStore);
+	string_index_close(TargetsIndex);
+	string_store_close(HashStore);
+	fixed_store_close(HashDetailsStore);
+	string_store_close(BuildHashStore);
+	string_store_close(DependsStore);
+	string_store_close(ScansStore);
+	string_store_close(ExprsStore);
 }
 
 void cache_bump_iteration() {
 	++CurrentIteration;
 	printf("Rabs version = %s\n", CURRENT_VERSION);
 	printf("Build iteration = %d\n", CurrentIteration);
-	char Buffer[100];
-	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('version', '%s')", CURRENT_VERSION);
-	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
+	{
+		uint32_t Temp = CurrentIteration;
+		string_store_set(MetadataStore, CURRENT_ITERATION_INDEX, &Temp, sizeof(uint32_t));
 	}
-	sprintf(Buffer, "REPLACE INTO info(key, value) VALUES('iteration', %d)", CurrentIteration);
-	if (sqlite3_exec(Cache, Buffer, 0, 0, 0) != SQLITE_OK) {
-		printf("Sqlite error: %s\n", sqlite3_errmsg(Cache));
-		exit(1);
+	{
+		const char Temp[] = CURRENT_VERSION;
+		string_store_set(MetadataStore, CURRENT_VERSION_INDEX, Temp, sizeof(Temp));
 	}
 }
 
 void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	sqlite3_bind_text(HashGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	if (sqlite3_step(HashGetStatement) == SQLITE_ROW) {
-		memcpy(Hash, sqlite3_column_blob(HashGetStatement, 0), SHA256_BLOCK_SIZE);
-		*LastUpdated = sqlite3_column_int(HashGetStatement, 1);
-		*LastChecked = sqlite3_column_int(HashGetStatement, 2);
-		*FileTime = sqlite3_column_int(HashGetStatement, 3);
+	if (string_store_get_size(HashStore, Target->CacheIndex)) {
+		string_store_get_value(HashStore, Target->CacheIndex, Hash);
+		cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
+		*LastUpdated = Details->LastUpdated;
+		*LastChecked = Details->LastChecked;
+		*FileTime = Details->FileTime;
 	} else {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
 		*LastUpdated = 0;
 		*LastChecked = 0;
 		*FileTime = 0;
 	}
-	sqlite3_reset(HashGetStatement);
 }
 
 void cache_hash_set(target_t *Target, time_t FileTime) {
-	sqlite3_bind_text(HashSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_bind_blob(HashSetStatement, 2, Target->Hash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
-	sqlite3_bind_int(HashSetStatement, 3, Target->LastUpdated);
-	sqlite3_bind_int(HashSetStatement, 4, CurrentIteration);
-	sqlite3_bind_int(HashSetStatement, 5, FileTime);
-	sqlite3_step(HashSetStatement);
-	sqlite3_reset(HashSetStatement);
+	cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
+	Details->LastUpdated = Target->LastUpdated;
+	Details->LastChecked = CurrentIteration;
+	Details->FileTime = FileTime;
+	string_store_set(HashStore, Target->CacheIndex, Target->Hash, SHA256_BLOCK_SIZE);
 }
 
 void cache_build_hash_get(target_t *Target, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	sqlite3_bind_text(HashBuildGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	if (sqlite3_step(HashBuildGetStatement) == SQLITE_ROW) {
-		memcpy(Hash, sqlite3_column_blob(HashBuildGetStatement, 0), SHA256_BLOCK_SIZE);
+	if (string_store_get_size(BuildHashStore, Target->CacheIndex)) {
+		string_store_get_value(BuildHashStore, Target->CacheIndex, Hash);
 	} else {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
 	}
-	sqlite3_reset(HashBuildGetStatement);
 }
 
 void cache_build_hash_set(target_t *Target, unsigned char BuildHash[SHA256_BLOCK_SIZE]) {
-	sqlite3_bind_text(HashBuildSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_bind_blob(HashBuildSetStatement, 2, BuildHash, SHA256_BLOCK_SIZE, SQLITE_STATIC);
-	sqlite3_step(HashBuildSetStatement);
-	sqlite3_reset(HashBuildSetStatement);
+	string_store_set(BuildHashStore, Target->CacheIndex, BuildHash, SHA256_BLOCK_SIZE);
 }
 
 void cache_last_check_set(target_t *Target, time_t FileTime) {
-	sqlite3_bind_int(LastCheckSetStatement, 1, CurrentIteration);
-	sqlite3_bind_int(LastCheckSetStatement, 2, FileTime);
-	sqlite3_bind_text(LastCheckSetStatement, 3, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_step(LastCheckSetStatement);
-	sqlite3_reset(LastCheckSetStatement);
+	cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
+	Details->LastUpdated = Target->LastUpdated;
+	Details->LastChecked = CurrentIteration;
+	Details->FileTime = FileTime;
 }
 
-/*void cache_parent_get(target_t *Target) {
-	sqlite3_bind_text(ParentGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	if (sqlite3_step(ParentGetStatement) == SQLITE_ROW) {
-		const char *Text = sqlite3_column_text(ParentGetStatement, 0);
-		int Length = sqlite3_column_bytes(ParentGetStatement, 0);
-		if (Length) {
-			char *Parent = GC_malloc_atomic(Length);
-			memcpy(Parent, Text, Length);
-			Target->Parent = target_find(Parent);
-		}
-	}
-	sqlite3_reset(ParentGetStatement);
-}
-
-void cache_parent_set(target_t *Target) {
-	sqlite3_bind_text(ParentSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_bind_blob(ParentSetStatement, 2, Target->Parent->Id, Target->Parent->IdLength, SQLITE_STATIC);
-	sqlite3_step(ParentSetStatement);
-	sqlite3_reset(ParentSetStatement);
-}*/
-
-static targetset_t *cache_target_set_parse(char *Id) {
+static targetset_t *cache_target_set_parse(uint32_t *Indices) {
 	targetset_t *Set = targetset_new();
-	if (!Id) return Set;
-	int Size = strtol(Id, &Id, 10);
+	if (!Indices) return Set;
+	int Size = Indices[0];
 	targetset_init(Set, Size);
-	++Id;
-	while (*Id > '\n') {
-		char *End = Id + 1;
-		while (*End > '\n') ++End;
-		*End = 0;
-		targetset_insert(Set, target_find(Id, End - Id));
-		Id = End + 1;
+	while (--Size >= 0) {
+		size_t Index = *++Indices;
+		target_id_slot R = targetcache_index(Index);
+		target_t *Target = R.Slot[0] ?: target_load(R.Id, Index, R.Slot);
+		targetset_insert(Set, Target);
 	}
 	return Set;
 }
 
-static int cache_target_set_size(target_t *Target, int *Size) {
-	*Size += Target->IdLength + 1;
-	return 0;
-}
-
-static int cache_target_set_append(target_t *Target, char **Buffer) {
-	char *Result = stpcpy(*Buffer, Target->Id);
-	Result[0] = '\n';
-	*Buffer = Result + 1;
+static int cache_target_set_index(target_t *Target, uint32_t **IndexP) {
+	**IndexP = Target->CacheIndex;
+	++*IndexP;
 	return 0;
 }
 
 targetset_t *cache_depends_get(target_t *Target) {
-	sqlite3_bind_text(DependsGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	char *Depends = 0;
-	if (sqlite3_step(DependsGetStatement) == SQLITE_ROW) {
-		const char *Text = (const char *)sqlite3_column_text(DependsGetStatement, 0);
-		int Length = sqlite3_column_bytes(DependsGetStatement, 0);
-		Depends = GC_malloc_atomic(Length);
-		memcpy(Depends, Text, Length);
+	size_t Length = string_store_get_size(DependsStore, Target->CacheIndex);
+	if (Length) {
+		uint32_t *Buffer = GC_malloc_atomic(Length);
+		string_store_get_value(DependsStore, Target->CacheIndex, Buffer);
+		return cache_target_set_parse(Buffer);
+	} else {
+		return targetset_new();
 	}
-	sqlite3_reset(DependsGetStatement);
-	return cache_target_set_parse(Depends);
 }
 
 void cache_depends_set(target_t *Target, targetset_t *Depends) {
-	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
-	char LengthBuffer[16];
-	int Size = sprintf(LengthBuffer, "%d\n", Depends->Size - Depends->Space) + 1;
-	targetset_foreach(Depends, &Size, (void *)cache_target_set_size);
-	char *Buffer = snew(Size);
-	char *Next = stpcpy(Buffer, LengthBuffer);
-	targetset_foreach(Depends, &Next, (void *)cache_target_set_append);
-	*Next = '\n';
-	sqlite3_bind_text(DependsSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_bind_text(DependsSetStatement, 2, Buffer, Size, SQLITE_STATIC);
-	sqlite3_step(DependsSetStatement);
-	sqlite3_reset(DependsSetStatement);
-	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
+	int Size = Depends->Size - Depends->Space;
+	uint32_t *Indices = anew(uint32_t, Size + 1);
+	Indices[0] = Size;
+	uint32_t *IndexP = Indices + 1;
+	targetset_foreach(Depends, &IndexP, (void *)cache_target_set_index);
+	string_store_set(DependsStore, Target->CacheIndex, Indices, (Size + 1) * sizeof(uint32_t));
 }
 
 targetset_t *cache_scan_get(target_t *Target) {
-	sqlite3_bind_text(ScanGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	char *Scans = 0;
-	if (sqlite3_step(ScanGetStatement) == SQLITE_ROW) {
-		const char *Text = (const char *)sqlite3_column_text(ScanGetStatement, 0);
-		int Length = sqlite3_column_bytes(ScanGetStatement, 0);
-		Scans = GC_malloc_atomic(Length);
-		memcpy(Scans, Text, Length);
+	size_t Length = string_store_get_size(ScansStore, Target->CacheIndex);
+	if (Length) {
+		uint32_t *Buffer = GC_malloc_atomic(Length);
+		string_store_get_value(ScansStore, Target->CacheIndex, Buffer);
+		return cache_target_set_parse(Buffer);
+	} else {
+		return targetset_new();
 	}
-	sqlite3_reset(ScanGetStatement);
-	return cache_target_set_parse(Scans);
 }
 
 void cache_scan_set(target_t *Target, targetset_t *Scans) {
-	sqlite3_exec(Cache, "BEGIN TRANSACTION", 0, 0, 0);
-	char LengthBuffer[16];
-	int Size = sprintf(LengthBuffer, "%d\n", Scans->Size - Scans->Space) + 1;
-	targetset_foreach(Scans, &Size, (void *)cache_target_set_size);
-	char *Buffer = snew(Size);
-	char *Next = stpcpy(Buffer, LengthBuffer);
-	targetset_foreach(Scans, &Next, (void *)cache_target_set_append);
-	*Next = '\n';
-	sqlite3_bind_text(ScanSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	sqlite3_bind_text(ScanSetStatement, 2, Buffer, Size, SQLITE_STATIC);
-	sqlite3_step(ScanSetStatement);
-	sqlite3_reset(ScanSetStatement);
-	sqlite3_exec(Cache, "COMMIT TRANSACTION", 0, 0, 0);
+	int Size = Scans->Size - Scans->Space;
+	uint32_t *Indices = anew(uint32_t, Size + 1);
+	Indices[0] = Size;
+	uint32_t *IndexP = Indices + 1;
+	targetset_foreach(Scans, &IndexP, (void *)cache_target_set_index);
+	string_store_set(ScansStore, Target->CacheIndex, Indices, (Size + 1) * sizeof(uint32_t));
 }
 
 static int cache_expr_value_size(ml_value_t *Value);
@@ -498,7 +345,12 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 	case CACHE_EXPR_TARGET: {
 		int Length = *(int32_t *)Buffer;
 		Buffer += 4;
-		*Output = (ml_value_t *)target_find(Buffer, Length);
+		target_t *Target = target_find(Buffer);
+		if (!Target) {
+			printf("\e[31mError: target not defined: %s\e[0m\n", Buffer);
+			exit(1);
+		}
+		*Output = (ml_value_t *)Target;
 		return Buffer + Length + 1;
 	}
 	}
@@ -506,54 +358,35 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 }
 
 ml_value_t *cache_expr_get(target_t *Target) {
-	sqlite3_bind_text(ExprGetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
 	ml_value_t *Result = 0;
-	if (sqlite3_step(ExprGetStatement) == SQLITE_ROW) {
-		switch (sqlite3_column_type(ExprGetStatement, 0)) {
-		case SQLITE_TEXT: {
-			int Length = sqlite3_column_bytes(ExprGetStatement, 0);
-			char *Chars = snew(Length + 1);
-			memcpy(Chars, sqlite3_column_text(ExprGetStatement, 0), Length);
-			Chars[Length] = 0;
-			Result = ml_string(Chars, Length);
-			break;
-		}
-		case SQLITE_INTEGER:
-			Result = ml_integer(sqlite3_column_int64(ExprGetStatement, 0));
-			break;
-		case SQLITE_FLOAT:
-			Result = ml_real(sqlite3_column_double(ExprGetStatement, 0));
-			break;
-		case SQLITE_NULL:
-			Result = MLNil;
-			break;
-		case SQLITE_BLOB: {
-			const char *Buffer = (const char *)sqlite3_column_blob(ExprGetStatement, 0);
-			cache_expr_value_read(Buffer, &Result);
-			break;
-		}
-		}
+	size_t Length = string_store_get_size(ExprsStore, Target->CacheIndex);
+	if (Length) {
+		char *Buffer = GC_malloc_atomic(Length);
+		string_store_get_value(ExprsStore, Target->CacheIndex, Buffer);
+		cache_expr_value_read(Buffer, &Result);
 	}
-	sqlite3_reset(ExprGetStatement);
 	return Result;
 }
 
 void cache_expr_set(target_t *Target, ml_value_t *Value) {
-	sqlite3_bind_text(ExprSetStatement, 1, Target->Id, Target->IdLength, SQLITE_STATIC);
-	if (Value->Type == MLStringT) {
-		sqlite3_bind_text(ExprSetStatement, 2, ml_string_value(Value), ml_string_length(Value), SQLITE_STATIC);
-	} else if (Value->Type == MLIntegerT) {
-		sqlite3_bind_int64(ExprSetStatement, 2, ml_integer_value(Value));
-	} else if (Value->Type == MLRealT) {
-		sqlite3_bind_double(ExprSetStatement, 2, ml_real_value(Value));
-	} else if (Value == MLNil) {
-		sqlite3_bind_null(ExprSetStatement, 2);
-	} else {
-		int Length = cache_expr_value_size(Value);
-		char *Buffer = GC_malloc_atomic(Length);
-		cache_expr_value_write(Value, Buffer);
-		sqlite3_bind_blob(ExprSetStatement, 2, Buffer, Length, SQLITE_STATIC);
-	}
-	sqlite3_step(ExprSetStatement);
-	sqlite3_reset(ExprSetStatement);
+	size_t Length = cache_expr_value_size(Value);
+	char *Buffer = GC_malloc_atomic(Length);
+	cache_expr_value_write(Value, Buffer);
+	string_store_set(ExprsStore, Target->CacheIndex, Buffer, Length);
+}
+
+size_t cache_target_id_to_index(const char *Id) {
+	return string_index_insert(TargetsIndex, Id);
+}
+
+size_t cache_target_id_to_index_existing(const char *Id) {
+	return string_index_search(TargetsIndex, Id);
+}
+
+const char *cache_target_index_to_id(size_t Index) {
+	return GC_strdup(string_index_get(TargetsIndex, Index));
+}
+
+size_t cache_target_count() {
+	return string_index_count(TargetsIndex);
 }

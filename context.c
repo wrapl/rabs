@@ -33,13 +33,13 @@ context_t *context_push(const char *Path) {
 	Context->FullPath = concat(RootPath, Path, NULL);
 	CurrentContext = Context;
 	Context->Locals[0] = (stringmap_t)STRINGMAP_INIT;
-	target_t *Default = Context->Default = (target_t *)target_meta_new(0, 1, &DefaultString);
+	target_t *Default = Context->Default = (target_t *)target_meta_new(NULL, 1, &DefaultString);
 	stringmap_insert(Context->Locals, "DEFAULT", Default);
 	target_t *BuildDir = target_file_check(Path[0] == '/' ? Path + 1 : Path, 0);
 	stringmap_insert(Context->Locals, "BUILDDIR", BuildDir);
 	stringmap_insert(Context->Locals, "PATH", BuildDir);
 	stringmap_insert(Context->Locals, "CONTEXT", Context);
-	stringmap_insert(Context->Locals, "PARENT", Context->Parent ?: MLNil);
+	stringmap_insert(Context->Locals, "PARENT", (ml_value_t *)Context->Parent ?: MLNil);
 	return Context;
 }
 
@@ -71,7 +71,7 @@ ml_value_t *context_symb_get(context_t *Context, const char *Name) {
 	return 0;
 }
 
-ml_value_t *context_symb_get_or_nil(context_t *Context, const char *Name) {
+static ml_value_t *context_symb_get_or_nil(context_t *Context, const char *Name) {
 	return context_symb_get(Context, Name) ?: MLNil;
 }
 

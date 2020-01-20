@@ -77,11 +77,11 @@ target_t *target_expr_create(const char *Id, context_t *BuildContext, size_t Ind
 	return (target_t *)Target;
 }
 
-void target_expr_init() {
+void target_expr_init(void) {
 	ExprTargetT = ml_type(TargetT, "expr-target");
-	ml_method_by_value(AppendMethod, 0, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
-	ml_method_by_value(ArgifyMethod, 0, target_expr_argify, MLListT, ExprTargetT, NULL);
-	ml_method_by_value(CmdifyMethod, 0, target_expr_cmdify, MLStringBufferT, ExprTargetT, NULL);
-	ml_method_by_name("string", 0, target_expr_to_string, ExprTargetT, NULL);
+	ml_method_by_value(AppendMethod, NULL, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
+	ml_method_by_value(ArgifyMethod, NULL, target_expr_argify, MLListT, ExprTargetT, NULL);
+	ml_method_by_value(CmdifyMethod, NULL, target_expr_cmdify, MLStringBufferT, ExprTargetT, NULL);
+	ml_method_by_name("string", NULL, target_expr_to_string, ExprTargetT, NULL);
 
 }
