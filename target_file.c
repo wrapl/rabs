@@ -152,9 +152,9 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 	} else if (S_ISDIR(Stat->st_mode)) {
 		memset(Target->Base.Hash, 0xD0, SHA256_BLOCK_SIZE);
 #if defined(__APPLE__)
-		memcpy(Target->Hash, &Stat->st_mtimespec, sizeof(Stat->st_mtimespec));
+		memcpy(Target->Base.Hash, &Stat->st_mtimespec, sizeof(Stat->st_mtimespec));
 #elif defined(__MINGW32__)
-		memcpy(Target->Hash, &Stat->st_mtime, sizeof(Stat->st_mtime));
+		memcpy(Target->Base.Hash, &Stat->st_mtime, sizeof(Stat->st_mtime));
 #else
 		memcpy(Target->Base.Hash, &Stat->st_mtim, sizeof(Stat->st_mtim));
 #endif
