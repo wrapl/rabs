@@ -29,7 +29,7 @@ extern __thread target_t *CurrentTarget;
 
 ml_value_t *rabs_global(const char *Name);
 
-#define CURRENT_VERSION "2.5.2"
+#define CURRENT_VERSION "2.5.3"
 #define WORKING_VERSION "2.4.0"
 
 #endif
