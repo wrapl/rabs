@@ -168,7 +168,7 @@ static int cache_target_set_index(target_t *Target, uint32_t **IndexP) {
 targetset_t *cache_depends_get(target_t *Target) {
 	size_t Length = string_store_get_size(DependsStore, Target->CacheIndex);
 	if (Length) {
-		uint32_t *Buffer = GC_malloc_atomic(Length);
+		uint32_t *Buffer = GC_MALLOC_ATOMIC(Length);
 		string_store_get_value(DependsStore, Target->CacheIndex, Buffer);
 		return cache_target_set_parse(Buffer);
 	} else {
@@ -188,7 +188,7 @@ void cache_depends_set(target_t *Target, targetset_t *Depends) {
 targetset_t *cache_scan_get(target_t *Target) {
 	size_t Length = string_store_get_size(ScansStore, Target->CacheIndex);
 	if (Length) {
-		uint32_t *Buffer = GC_malloc_atomic(Length);
+		uint32_t *Buffer = GC_MALLOC_ATOMIC(Length);
 		string_store_get_value(ScansStore, Target->CacheIndex, Buffer);
 		return cache_target_set_parse(Buffer);
 	} else {
@@ -305,7 +305,7 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 	case CACHE_EXPR_STRING: {
 		int Length = *(int32_t *)Buffer;
 		Buffer += 4;
-		char *Chars = GC_malloc_atomic(Length + 1);
+		char *Chars = GC_MALLOC_ATOMIC(Length + 1);
 		memcpy(Chars, Buffer, Length);
 		Chars[Length] = 0;
 		*Output = ml_string(Chars, Length);
@@ -361,7 +361,7 @@ ml_value_t *cache_expr_get(target_t *Target) {
 	ml_value_t *Result = 0;
 	size_t Length = string_store_get_size(ExprsStore, Target->CacheIndex);
 	if (Length) {
-		char *Buffer = GC_malloc_atomic(Length);
+		char *Buffer = GC_MALLOC_ATOMIC(Length);
 		string_store_get_value(ExprsStore, Target->CacheIndex, Buffer);
 		cache_expr_value_read(Buffer, &Result);
 	}
@@ -370,7 +370,7 @@ ml_value_t *cache_expr_get(target_t *Target) {
 
 void cache_expr_set(target_t *Target, ml_value_t *Value) {
 	size_t Length = cache_expr_value_size(Value);
-	char *Buffer = GC_malloc_atomic(Length);
+	char *Buffer = GC_MALLOC_ATOMIC(Length);
 	cache_expr_value_write(Value, Buffer);
 	string_store_set(ExprsStore, Target->CacheIndex, Buffer, Length);
 }

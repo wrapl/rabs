@@ -625,6 +625,8 @@ int target_wait(target_t *Target, target_t *Waiter) {
 }
 
 static void *target_thread_fn(void *Arg) {
+	GC_add_roots(&CurrentThread, &CurrentThread + 1);
+	GC_add_roots(&CurrentDirectory, &CurrentDirectory + 1);
 	CurrentThread = (build_thread_t *)Arg;
 	char *Path = getcwd(NULL, 0);
 	CurrentDirectory = GC_strdup(Path);
@@ -651,14 +653,16 @@ static void *target_thread_fn(void *Arg) {
 }
 
 void target_threads_start(int NumThreads) {
-	CurrentThread = (build_thread_t *)GC_malloc_uncollectable(sizeof(build_thread_t));
+	GC_add_roots(&CurrentThread, &CurrentThread + 1);
+	GC_add_roots(&CurrentDirectory, &CurrentDirectory + 1);
+	CurrentThread = new(build_thread_t);
 	CurrentThread->Id = 0;
 	CurrentThread->Status = BUILD_IDLE;
 	RunningThreads = 1;
 	pthread_mutex_init(InterpreterLock, NULL);
 	pthread_mutex_lock(InterpreterLock);
 	for (LastThread = 0; LastThread < NumThreads; ++LastThread) {
-		build_thread_t *BuildThread = (build_thread_t *)GC_malloc_uncollectable(sizeof(build_thread_t));
+		build_thread_t *BuildThread = new(build_thread_t);
 		BuildThread->Id = LastThread;
 		BuildThread->Status = BUILD_IDLE;
 		pthread_create(&BuildThread->Handle, NULL, target_thread_fn, BuildThread);

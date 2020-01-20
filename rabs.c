@@ -121,14 +121,14 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 			++Node->Source.Line;
 			Node = Preprocessor->Nodes = NewNode;
 		} else if (Line[Actual - 1] != '\n') {
-			char *NewLine = GC_malloc_atomic(Actual + 1);
+			char *NewLine = GC_MALLOC_ATOMIC(Actual + 1);
 			memcpy(NewLine, Line, Actual);
 			NewLine[Actual] = '\n';
 			NewLine[Actual + 1] = 0;
 			free(Line);
 			return NewLine;
 		} else {
-			char *NewLine = GC_malloc_atomic(Actual);
+			char *NewLine = GC_MALLOC_ATOMIC(Actual);
 			memcpy(NewLine, Line, Actual);
 			NewLine[Actual] = 0;
 			free(Line);
@@ -148,7 +148,7 @@ static ml_value_t *load_file(const char *FileName) {
 	Preprocessor->Context->GlobalGet = (ml_getter_t)rabs_ml_global;
 	Preprocessor->Context->Globals = NULL;
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Context);
-	mlc_on_error(Preprocessor->Context) return Preprocessor->Context->Error;
+	MLC_ON_ERROR(Preprocessor->Context) return Preprocessor->Context->Error;
 	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
 	ml_accept_eoi(Preprocessor->Scanner);
 	ml_value_t *Closure = ml_compile(Expr, NULL, Preprocessor->Context);
@@ -216,7 +216,7 @@ static ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 		if (Result->Type == MLErrorT) return Result;
 	}
 	size_t Length = Buffer->Length;
-	char *FileName0 = GC_malloc_atomic(Length + MAX_EXTENSION);
+	char *FileName0 = GC_MALLOC_ATOMIC(Length + MAX_EXTENSION);
 	memcpy(FileName0, ml_stringbuffer_get(Buffer), Length);
 	char *FileName = FileName0;
 	struct stat Stat[1];
@@ -748,7 +748,7 @@ static ml_value_t *debug(void *Data, int Count, ml_value_t **Args) {
 
 static ml_value_t *lib_path(void) {
 	int ExecutablePathLength = wai_getExecutablePath(NULL, 0, NULL);
-	char *ExecutablePath = GC_malloc_atomic(ExecutablePathLength + 1);
+	char *ExecutablePath = GC_MALLOC_ATOMIC(ExecutablePathLength + 1);
 	wai_getExecutablePath(ExecutablePath, ExecutablePathLength + 1, &ExecutablePathLength);
 	ExecutablePath[ExecutablePathLength] = 0;
 	for (int I = ExecutablePathLength - 1; I > 0; --I) {
@@ -759,7 +759,7 @@ static ml_value_t *lib_path(void) {
 		}
 	}
 	int LibPathLength = ExecutablePathLength + strlen("/lib/rabs");
-	char *LibPath = GC_malloc_atomic(LibPathLength + 1);
+	char *LibPath = GC_MALLOC_ATOMIC(LibPathLength + 1);
 	memcpy(LibPath, ExecutablePath, ExecutablePathLength);
 	strcpy(LibPath + ExecutablePathLength, "/lib/rabs");
 	printf("Looking for library path at %s\n", LibPath);

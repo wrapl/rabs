@@ -618,11 +618,11 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *target_file_chdir(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Absolute) {
-		char *Path2 = GC_malloc_atomic_uncollectable(strlen(Target->Path) + 1);
+		char *Path2 = GC_MALLOC_ATOMIC(strlen(Target->Path) + 1);
 		CurrentDirectory = strcpy(Path2, Target->Path);
 	} else {
 		const char *Path = concat(RootPath, "/", Target->Path, NULL);
-		char *Path2 = GC_malloc_atomic_uncollectable(strlen(Path) + 1);
+		char *Path2 = GC_MALLOC_ATOMIC(strlen(Path) + 1);
 		CurrentDirectory = strcpy(Path2, Path);
 	}
 	return Args[0];
