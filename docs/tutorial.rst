@@ -38,7 +38,7 @@ Note that ``rabs`` automatically loads and runs the :file:`build.rabs` file. The
       Looking for library path at /usr/lib/rabs
       Error: could not find project root
 
-After this, the :file:`build.rabs` contains one other line: :mini:`print("Hello world!\n")` which predictably causes ``rabs`` to print `Hello world!` to the console.
+After this, the :file:`build.rabs` contains one other line: :mini:`print("Hello world!\n")` which predictably causes ``rabs`` to print :mini:`"Hello world!"` to the console.
 
 Build Iterations
 ----------------
@@ -95,7 +95,7 @@ Update the :file:`build.rabs` file to look as follows:
    
    DEFAULT => fun() print("Building DEFAULT\n")
 
-This change sets a *build function* for the :mini:`DEFAULT` target to a function that prints out a single string `Building DEFAULT`. Since :mini:`DEFAULT` is a meta target, its build function doesn't need to do anything specific such as creating a file or returning a value.
+This change sets a *build function* for the :mini:`DEFAULT` target to a function that prints out a single string :mini:`"Building DEFAULT"`. Since :mini:`DEFAULT` is a meta target, its build function doesn't need to do anything specific such as creating a file or returning a value.
 
 Running ``rabs -s`` again produces the following output:
 
@@ -163,14 +163,14 @@ Targets and Dependencies
 
 .. code-block:: mini
 
-   -- ROOT ---
+   -- ROOT --
    
    print("Hello world!\n")
    
-   var TEST := meta("TEST")
-   TEST => fun() print("Building TEST\n")
+   var Test := meta("TEST")
+   Test => fun() print("Building TEST\n")
    
-   DEFAULT[TEST]
+   DEFAULT[Test]
    DEFAULT => fun() print("Building DEFAULT again\n")
 
 This defines a new meta target, called :mini:`TEST`. However running ``rabs -s`` will not display `Building TEST` and :mini:`TEST` will not be updated (or even displayed).
@@ -179,14 +179,14 @@ In order for :mini:`TEST` to be built, we need to make one more change:
 
 .. code-block:: mini
 
-   -- ROOT ---
+   -- ROOT --
    
    print("Hello world!\n")
    
-   var TEST := meta("TEST")
-   TEST => fun() print("Building TEST\n")
+   var Test := meta("TEST")
+   Test => fun() print("Building TEST\n")
    
-   DEFAULT[TEST]
+   DEFAULT[Test]
    DEFAULT => fun() print("Building DEFAULT again\n")
 
 The line :mini:`DEFAULT[TEST]` adds :mini:`TEST` as a *dependency* of :mini:`DEFAULT`. This causes 2 things:
@@ -194,7 +194,7 @@ The line :mini:`DEFAULT[TEST]` adds :mini:`TEST` as a *dependency* of :mini:`DEF
 #. :mini:`TEST` must be built before :mini:`DEFAULT` and
 #. whenever :mini:`TEST` changes, :mini:`DEFAULT` will be rebuilt.
 
-Running `rabs -s` shows us this in action:
+Running ``rabs -s`` shows us this in action:
 
 .. code-block:: console
 
@@ -215,14 +215,14 @@ Not only is the build function for :mini:`TEST` executed, the build function for
 
 .. code-block:: mini
 
-   -- ROOT ---
+   -- ROOT --
    
    print("Hello world!\n")
    
-   var TEST := meta("TEST")
-   TEST => fun() print("Building TEST again\n")
+   var Test := meta("TEST")
+   Test => fun() print("Building TEST again\n")
    
-   DEFAULT[TEST]
+   DEFAULT[Test]
    DEFAULT => fun() print("Building DEFAULT again\n")
 
 .. code-block:: console
@@ -242,5 +242,64 @@ Not only is the build function for :mini:`TEST` executed, the build function for
 
 .. note::
 
-   Some targets (e.g. file targets), may be considered unchanged even if their build functions was run in an iteration. This will happen if the contents / value of a target has not changed despite a changes to its build function or dependencies. Meta targets are always considered updated if their build function or any of their dependencies change (since they have no other contents / value).
+   Some targets (e.g. file targets), are considered unchanged even if their build functions was run in an iteration. This happens if the contents / value of a target has not changed despite changes to its build function or dependencies. Since meta targets have no contents or value, they are always considered changed if their build function or any of their dependencies change.
 
+Shorter Syntax
+--------------
+
+Our current script describes build functions (using :mini:`Target => Function`) and dependencies (using :mini:`Target[Dependency]`). Both of these operations return the target itself, so we can combine them on one line:
+
+.. code-block:: mini
+
+   -- ROOT --
+   
+   print("Hello world!\n")
+   
+   var Test := meta("TEST") => fun() print("Building TEST again\n")
+   
+   DEFAULT[Test] => fun() print("Building DEFAULT again\n")
+
+File Targets
+------------
+
+Now that we can create and update meta targets, it's time to move on to the most useful type of target in ``rabs``, *file* targets. These correspond to files (or directories) on disk. As such, they have contents, which are read when checking if a file has changed.
+
+Add a few more lines to :file:`build.rabs`:
+
+.. code-block:: mini
+
+   -- ROOT --
+   
+   print("Hello world!\n")
+   
+   var Test := meta("TEST") => fun() print("Building TEST again\n")
+   
+   var Test2 := file("test.txt") => fun(Target) do
+      var File := Target:open("w")
+      File:write("Hello world!\n")
+      File:close
+   end
+   
+   DEFAULT[Test, Test2] => fun() print("Building DEFAULT again\n")
+
+Running ``rabs -s`` again creates the file :file:`test.txt` with the expected content:
+
+.. code-block:: console
+
+   $ rabs -s
+   Looking for library path at /usr/lib/rabs
+   RootPath = <path>
+   Building in <path>
+   Rabs version = 2.5.4
+   Build iteration = 13
+   Hello world!
+   1 / 3 #0 Updated file:test.txt to iteration 13
+   2 / 3 #0 Updated meta:::TEST to iteration 12
+      Updating due to file:test.txt
+   Building DEFAULT again
+   3 / 3 #0 Updated meta:::DEFAULT to iteration 13
+   $ ls
+   build.rabs  build.rabs.db/  test.txt
+   $ cat test.txt
+   Hello world!
+   
