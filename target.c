@@ -721,6 +721,7 @@ void target_init(void) {
 	ml_method_by_name("[]", NULL, target_depend, TargetT, MLAnyT, NULL);
 	ml_method_by_name("scan", NULL, target_scan_new, TargetT, NULL);
 	ml_method_by_name("=>", NULL, target_set_build, TargetT, MLAnyT, NULL);
+	ml_method_by_name("<<", NULL, target_depend, TargetT, MLAnyT, NULL);
 	ml_method_by_name("id", NULL, target_get_id, TargetT, NULL);
 	ml_method_by_name("build", NULL, target_get_build, TargetT, NULL);
 	ml_method_by_name("build", NULL, target_set_build, TargetT, MLAnyT, NULL);

@@ -220,6 +220,10 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	} else {
 		Target = target_file_check(Path, 1);
 	}
+	if (Count > 1) {
+		Target->Build = Args[1];
+		Target->BuildContext = CurrentContext;
+	}
 	return (ml_value_t *)Target;
 }
 

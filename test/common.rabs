@@ -43,5 +43,4 @@ c_program := fun(Executable, Objects, Libraries) do
 		execute('cc', '-o', Executable, Objects, Libraries, LDFLAGS)
 		DEBUG or execute('strip', Executable)
 	end
-	DEFAULT[Executable]
 end
