@@ -6,7 +6,7 @@ In this tutorial, we will create a Rabs script that updates a generated file whe
 Hello world
 -----------
 
-Create a new directory called :file:`tutorial1` and inside it create a file called :file:`build.rabs` with the following content.
+Create a new directory called :file:`tutorial` and inside it create a file called :file:`build.rabs` with the following content.
 
 .. code-block:: mini
 
@@ -14,14 +14,14 @@ Create a new directory called :file:`tutorial1` and inside it create a file call
    
    print("Hello world!\n")
 
-Run ``rabs`` in the directory, which will give the following output (with `/tutorial1` replaced by the full path of your directory):
+Run ``rabs`` in the directory, which will give the following output (with `/tutorial` replaced by the full path of your directory):
 
 .. code-block:: console
 
    $ rabs
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 1
    Hello world!
@@ -49,8 +49,8 @@ If we run ``rabs`` again, we get almost the same output:
 
    $ rabs
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 2
    Hello world!
@@ -73,8 +73,8 @@ If we run ``rabs`` with the additional argument `-s`, we can see how it checks a
 
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 3
    Hello world!
@@ -103,8 +103,8 @@ Running ``rabs -s`` again produces the following output:
 
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 4
    Hello world!
@@ -119,8 +119,8 @@ If we try running ``rabs -s`` again, we'll get different output:
 
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 5
    Hello world!
@@ -142,8 +142,8 @@ Try changing the build function:
 
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 6
    Hello world!
@@ -200,8 +200,8 @@ Running ``rabs -s`` shows us this in action:
 
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 11
    Hello world!
@@ -229,8 +229,8 @@ Not only is the build function for :mini:`TEST` executed, the build function for
 
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 12
    Hello world!
@@ -290,8 +290,8 @@ Running ``rabs -s`` again creates the file :file:`test.txt` with the expected co
 
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 13
    Hello world!
@@ -332,8 +332,8 @@ In this example, the :file:`test.txt` target has no dependencies so it will only
    cat: test.txt: No such file or directory
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 14
    Hello world!
@@ -379,12 +379,12 @@ We are introducing two new features here, using an external file target and call
 
    $ rabs -s
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 24
    Hello world!
-   Error: rule failed to build: /tutorial1/input.txt
+   Error: rule failed to build: /tutorial/input.txt
 
 `rabs` needs to check the file :file:`input.txt` before it can build :file:`output.txt`, but this file does not exist and it has no build function. So `rabs` complains that the (:mini:`nil`) build function for :file:`input.txt` failed to build the file. This error will also occur for any file target which has a build function if that build function fails to build the expected file.
 
@@ -395,15 +395,15 @@ Create :file:`input.txt` with some text, and run `rabs`. This time add the extra
    $ echo 1 > input.txt
    $ rabs -s -c
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 25
    Hello world!
    1 / 5 #0 Updated file:input.txt to iteration 25
    2 / 5 #0 Updated file:test.txt to iteration 13
       Updating due to file:input.txt
-   /tutorial1: cp /tutorial1/input.txt /tutorial1/output.txt 
+   /tutorial: cp /tutorial/input.txt /tutorial/output.txt 
       0.000101 seconds.
    3 / 5 #0 Updated file:output.txt to iteration 25
    4 / 5 #0 Updated meta:::TEST to iteration 12
@@ -422,15 +422,15 @@ If we change the contents of :file:`input.txt`, `rabs` will do its job and rebui
    $ echo 2 > input.txt
    $ rabs -s -c
    Looking for library path at /usr/lib/rabs
-   RootPath = /tutorial1
-   Building in /tutorial1
+   RootPath = /tutorial
+   Building in /tutorial
    Rabs version = 2.5.4
    Build iteration = 28
    Hello world!
    1 / 5 #0 Updated file:input.txt to iteration 28
    2 / 5 #0 Updated file:test.txt to iteration 13
       Updating due to file:input.txt
-   /tutorial1: cp /tutorial1/input.txt /tutorial1/output.txt 
+   /tutorial: cp /tutorial/input.txt /tutorial/output.txt 
       0.000101 seconds.
    3 / 5 #0 Updated file:output.txt to iteration 28
    4 / 5 #0 Updated meta:::TEST to iteration 12
