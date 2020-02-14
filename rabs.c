@@ -184,12 +184,8 @@ static ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	const char *Name = ml_string_value(Args[0]);
 	context_t *Context = context_scope(Name);
 	ml_value_t *Result = ml_call(Args[1], 0, NULL);
-	if (Result->Type == MLErrorT) {
-		context_pop();
-		return Result;
-	}
 	context_pop();
-	return (ml_value_t *)Context;
+	return Result;
 }
 
 static ml_value_t *symbol(void *Data, int Count, ml_value_t **Args) {
