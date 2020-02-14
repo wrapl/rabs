@@ -47,18 +47,18 @@ ifeq ($(MACHINE), i686)
 endif
 
 ifeq ($(PLATFORM), Linux)
-	LDFLAGS += -Wl,--dynamic-list=exports.lst -ldl -lgc -lsqlite3
+	LDFLAGS += -Wl,--dynamic-list=exports.lst -ldl -lgc
 	objects += targetwatch.o
 endif
 
 ifeq ($(PLATFORM), FreeBSD)
 	CFLAGS += -I/usr/local/include
-	LDFLAGS += -L/usr/local/lib -lgc-threaded -lsqlite3
+	LDFLAGS += -L/usr/local/lib -lgc-threaded
 endif
 
 ifeq ($(PLATFORM), Mingw)
 	CFLAGS += -include ansicolor-w32.h
-	LDFLAGS += -lregex -lgc -lsqlite3
+	LDFLAGS += -lregex -lgc
 	objects += ansicolor-w32.o
 endif
 

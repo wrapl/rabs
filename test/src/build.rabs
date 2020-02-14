@@ -31,7 +31,7 @@ CFLAGS := old + [TestCflags, pkgconfig("-march=native")]
 LDFLAGS := old + ["-lminilang"]
 PREBUILDS := old + [EXTERNALS."MINILANG"]
 
-c_program(file("test"), [file("test.o"), file("test2.o")])
+DEFAULT[c_program(file("test"), [file("test.o"), file("test2.o")])]
 
 for File in file(""):ls("^.+\\.c$") do
 	print('Found {File}\n')

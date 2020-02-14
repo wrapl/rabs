@@ -68,6 +68,11 @@ ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
 		target_expr_t *Target = target_new(target_expr_t, ExprTargetT, Id, R.Index, R.Slot);
 		Target->Value = NULL;
 	}
+	if (Count > 1) {
+		target_t *Target = R.Slot[0];
+		Target->Build = Args[1];
+		Target->BuildContext = CurrentContext;
+	}
 	return (ml_value_t *)R.Slot[0];
 }
 

@@ -34,6 +34,11 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, R.Index, R.Slot);
 		Target->Name = Name;
 	}
+	if (Count > 1) {
+		target_t *Target = R.Slot[0];
+		Target->Build = Args[1];
+		Target->BuildContext = CurrentContext;
+	}
 	return (ml_value_t *)R.Slot[0];
 }
 

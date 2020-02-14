@@ -129,6 +129,7 @@ void context_init() {
 	DefaultString = ml_string("DEFAULT", -1);
 	ContextT = ml_type(MLAnyT, "context");
 	ml_method_by_name(".", 0, context_get_local, ContextT, MLStringT, NULL);
+	ml_method_by_name("::", 0, context_get_local, ContextT, MLStringT, NULL);
 	ml_method_by_name("parent", 0, context_get_parent, ContextT, NULL);
 	ml_method_by_name("path", 0, context_path, ContextT, NULL);
 	ml_method_by_name("/", 0, context_get_subdir, ContextT, MLStringT, NULL);

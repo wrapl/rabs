@@ -45,6 +45,11 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 		Target->Name = Name;
 		targetset_insert(Target->Base.Depends, Source);
 	}
+	if (Count > 2) {
+		target_t *Target = R.Slot[0];
+		Target->Build = Args[2];
+		Target->BuildContext = CurrentContext;
+	}
 	return (ml_value_t *)R.Slot[0];
 }
 
