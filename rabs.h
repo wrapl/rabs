@@ -4,7 +4,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include "minilang.h"
-#include "minilang/ml_macros.h"
+#include "ml_macros.h"
 
 typedef struct target_t target_t;
 

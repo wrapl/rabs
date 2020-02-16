@@ -11,13 +11,13 @@ endif
 
 all: $(RABS)
 
-minilang/libminilang.a: minilang/Makefile minilang/*.c minilang/*.h
-	$(MAKE) -C minilang PLATFORM=$(PLATFORM) libminilang.a
+minilang/lib/libminilang.a: minilang/Makefile minilang/src/*.c minilang/src/*.h
+	$(MAKE) -C minilang PLATFORM=$(PLATFORM) lib/libminilang.a
 
 radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a
 
-*.o: *.h minilang/*.h
+*.o: *.h minilang/src/*.h
 
 objects = \
 	cache.o \
@@ -38,8 +38,8 @@ objects = \
 	whereami.o
 
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -Wall \
-	-I. -Iminilang -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
-LDFLAGS += minilang/libminilang.a radb/libradb.a -lm -pthread
+	-I. -Iminilang/src -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
+LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread
 
 ifeq ($(MACHINE), i686)
 	CFLAGS += -fno-pic
@@ -74,10 +74,10 @@ else
 endif
 
 ifdef DEBUG
-$(RABS): Makefile $(objects) *.h minilang/libminilang.a radb/libradb.a exports.lst
+$(RABS): Makefile $(objects) *.h minilang/lib/libminilang.a radb/libradb.a exports.lst
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 else
-$(RABS): Makefile $(objects) *.h minilang/libminilang.a radb/libradb.a exports.lst
+$(RABS): Makefile $(objects) *.h minilang/lib/libminilang.a radb/libradb.a exports.lst
 	mkdir -p bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 	#strip $@

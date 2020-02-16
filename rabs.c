@@ -17,7 +17,7 @@
 #include "ml_iterfns.h"
 #include "ml_file.h"
 #include "rabs.h"
-#include "minilang/stringmap.h"
+#include "stringmap.h"
 #include "library.h"
 #include "ml_console.h"
 #include "whereami.h"
