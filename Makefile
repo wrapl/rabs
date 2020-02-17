@@ -11,6 +11,11 @@ endif
 
 all: $(RABS)
 
+SUBDIRS = obj bin lib
+
+$(SUBDIRS):
+	mkdir -p $@
+
 minilang/lib/libminilang.a: minilang/Makefile minilang/src/*.c minilang/src/*.h
 	$(MAKE) -C minilang PLATFORM=$(PLATFORM) lib/libminilang.a
 
@@ -19,26 +24,29 @@ radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 
 *.o: *.h minilang/src/*.h
 
+obj/%.o: src/%.c | obj
+	$(CC) $(CFLAGS) -c -o $@ $< 
+
 objects = \
-	cache.o \
-	context.o \
-	rabs.o \
-	target.o \
-	target_expr.o \
-	target_file.o \
-	target_meta.o \
-	target_scan.o \
-	target_symb.o \
-	targetcache.o \
-	targetqueue.o \
-	targetset.o \
-	util.o \
-	vfs.o \
-	library.o \
-	whereami.o
+	obj/cache.o \
+	obj/context.o \
+	obj/rabs.o \
+	obj/target.o \
+	obj/target_expr.o \
+	obj/target_file.o \
+	obj/target_meta.o \
+	obj/target_scan.o \
+	obj/target_symb.o \
+	obj/targetcache.o \
+	obj/targetqueue.o \
+	obj/targetset.o \
+	obj/util.o \
+	obj/vfs.o \
+	obj/library.o \
+	obj/whereami.o
 
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing -Wall \
-	-I. -Iminilang/src -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
+	-Iobj -Isrc -Iradb -Iminilang/src -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
 LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread
 
 ifeq ($(MACHINE), i686)
@@ -47,8 +55,8 @@ ifeq ($(MACHINE), i686)
 endif
 
 ifeq ($(PLATFORM), Linux)
-	LDFLAGS += -Wl,--dynamic-list=exports.lst -ldl -lgc
-	objects += targetwatch.o
+	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+	objects += obj/targetwatch.o
 endif
 
 ifeq ($(PLATFORM), FreeBSD)
@@ -59,7 +67,7 @@ endif
 ifeq ($(PLATFORM), Mingw)
 	CFLAGS += -include ansicolor-w32.h
 	LDFLAGS += -lregex -lgc
-	objects += ansicolor-w32.o
+	objects += obj/ansicolor-w32.o
 endif
 
 ifeq ($(PLATFORM), Darwin)
@@ -74,11 +82,10 @@ else
 endif
 
 ifdef DEBUG
-$(RABS): Makefile $(objects) *.h minilang/lib/libminilang.a radb/libradb.a exports.lst
+$(RABS): Makefile $(objects) src/*.h minilang/lib/libminilang.a radb/libradb.a src/exports.lst bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 else
-$(RABS): Makefile $(objects) *.h minilang/lib/libminilang.a radb/libradb.a exports.lst
-	mkdir -p bin
+$(RABS): Makefile $(objects) src/*.h minilang/lib/libminilang.a radb/libradb.a src/exports.lst bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 	#strip $@
 endif
@@ -87,8 +94,7 @@ endif
 clean:
 	$(MAKE) -C minilang clean
 	$(MAKE) -C radb clean
-	rm -f $(RABS)
-	rm -f *.o
+	rm -rf bin obj
 
 PREFIX = /usr
 install_bin = $(DESTDIR)$(PREFIX)/bin
