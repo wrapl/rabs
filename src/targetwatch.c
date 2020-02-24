@@ -1,7 +1,7 @@
 #include "targetwatch.h"
 #include "target.h"
-#include "minilang/stringmap.h"
-#include "minilang/ml_macros.h"
+#include "stringmap.h"
+#include "ml_macros.h"
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>

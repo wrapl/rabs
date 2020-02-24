@@ -4,7 +4,7 @@
 #include <pthread.h>
 #include <unistd.h>
 #include "minilang.h"
-#include "minilang/ml_macros.h"
+#include "ml_macros.h"
 
 typedef struct target_t target_t;
 
@@ -29,7 +29,7 @@ extern __thread target_t *CurrentTarget;
 
 ml_value_t *rabs_global(const char *Name);
 
-#define CURRENT_VERSION "2.5.5"
+#define CURRENT_VERSION "2.5.6"
 #define WORKING_VERSION "2.4.0"
 
 #endif

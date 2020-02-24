@@ -11,7 +11,7 @@
 #include "rabs.h"
 #include "util.h"
 #include "targetcache.h"
-#include "minilang/ml_file.h"
+#include "ml_file.h"
 
 #ifdef Linux
 #include <sys/sendfile.h>
@@ -131,6 +131,11 @@ static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Arg
 	return ml_string(Path, strlen(Path));
 }
 
+static int target_file_affects_fn(target_t *Target, void *Data) {
+	fprintf(stderr, "\t\e[31mRequired by %s\e[0m\n", Target->Id);
+	return 0;
+}
+
 time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	const char *FileName;
 	if (Target->Absolute) {
@@ -142,7 +147,8 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
 		pthread_mutex_lock(InterpreterLock);
-		printf("\e[31mError: rule failed to build: %s\e[0m\n", FileName);
+		printf("\e[31mError: file does not exist: %s\e[0m\n", FileName);
+		targetset_foreach(Target->Base.Affects, NULL, target_file_affects_fn);
 		exit(1);
 		//memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
 		//return PreviousTime;
@@ -160,6 +166,11 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 #endif
 	} else {
 		int File = open(FileName, 0, O_RDONLY);
+		if (!File) {
+			fprintf(stderr, "\e[31mError: error opening: %s\e[0m\n", FileName);
+			targetset_foreach(Target->Base.Affects, NULL, target_file_affects_fn);
+			exit(1);
+		}
 		SHA256_CTX Ctx[1];
 		uint8_t Buffer[8192];
 		sha256_init(Ctx);
@@ -167,7 +178,8 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 			int Count = read(File, Buffer, 8192);
 			if (Count == 0) break;
 			if (Count == -1) {
-				fprintf(stderr, "\e[31mError: read error: %s\e[0m\n", FileName);
+				fprintf(stderr, "\e[31mError: error reading: %s\e[0m\n", FileName);
+				targetset_foreach(Target->Base.Affects, NULL, target_file_affects_fn);
 				exit(1);
 			}
 			sha256_update(Ctx, Buffer, Count);

@@ -16,3 +16,4 @@ build.rabs.db*
 /docs/_build
 /tmp/
 *.pyc
+/obj/

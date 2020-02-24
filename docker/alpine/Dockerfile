@@ -1,6 +1,6 @@
 FROM alpine:latest
 
-RUN apk add --no-cache alpine-sdk gc-dev sqlite-dev
+RUN apk add --no-cache alpine-sdk gc-dev
 
 ADD . /tmp/rabs
 

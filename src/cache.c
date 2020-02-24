@@ -7,7 +7,7 @@
 #include <gc/gc.h>
 #include <sys/stat.h>
 #include <targetcache.h>
-#include "radb/radb.h"
+#include <radb.h>
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 

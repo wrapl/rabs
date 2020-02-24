@@ -1,5 +1,5 @@
 #include "targetqueue.h"
-#include "minilang/ml_macros.h"
+#include "ml_macros.h"
 #include <gc/gc.h>
 #include <string.h>
 

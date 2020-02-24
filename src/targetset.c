@@ -1,7 +1,7 @@
 #include "targetset.h"
 #include <gc/gc.h>
 #include "target.h"
-#include "minilang/ml_macros.h"
+#include "ml_macros.h"
 
 #define INITIAL_SIZE 4
 
