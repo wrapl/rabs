@@ -146,7 +146,7 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 	struct stat Stat[1];
 	if (stat(FileName, Stat)) {
 		pthread_mutex_lock(InterpreterLock);
-		printf("\e[31mError: file does not exist: %s\e[0m\n", FileName);
+		printf("\e[33mWarning: file does not exist: %s\e[0m\n", FileName);
 		targetset_foreach(Target->Base.Affects, NULL, target_file_affects_fn);
 		memcpy(Target->Base.Hash, PreviousHash, SHA256_BLOCK_SIZE);
 		return PreviousTime;

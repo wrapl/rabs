@@ -20,6 +20,7 @@
 #include "stringmap.h"
 #include "library.h"
 #include "ml_console.h"
+#include "ml_module.h"
 #include "whereami.h"
 
 #ifdef Linux
