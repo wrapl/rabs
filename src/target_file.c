@@ -18,7 +18,6 @@
 #include "targetwatch.h"
 #endif
 
-extern ml_value_t *AppendMethod;
 extern ml_value_t *ArgifyMethod;
 extern ml_value_t *CmdifyMethod;
 
@@ -149,9 +148,8 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 		pthread_mutex_lock(InterpreterLock);
 		printf("\e[31mError: file does not exist: %s\e[0m\n", FileName);
 		targetset_foreach(Target->Base.Affects, NULL, target_file_affects_fn);
-		exit(1);
-		//memcpy(Target->Hash, PreviousHash, SHA256_BLOCK_SIZE);
-		//return PreviousTime;
+		memcpy(Target->Base.Hash, PreviousHash, SHA256_BLOCK_SIZE);
+		return PreviousTime;
 	}
 	if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Base.Hash, PreviousHash, SHA256_BLOCK_SIZE);
@@ -654,7 +652,7 @@ ml_value_t *target_file_path(void *Data, int Count, ml_value_t **Args) {
 
 void target_file_init() {
 	FileTargetT = ml_type(TargetT, "file-target");
-	ml_method_by_value(AppendMethod, 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
 	ml_method_by_value(ArgifyMethod, 0, target_file_argify, MLListT, FileTargetT, NULL);
 	ml_method_by_value(CmdifyMethod, 0, target_file_cmdify, MLStringBufferT, FileTargetT, NULL);
 	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);

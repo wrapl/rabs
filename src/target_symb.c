@@ -32,20 +32,20 @@ time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned cha
 	return 0;
 }
 
-target_t *target_symb_new(const char *Name) {
+target_t *target_symb_new(context_t *Context, const char *Name) {
 	char *Id;
-	asprintf(&Id, "symb:%s/%s", CurrentContext->Name, Name);
+	asprintf(&Id, "symb:%s/%s", Context->Name, Name);
 	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
 		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, R.Index, R.Slot);
-		Target->Context = CurrentContext;
+		Target->Context = Context;
 		Target->Name = Name;
 	}
 	return R.Slot[0];
 }
 
 void target_symb_update(const char *Name) {
-	target_t *Target = target_symb_new(Name);
+	target_t *Target = target_symb_new(CurrentContext, Name);
 	unsigned char Previous[SHA256_BLOCK_SIZE];
 	int LastUpdated, LastChecked;
 	time_t FileTime = 0;

@@ -25,6 +25,7 @@
 #include <ml_file.h>
 #include <limits.h>
 #include <inttypes.h>
+#include "ml_bytecode.h"
 
 #ifdef Linux
 #include "targetwatch.h"
@@ -98,7 +99,7 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 	if (Arg->Type == MLListT) {
 		return ml_list_foreach(Arg, Target, (void *)target_depends_single);
 	} else if (Arg->Type == MLStringT) {
-		target_t *Depend = target_symb_new(ml_string_value(Arg));
+		target_t *Depend = target_symb_new(CurrentContext, ml_string_value(Arg));
 		targetset_insert(Target->Depends, Depend);
 		if (CurrentTarget) targetset_insert(Target->BuildDepends, Depend);
 		return 0;
@@ -165,7 +166,7 @@ static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
 			if (target_depends_auto_single(Node->Value, NULL)) return 1;
 		}
 	} else if (Arg->Type == MLStringT) {
-		target_t *Depend = target_symb_new(ml_string_value(Arg));
+		target_t *Depend = target_symb_new(CurrentContext, ml_string_value(Arg));
 		target_depends_auto(Depend);
 		return 0;
 	} else if (ml_is(Arg, TargetT)) {
