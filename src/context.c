@@ -3,6 +3,7 @@
 #include "util.h"
 #include "cache.h"
 #include "target.h"
+#include "target_symb.h"
 #include "stringmap.h"
 #include <gc/gc.h>
 #include <unistd.h>
@@ -71,10 +72,6 @@ ml_value_t *context_symb_get(context_t *Context, const char *Name) {
 	return 0;
 }
 
-static ml_value_t *context_symb_get_or_nil(context_t *Context, const char *Name) {
-	return context_symb_get(Context, Name) ?: MLNil;
-}
-
 ml_value_t *context_symb_set(context_t *Context, const char *Name, ml_value_t *Value) {
 	stringmap_insert(Context->Locals, Name, Value);
 	return Value;
@@ -83,7 +80,7 @@ ml_value_t *context_symb_set(context_t *Context, const char *Name, ml_value_t *V
 static ml_value_t *context_get_local(void *Data, int Count, ml_value_t **Args) {
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
-	return ml_property(Context, Name, (ml_getter_t)context_symb_get_or_nil, (ml_setter_t)context_symb_set, NULL, NULL);
+	return target_symb_new(Context, Name);
 }
 
 static ml_value_t *context_get_parent(void *Data, int Count, ml_value_t **Args) {

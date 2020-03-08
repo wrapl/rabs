@@ -1,6 +1,6 @@
 #include "csv.h"
 #include "minilang.h"
-#include "minilang/stringmap.h"
+#include "stringmap.h"
 #include "rabs.h"
 #include <string.h>
 #include <stdio.h>
@@ -56,15 +56,13 @@ static ml_value_t *csv_read_fn(void *Data, int Count, ml_value_t **Args) {
 	return Row->Values;
 }
 
-static ml_value_t *StringMethod;
-
 static ml_value_t *csv_write_fn(void *Data, int Count, ml_value_t **Args) {
 	csv_t *Csv = (csv_t *)Args[0];
 	ml_list_t *Values = (ml_list_t *)Args[1];
 	for (ml_list_node_t *Node = Values->Head; Node; Node = Node->Next) {
 		ml_value_t *Field = Node->Value;
 		if (Field->Type != MLStringT) {
-			Field = ml_call(StringMethod, 1, &Field);
+			Field = ml_call(MLStringOfMethod, 1, &Field);
 			if (Field->Type == MLErrorT) return Field;
 			if (Field->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 		}
@@ -95,7 +93,7 @@ static ml_value_t *csv_open(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(2);
 	ml_value_t *FileName = Args[0];
 	if (FileName->Type != MLStringT) {
-		FileName = ml_call(StringMethod, 1, &FileName);
+		FileName = ml_call(MLStringOfMethod, 1, &FileName);
 		if (FileName->Type == MLErrorT) return FileName;
 		if (FileName->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 	}
@@ -117,7 +115,6 @@ static ml_value_t *csv_open(void *Data, int Count, ml_value_t **Args) {
 }
 
 void *init(stringmap_t *Exports, stringmap_t *Globals) {
-	StringMethod = ml_method("string");
 	CsvT = ml_type(MLAnyT, "csv-file");
 	ml_method_by_name("read", 0, csv_read_fn, CsvT, NULL);
 	ml_method_by_name("write", 0, csv_write_fn, CsvT, MLListT, NULL);

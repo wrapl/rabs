@@ -91,7 +91,13 @@ Complex strings are written between single quotes ``'`` and can contain the same
    -- Complex strings
    'The value of x is \'{x}\''
    'L:length = {L:length}\n'
-   
+
+:mini:`String[I]`
+   Returns the *I*-th character of *String* as a string of length 1.
+
+:mini:`String[I, J]`
+   Returns the sub-string of *String* starting with the *I*-th character up to but excluding the *J*-th character. Negative indices are taken from the end of *String*. If either *I* or *J* it outside the range of *String*, or *I* > *J* then :mini:`nil` is returned.
+
 Regular Expressions
 -------------------
 

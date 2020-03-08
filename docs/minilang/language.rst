@@ -286,11 +286,11 @@ In order to loop over a range of numbers, *Minilang* has a range type, created u
    X = 4
    X = 5
 
-The default step size is :mini:`1` but can be changed with an additional :mini:`..` call.
+The default step size is :mini:`1` but can be changed using the :mini:`:by` method.
 
 .. code-block:: mini
 
-   for X in 1 .. 3 .. 10 do
+   for X in 1 .. 10 by 2 do
       print('X = {X}\n')
    end
 

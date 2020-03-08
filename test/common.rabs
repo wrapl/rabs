@@ -10,7 +10,6 @@ c_compile := fun(Source, Object) do
 end
 
 c_includes := fun(Target) do
-	var Files := []
 	var Lines := shell('cc -c {CFLAGS} -M -MG {Target:source}')
 	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( +)"
 	Files:pop

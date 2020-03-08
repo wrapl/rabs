@@ -20,6 +20,7 @@
 #include "stringmap.h"
 #include "library.h"
 #include "ml_console.h"
+#include "ml_module.h"
 #include "whereami.h"
 
 #ifdef Linux
@@ -32,8 +33,6 @@
 
 const char *SystemName = "build.rabs";
 const char *RootPath;
-ml_value_t *AppendMethod;
-ml_value_t *StringMethod;
 ml_value_t *ArgifyMethod;
 ml_value_t *CmdifyMethod;
 static int EchoCommands = 0;
@@ -47,31 +46,50 @@ ml_value_t *rabs_global(const char *Name) {
 	return stringmap_search(Globals, Name) ?: MLNil;
 }
 
-static ml_value_t *rabs_ml_get(void *Data, const char *Name) {
-	ml_value_t *Value = context_symb_get(CurrentContext, Name);
+extern target_t *target_symb_new(context_t *Context, const char *Name);
+
+typedef struct rabs_property_t {
+	const ml_type_t *Type;
+	const char *Name;
+} rabs_property_t;
+
+static ml_value_t *rabs_property_deref(rabs_property_t *Property) {
+	ml_value_t *Value = context_symb_get(CurrentContext, Property->Name);
 	if (Value) {
-		target_t *Target = target_symb_new(Name);
+		target_t *Target = target_symb_new(CurrentContext, Property->Name);
 		target_depends_auto(Target);
 		return Value;
 	} else {
-		return stringmap_search(Globals, Name) ?: MLNil; //ml_error("NameError", "%s undefined", Name);
+		return stringmap_search(Globals, Property->Name) ?: MLNil; //ml_error("NameError", "%s undefined", Name);
 	}
 }
 
-static ml_value_t *rabs_ml_set(void *Data, const char *Name, ml_value_t *Value) {
-	context_symb_set(CurrentContext, Name, Value);
+static ml_value_t *rabs_property_assign(rabs_property_t *Property, ml_value_t *Value) {
+	context_symb_set(CurrentContext, Property->Name, Value);
 	//target_symb_update(Name);
 	return Value;
 }
 
+static ml_type_t RabsPropertyT[1] = {{
+	MLTypeT,
+	MLAnyT, "property",
+	ml_default_hash,
+	ml_default_call,
+	rabs_property_deref,
+	rabs_property_assign,
+	NULL, 0, 0
+}};
+
 static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
-	ml_value_t *Value = stringmap_search(Cache, Name);
-	if (!Value) {
-		Value = ml_property(Data, Name, rabs_ml_get, rabs_ml_set, NULL, NULL);
-		stringmap_insert(Cache, Name, Value);
+	ml_value_t **Slot = stringmap_slot(Cache, Name);
+	if (!Slot[0]) {
+		rabs_property_t *Property = new(rabs_property_t);
+		Property->Type = RabsPropertyT;
+		Property->Name = Name;
+		Slot[0] = (ml_value_t *)Property;
 	}
-	return Value;
+	return Slot[0];
 }
 
 typedef struct preprocessor_node_t preprocessor_node_t;
@@ -208,7 +226,7 @@ static ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		ml_value_t *Result = ml_inline(MLStringBufferAppendMethod, 2, Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
 	size_t Length = Buffer->Length;
@@ -316,14 +334,14 @@ static int cmdify_map_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t 
 	} else {
 		ml_stringbuffer_add(Buffer, " ", 1);
 	}
-	ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Key);
+	ml_value_t *Result = ml_inline(MLStringBufferAppendMethod, 2, Buffer, Key);
 	if (Result->Type == MLErrorT) {
 		Context->Result = Result;
 		return 1;
 	}
 	if (Value != MLNil && Value != MLSome) {
 		ml_stringbuffer_add(Buffer, "=", 1);
-		Result = ml_inline(AppendMethod, 2, Buffer, Value);
+		Result = ml_inline(MLStringBufferAppendMethod, 2, Buffer, Value);
 		if (Result->Type == MLErrorT) {
 			Context->Result = Result;
 			return 1;
@@ -458,14 +476,14 @@ typedef struct argify_context_t {
 
 static int argify_map_node(ml_value_t *Key, ml_value_t *Value, argify_context_t *Context) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Key);
+	ml_value_t *Result = ml_inline(MLStringBufferAppendMethod, 2, Buffer, Key);
 	if (Result->Type == MLErrorT) {
 		Context->Result = Result;
 		return 1;
 	}
 	if (Value != MLNil) {
 		ml_stringbuffer_add(Buffer, "=", 1);
-		Result = ml_inline(AppendMethod, 2, Buffer, Value);
+		Result = ml_inline(MLStringBufferAppendMethod, 2, Buffer, Value);
 		if (Result->Type == MLErrorT) {
 			Context->Result = Result;
 			return 1;
@@ -603,7 +621,7 @@ static ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		ml_value_t *Result = ml_inline(MLStringBufferAppendMethod, 2, Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
 	char *Path = ml_stringbuffer_get(Buffer);
@@ -617,7 +635,7 @@ static ml_value_t *rabs_chdir(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[I]);
+		ml_value_t *Result = ml_inline(MLStringBufferAppendMethod, 2, Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
 	if (CurrentDirectory) GC_free((void *)CurrentDirectory);
@@ -628,7 +646,7 @@ static ml_value_t *rabs_chdir(void *Data, int Count, ml_value_t **Args) {
 static ml_value_t *rabs_open(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(2);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	ml_value_t *Result = ml_inline(AppendMethod, 2, Buffer, Args[0]);
+	ml_value_t *Result = ml_inline(MLStringBufferAppendMethod, 2, Buffer, Args[0]);
 	if (Result->Type == MLErrorT) return Result;
 	char *FileName = ml_stringbuffer_get(Buffer);
 	ml_value_t *Args2[] = {ml_string(FileName, -1), Args[1]};
@@ -667,7 +685,7 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = Args[I];
 		if (Result->Type != MLStringT) {
-			Result = ml_call(StringMethod, 1, &Result);
+			Result = ml_call(MLStringOfMethod, 1, &Result);
 			if (Result->Type == MLErrorT) return Result;
 			if (Result->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 		}
@@ -778,8 +796,11 @@ int main(int Argc, char **Argv) {
 	SavedArgv = Argv;
 	GC_INIT();
 	ml_init();
-	AppendMethod = ml_method("append");
-	StringMethod = ml_method("string");
+	ml_module_init(Globals);
+	ml_types_init(Globals);
+	ml_object_init(Globals);
+	ml_iterfns_init(Globals);
+	ml_file_init(Globals);
 	ArgifyMethod = ml_method("argify");
 	CmdifyMethod = ml_method("cmdify");
 	stringmap_insert(Globals, "vmount", ml_function(NULL, vmount));
@@ -828,9 +849,6 @@ int main(int Argc, char **Argv) {
 
 	target_init();
 	context_init();
-	ml_object_init(Globals);
-	ml_iterfns_init(Globals);
-	ml_file_init(Globals);
 	library_init();
 
 	struct sigaction Action[1];
