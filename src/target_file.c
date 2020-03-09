@@ -655,7 +655,7 @@ void target_file_init() {
 	ml_method_by_value(MLStringBufferAppendMethod, 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
 	ml_method_by_value(ArgifyMethod, 0, target_file_argify, MLListT, FileTargetT, NULL);
 	ml_method_by_value(CmdifyMethod, 0, target_file_cmdify, MLStringBufferT, FileTargetT, NULL);
-	ml_method_by_name("string", 0, target_file_to_string, FileTargetT, NULL);
+	ml_method_by_name(MLStringOfMethod, 0, target_file_to_string, FileTargetT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, NULL);
