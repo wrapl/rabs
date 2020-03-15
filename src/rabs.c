@@ -20,7 +20,6 @@
 #include "stringmap.h"
 #include "library.h"
 #include "ml_console.h"
-#include "ml_module.h"
 #include "whereami.h"
 
 #ifdef Linux
@@ -790,13 +789,14 @@ static void restart(void) {
 	execv("/proc/self/exe", SavedArgv);
 }
 
+extern int MLDebugClosures;
+
 int main(int Argc, char **Argv) {
 	CurrentDirectory = "<random>";
 	SavedArgc = Argc;
 	SavedArgv = Argv;
 	GC_INIT();
 	ml_init();
-	ml_module_init(Globals);
 	ml_types_init(Globals);
 	ml_object_init(Globals);
 	ml_iterfns_init(Globals);
