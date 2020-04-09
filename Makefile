@@ -87,7 +87,7 @@ $(RABS): Makefile $(objects) src/*.h minilang/lib/libminilang.a radb/libradb.a s
 else
 $(RABS): Makefile $(objects) src/*.h minilang/lib/libminilang.a radb/libradb.a src/exports.lst bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
-	#strip $@
+	strip $@
 endif
 	
 

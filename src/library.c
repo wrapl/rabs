@@ -36,7 +36,7 @@ ml_value_t *library_load(const char *Path, stringmap_t *Globals) {
 #endif
 }
 
-static ml_value_t *library_get(ml_state_t *Caller, library_t *Library, int Count, ml_value_t **Args) {
+static void library_get(ml_state_t *Caller, library_t *Library, int Count, ml_value_t **Args) {
 	ML_CHECKX_ARG_COUNT(1);
 	ML_CHECKX_ARG_TYPE(0, MLStringT);
 	const char *Symbol = ml_string_value(Args[0]);
