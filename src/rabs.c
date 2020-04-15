@@ -186,6 +186,7 @@ static ml_value_t *load_file(const char *FileName) {
 
 	load_file_state_t State[1];
 	State->Base.run = load_file_loaded;
+	State->Base.Context = &MLRootContext;
 	State->Result = MLNil;
 	ml_function_compile(State, Preprocessor->Scanner, NULL);
 	return State->Result;
