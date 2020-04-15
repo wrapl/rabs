@@ -20,7 +20,6 @@
 #include "stringmap.h"
 #include "library.h"
 #include "ml_console.h"
-#include "ml_module.h"
 #include "whereami.h"
 
 #ifdef Linux
@@ -156,6 +155,24 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 	return NULL;
 }
 
+typedef struct {
+	ml_state_t Base;
+	ml_value_t *Result;
+} load_file_state_t;
+
+static void load_file_result(load_file_state_t *State, ml_value_t *Result) {
+	State->Result = Result;
+}
+
+static void load_file_loaded(load_file_state_t *State, ml_value_t *Closure) {
+	if (Closure->Type != MLErrorT) {
+		State->Base.run = load_file_result;
+		Closure->Type->call(State, Closure, 0, NULL);
+	} else {
+		State->Result = Closure;
+	}
+}
+
 static ml_value_t *load_file(const char *FileName) {
 #ifdef Linux
 	if (WatchMode) targetwatch_add(FileName);
@@ -166,12 +183,12 @@ static ml_value_t *load_file(const char *FileName) {
 	Preprocessor->Context->GlobalGet = (ml_getter_t)rabs_ml_global;
 	Preprocessor->Context->Globals = NULL;
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Context);
-	MLC_ON_ERROR(Preprocessor->Context) return Preprocessor->Context->Error;
-	mlc_expr_t *Expr = ml_accept_block(Preprocessor->Scanner);
-	ml_accept_eoi(Preprocessor->Scanner);
-	ml_value_t *Closure = ml_compile(Expr, NULL, Preprocessor->Context);
-	if (Closure->Type == MLErrorT) return Closure;
-	return ml_call(Closure, 0, NULL);
+
+	load_file_state_t State[1];
+	State->Base.run = load_file_loaded;
+	State->Result = MLNil;
+	ml_function_compile(State, Preprocessor->Scanner, NULL);
+	return State->Result;
 }
 
 static ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
@@ -790,13 +807,14 @@ static void restart(void) {
 	execv("/proc/self/exe", SavedArgv);
 }
 
+extern int MLDebugClosures;
+
 int main(int Argc, char **Argv) {
 	CurrentDirectory = "<random>";
 	SavedArgc = Argc;
 	SavedArgv = Argv;
 	GC_INIT();
 	ml_init();
-	ml_module_init(Globals);
 	ml_types_init(Globals);
 	ml_object_init(Globals);
 	ml_iterfns_init(Globals);
