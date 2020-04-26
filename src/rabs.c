@@ -69,15 +69,10 @@ static ml_value_t *rabs_property_assign(rabs_property_t *Property, ml_value_t *V
 	return Value;
 }
 
-static ml_type_t RabsPropertyT[1] = {{
-	MLTypeT,
-	MLAnyT, "property",
-	ml_default_hash,
-	ml_default_call,
-	rabs_property_deref,
-	rabs_property_assign,
-	NULL, 0, 0
-}};
+ML_TYPE(RabsPropertyT, MLAnyT, "property",
+	.deref = (void *)rabs_property_deref,
+	.assign = (void *)rabs_property_assign
+);
 
 static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
@@ -103,7 +98,6 @@ struct preprocessor_node_t {
 typedef struct preprocessor_t {
 	preprocessor_node_t *Nodes;
 	mlc_scanner_t *Scanner;
-	mlc_context_t Context[1];
 } preprocessor_t;
 
 static const char *preprocessor_read(preprocessor_t *Preprocessor) {
@@ -112,8 +106,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 		if (!Node->File) {
 			Node->File = fopen(Node->FileName, "r");
 			if (!Node->File) {
-				Preprocessor->Context->Error = ml_error("LoadError", "error opening %s", Node->FileName);
-				longjmp(Preprocessor->Context->OnError, 1);
+				ml_scanner_error(Preprocessor->Scanner, "LoadError", "error opening %s", Node->FileName);
 			}
 		}
 		char *Line = NULL;
@@ -180,9 +173,7 @@ static ml_value_t *load_file(const char *FileName) {
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
-	Preprocessor->Context->GlobalGet = (ml_getter_t)rabs_ml_global;
-	Preprocessor->Context->Globals = NULL;
-	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Context);
+	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, (ml_getter_t)rabs_ml_global, NULL);
 
 	load_file_state_t State[1];
 	State->Base.run = load_file_loaded;
@@ -1034,7 +1025,7 @@ int main(int Argc, char **Argv) {
 	}
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
-		ml_console(rabs_ml_global, Globals);
+		ml_console(rabs_ml_global, Globals, "--> ", "... ");
 	} else if (WatchMode) {
 #ifdef Linux
 		targetwatch_wait(restart);
