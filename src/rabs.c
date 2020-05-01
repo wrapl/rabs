@@ -365,6 +365,8 @@ static ml_value_t *cmdify_map(void *Data, int Count, ml_value_t **Args) {
 	return Context.Result;
 }
 
+static int ErrorLogFile = STDERR_FILENO;
+
 static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
@@ -389,6 +391,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 		if (chdir(WorkingDirectory)) exit(-1);
 		close(Pipe[0]);
 		dup2(Pipe[1], STDOUT_FILENO);
+		dup2(ErrorLogFile, STDERR_FILENO);
 		execl("/bin/sh", "sh", "-c", Command, NULL);
 		exit(-1);
 	}
@@ -897,6 +900,15 @@ int main(int Argc, char **Argv) {
 			}
 			case 'b': {
 				ProgressBar = 1;
+				break;
+			}
+			case 'E': {
+				const char *ErrorLogFileName = Argv[I][2] ? (Argv[I] + 2) : Argv[++I];
+				ErrorLogFile = open(ErrorLogFileName, O_CREAT | O_WRONLY, 0600);
+				if (ErrorLogFile == -1) {
+					printf("Error open error file: %s\n", Argv[I] + 2);
+					exit(-1);
+				}
 				break;
 			}
 			case 'p': {
