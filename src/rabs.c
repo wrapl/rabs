@@ -895,6 +895,10 @@ int main(int Argc, char **Argv) {
 				StatusUpdates = 1;
 				break;
 			}
+			case 'b': {
+				ProgressBar = 1;
+				break;
+			}
 			case 'p': {
 				if (Argv[I][2]) {
 					NumThreads = atoi(Argv[I] + 2);
