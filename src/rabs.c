@@ -69,15 +69,10 @@ static ml_value_t *rabs_property_assign(rabs_property_t *Property, ml_value_t *V
 	return Value;
 }
 
-static ml_type_t RabsPropertyT[1] = {{
-	MLTypeT,
-	MLAnyT, "property",
-	ml_default_hash,
-	ml_default_call,
-	rabs_property_deref,
-	rabs_property_assign,
-	NULL, 0, 0
-}};
+ML_TYPE(RabsPropertyT, MLAnyT, "property",
+	.deref = (void *)rabs_property_deref,
+	.assign = (void *)rabs_property_assign
+);
 
 static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
@@ -103,7 +98,6 @@ struct preprocessor_node_t {
 typedef struct preprocessor_t {
 	preprocessor_node_t *Nodes;
 	mlc_scanner_t *Scanner;
-	mlc_context_t Context[1];
 } preprocessor_t;
 
 static const char *preprocessor_read(preprocessor_t *Preprocessor) {
@@ -112,8 +106,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 		if (!Node->File) {
 			Node->File = fopen(Node->FileName, "r");
 			if (!Node->File) {
-				Preprocessor->Context->Error = ml_error("LoadError", "error opening %s", Node->FileName);
-				longjmp(Preprocessor->Context->OnError, 1);
+				ml_scanner_error(Preprocessor->Scanner, "LoadError", "error opening %s", Node->FileName);
 			}
 		}
 		char *Line = NULL;
@@ -180,9 +173,7 @@ static ml_value_t *load_file(const char *FileName) {
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
-	Preprocessor->Context->GlobalGet = (ml_getter_t)rabs_ml_global;
-	Preprocessor->Context->Globals = NULL;
-	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, Preprocessor->Context);
+	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, (ml_getter_t)rabs_ml_global, NULL);
 
 	load_file_state_t State[1];
 	State->Base.run = load_file_loaded;
@@ -374,6 +365,8 @@ static ml_value_t *cmdify_map(void *Data, int Count, ml_value_t **Args) {
 	return Context.Result;
 }
 
+static int ErrorLogFile = STDERR_FILENO;
+
 static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
@@ -398,6 +391,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 		if (chdir(WorkingDirectory)) exit(-1);
 		close(Pipe[0]);
 		dup2(Pipe[1], STDOUT_FILENO);
+		dup2(ErrorLogFile, STDERR_FILENO);
 		execl("/bin/sh", "sh", "-c", Command, NULL);
 		exit(-1);
 	}
@@ -904,6 +898,19 @@ int main(int Argc, char **Argv) {
 				StatusUpdates = 1;
 				break;
 			}
+			case 'b': {
+				ProgressBar = 1;
+				break;
+			}
+			case 'E': {
+				const char *ErrorLogFileName = Argv[I][2] ? (Argv[I] + 2) : Argv[++I];
+				ErrorLogFile = open(ErrorLogFileName, O_CREAT | O_WRONLY, 0600);
+				if (ErrorLogFile == -1) {
+					printf("Error open error file: %s\n", Argv[I] + 2);
+					exit(-1);
+				}
+				break;
+			}
 			case 'p': {
 				if (Argv[I][2]) {
 					NumThreads = atoi(Argv[I] + 2);
@@ -1034,7 +1041,7 @@ int main(int Argc, char **Argv) {
 	}
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
-		ml_console(rabs_ml_global, Globals);
+		ml_console(rabs_ml_global, Globals, "--> ", "... ");
 	} else if (WatchMode) {
 #ifdef Linux
 		targetwatch_wait(restart);

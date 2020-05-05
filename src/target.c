@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <math.h>
 #include <regex.h>
 #include <dirent.h>
 #include <ml_file.h>
@@ -42,6 +43,7 @@ enum {
 };
 
 int StatusUpdates = 0;
+int ProgressBar = 0;
 int MonitorFiles = 0;
 int DebugThreads = 0;
 int WatchMode = 0;
@@ -440,6 +442,17 @@ void display_threads(void) {
 	printf("\n\e[u");
 }
 
+void display_progress(void) {
+	static char *Bars[] = {"", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"};
+	printf("\e[s\e[H\e[35m▕");
+	double Filled = (64.0 * BuiltTargets) / QueuedTargets;
+	int Full = floor(Filled), Partial = (8 * (Filled - Full));
+	for (int I = 0; I < Full; ++I) fputs("█", stdout);
+	fputs(Bars[Partial], stdout);
+	for (int I = Full - !Partial; I < 63; ++I) putchar(' ');
+	printf("▏ %d / %d\e[0m\e[u", BuiltTargets, QueuedTargets);
+}
+
 static int build_scan_target_list(ml_value_t *Depend, targetset_t *Scans) {
 	if (Depend->Type == MLListT) {
 		ml_list_foreach(Depend, Scans, (void *)build_scan_target_list);
@@ -578,6 +591,7 @@ static void target_update(target_t *Target) {
 	}
 	++BuiltTargets;
 	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to iteration %d\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id, Target->LastUpdated);
+	if (ProgressBar) display_progress();
 	pthread_cond_broadcast(TargetUpdated);
 
 	targetset_foreach(Target->Affects, Target, (void *)target_affect);
