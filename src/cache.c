@@ -205,14 +205,6 @@ void cache_scan_set(target_t *Target, targetset_t *Scans) {
 	string_store_set(ScansStore, Target->CacheIndex, Indices, (Size + 1) * sizeof(uint32_t));
 }
 
-static int cache_expr_value_size(ml_value_t *Value);
-
-static int cache_expr_value_size_fn(ml_value_t *Key, ml_value_t *Value, int *Size) {
-	*Size += cache_expr_value_size(Key);
-	*Size += cache_expr_value_size(Value);
-	return 0;
-}
-
 static int cache_expr_value_size(ml_value_t *Value) {
 	if (Value->Type == MLStringT) {
 		return 6 + ml_string_length(Value);
@@ -224,25 +216,21 @@ static int cache_expr_value_size(ml_value_t *Value) {
 		return 1;
 	} else if (Value->Type == MLListT) {
 		int Size = 5;
-		for (ml_list_node_t *Node = ml_list_head(Value); Node; Node = Node->Next) {
+		ML_LIST_FOREACH(Value, Node) {
 			Size += cache_expr_value_size(Node->Value);
 		}
 		return Size;
 	} else if (Value->Type == MLMapT) {
 		int Size = 5;
-		ml_map_foreach(Value, &Size, (void *)cache_expr_value_size_fn);
+		ML_MAP_FOREACH(Value, Node) {
+			Size += cache_expr_value_size(Node->Key);
+			Size += cache_expr_value_size(Node->Value);
+		}
+		return Size;
 	} else if (ml_is(Value, TargetT)) {
 		target_t *Target = (target_t *)Value;
 		return 6 + Target->IdLength;
 	}
-	return 0;
-}
-
-static char *cache_expr_value_write(ml_value_t *Value, char *Buffer);
-
-static int cache_expr_value_write_fn(ml_value_t *Key, ml_value_t *Value, char **Buffer) {
-	*Buffer = cache_expr_value_write(Key, *Buffer);
-	*Buffer = cache_expr_value_write(Value, *Buffer);
 	return 0;
 }
 
@@ -277,14 +265,17 @@ static char *cache_expr_value_write(ml_value_t *Value, char *Buffer) {
 		*Buffer++ = CACHE_EXPR_LIST;
 		*(int32_t *)Buffer = ml_list_length(Value);
 		Buffer += 4;
-		for (ml_list_node_t *Node = ml_list_head(Value); Node; Node = Node->Next) {
+		ML_LIST_FOREACH(Value, Node) {
 			Buffer = cache_expr_value_write(Node->Value, Buffer);
 		}
 	} else if (Value->Type == MLMapT) {
 		*Buffer++ = CACHE_EXPR_MAP;
 		*(int32_t *)Buffer = ml_map_size(Value);
 		Buffer += 4;
-		ml_map_foreach(Value, &Buffer, (void *)cache_expr_value_write_fn);
+		ML_MAP_FOREACH(Value, Node) {
+			Buffer = cache_expr_value_write(Node->Key, Buffer);
+			Buffer = cache_expr_value_write(Node->Value, Buffer);
+		}
 	} else if (ml_is(Value, TargetT)) {
 		*Buffer++ = CACHE_EXPR_TARGET;
 		target_t *Target = (target_t *)Value;

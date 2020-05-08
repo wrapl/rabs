@@ -209,7 +209,7 @@ static ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
-	context_t *Context = context_scope(Name);
+	context_scope(Name);
 	ml_value_t *Result = ml_call(Args[1], 0, NULL);
 	context_pop();
 	return Result;
@@ -317,17 +317,13 @@ static ml_value_t *cmdify_method(void *Data, int Count, ml_value_t **Args) {
 
 static ml_value_t *cmdify_list(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
-	ml_list_node_t *Node = ((ml_list_t *)Args[1])->Head;
-	if (Node) {
+	int Space = 0;
+	ML_LIST_FOREACH(Args[1], Node) {
+		if (Space) ml_stringbuffer_add(Buffer, " ", 1);
 		ml_inline(CmdifyMethod, 2, Buffer, Node->Value);
-		while ((Node = Node->Next)) {
-			ml_stringbuffer_add(Buffer, " ", 1);
-			ml_inline(CmdifyMethod, 2, Buffer, Node->Value);
-		}
-		return MLSome;
-	} else {
-		return MLNil;
+		Space = 1;
 	}
+	return Space ? MLSome : MLNil;
 }
 
 typedef struct cmdify_context_t {
