@@ -123,7 +123,7 @@ ml_value_t *context_in_scope(void *Data, int Count, ml_value_t **Args) {
 }
 
 void context_init() {
-	DefaultString = ml_string("DEFAULT", -1);
+	DefaultString = ml_cstring("DEFAULT");
 	ContextT = ml_type(MLAnyT, "context");
 	ml_method_by_name(".", 0, context_get_local, ContextT, MLStringT, NULL);
 	ml_method_by_name("::", 0, context_get_local, ContextT, MLStringT, NULL);
