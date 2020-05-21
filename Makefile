@@ -20,7 +20,7 @@ minilang/lib/libminilang.a: minilang/Makefile minilang/src/*.c minilang/src/*.h
 	$(MAKE) -C minilang PLATFORM=$(PLATFORM) lib/libminilang.a
 
 radb/libradb.a: radb/Makefile radb/*.c radb/*.h
-	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a
+	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a RADB_MEM=GC
 
 *.o: *.h minilang/src/*.h
 

@@ -7,6 +7,7 @@
 #include "stringmap.h"
 #include <gc/gc.h>
 #include <unistd.h>
+#include <string.h>
 
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;

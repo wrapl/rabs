@@ -40,7 +40,7 @@ void cache_open(const char *RootPath) {
 	if (stat(CacheFileName, Stat)) {
 		mkdir(CacheFileName, 0777);
 		MetadataStore = string_store_create(concat(CacheFileName, "/metadata", NULL), 16, 0);
-		TargetsIndex = string_index_create(concat(CacheFileName, "/targets", NULL), 4096);
+		TargetsIndex = string_index_create(concat(CacheFileName, "/targets", NULL), 32, 4096);
 		HashStore = string_store_create(concat(CacheFileName, "/hashes", NULL), SHA256_BLOCK_SIZE, 4096);
 		HashDetailsStore = fixed_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_hash_details_t), 1024);
 		BuildHashStore = string_store_create(concat(CacheFileName, "/builds", NULL), SHA256_BLOCK_SIZE, 4096);
@@ -60,7 +60,7 @@ void cache_open(const char *RootPath) {
 		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL));
 		ExprsStore = string_store_open(concat(CacheFileName, "/exprs", NULL));
 		uint32_t Temp;
-		string_store_get_value(MetadataStore, CURRENT_ITERATION_INDEX, &Temp);
+		string_store_get(MetadataStore, CURRENT_ITERATION_INDEX, &Temp);
 		CurrentIteration = Temp;
 	}
 	++CurrentIteration;
@@ -104,8 +104,8 @@ void cache_bump_iteration() {
 }
 
 void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	if (string_store_get_size(HashStore, Target->CacheIndex)) {
-		string_store_get_value(HashStore, Target->CacheIndex, Hash);
+	if (string_store_size(HashStore, Target->CacheIndex)) {
+		string_store_get(HashStore, Target->CacheIndex, Hash);
 		cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
 		*LastUpdated = Details->LastUpdated;
 		*LastChecked = Details->LastChecked;
@@ -127,8 +127,8 @@ void cache_hash_set(target_t *Target, time_t FileTime) {
 }
 
 void cache_build_hash_get(target_t *Target, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	if (string_store_get_size(BuildHashStore, Target->CacheIndex)) {
-		string_store_get_value(BuildHashStore, Target->CacheIndex, Hash);
+	if (string_store_size(BuildHashStore, Target->CacheIndex)) {
+		string_store_get(BuildHashStore, Target->CacheIndex, Hash);
 	} else {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
 	}
@@ -166,10 +166,10 @@ static int cache_target_set_index(target_t *Target, uint32_t **IndexP) {
 }
 
 targetset_t *cache_depends_get(target_t *Target) {
-	size_t Length = string_store_get_size(DependsStore, Target->CacheIndex);
+	size_t Length = string_store_size(DependsStore, Target->CacheIndex);
 	if (Length) {
 		uint32_t *Buffer = GC_MALLOC_ATOMIC(Length);
-		string_store_get_value(DependsStore, Target->CacheIndex, Buffer);
+		string_store_get(DependsStore, Target->CacheIndex, Buffer);
 		return cache_target_set_parse(Buffer);
 	} else {
 		return targetset_new();
@@ -186,10 +186,10 @@ void cache_depends_set(target_t *Target, targetset_t *Depends) {
 }
 
 targetset_t *cache_scan_get(target_t *Target) {
-	size_t Length = string_store_get_size(ScansStore, Target->CacheIndex);
+	size_t Length = string_store_size(ScansStore, Target->CacheIndex);
 	if (Length) {
 		uint32_t *Buffer = GC_MALLOC_ATOMIC(Length);
-		string_store_get_value(ScansStore, Target->CacheIndex, Buffer);
+		string_store_get(ScansStore, Target->CacheIndex, Buffer);
 		return cache_target_set_parse(Buffer);
 	} else {
 		return targetset_new();
@@ -350,10 +350,10 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 
 ml_value_t *cache_expr_get(target_t *Target) {
 	ml_value_t *Result = 0;
-	size_t Length = string_store_get_size(ExprsStore, Target->CacheIndex);
+	size_t Length = string_store_size(ExprsStore, Target->CacheIndex);
 	if (Length) {
 		char *Buffer = GC_MALLOC_ATOMIC(Length);
-		string_store_get_value(ExprsStore, Target->CacheIndex, Buffer);
+		string_store_get(ExprsStore, Target->CacheIndex, Buffer);
 		cache_expr_value_read(Buffer, &Result);
 	}
 	return Result;
@@ -367,15 +367,19 @@ void cache_expr_set(target_t *Target, ml_value_t *Value) {
 }
 
 size_t cache_target_id_to_index(const char *Id) {
-	return string_index_insert(TargetsIndex, Id);
+	return string_index_insert(TargetsIndex, Id, 0);
 }
 
 size_t cache_target_id_to_index_existing(const char *Id) {
-	return string_index_search(TargetsIndex, Id);
+	return string_index_search(TargetsIndex, Id, 0);
 }
 
 const char *cache_target_index_to_id(size_t Index) {
-	return GC_strdup(string_index_get(TargetsIndex, Index));
+	size_t Size = string_index_size(TargetsIndex, Index);
+	char *Id = GC_MALLOC_ATOMIC(Size + 1);
+	string_index_get(TargetsIndex, Index, Id);
+	Id[Size] = 0;
+	return Id;
 }
 
 size_t cache_target_count() {
