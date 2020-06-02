@@ -76,7 +76,7 @@ ML_TYPE(RabsPropertyT, MLAnyT, "property",
 
 static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
-	ml_value_t **Slot = stringmap_slot(Cache, Name);
+	ml_value_t **Slot = (ml_value_t **)stringmap_slot(Cache, Name);
 	if (!Slot[0]) {
 		rabs_property_t *Property = new(rabs_property_t);
 		Property->Type = RabsPropertyT;
@@ -159,8 +159,8 @@ static void load_file_result(load_file_state_t *State, ml_value_t *Result) {
 
 static void load_file_loaded(load_file_state_t *State, ml_value_t *Closure) {
 	if (Closure->Type != MLErrorT) {
-		State->Base.run = load_file_result;
-		Closure->Type->call(State, Closure, 0, NULL);
+		State->Base.run = (void *)load_file_result;
+		Closure->Type->call((ml_state_t *)State, Closure, 0, NULL);
 	} else {
 		State->Result = Closure;
 	}
@@ -176,10 +176,10 @@ static ml_value_t *load_file(const char *FileName) {
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, (ml_getter_t)rabs_ml_global, NULL);
 
 	load_file_state_t State[1];
-	State->Base.run = load_file_loaded;
+	State->Base.run = (void *)load_file_loaded;
 	State->Base.Context = &MLRootContext;
 	State->Result = MLNil;
-	ml_function_compile(State, Preprocessor->Scanner, NULL);
+	ml_function_compile((ml_state_t *)State, Preprocessor->Scanner, NULL);
 	return State->Result;
 }
 
@@ -666,16 +666,21 @@ static const char *find_root(const char *Path) {
 	char *End = stpcpy(FileName, Path);
 	End[0] = '/';
 	strcpy(End + 1, SystemName);
-	char Line[strlen("-- ROOT --\n")];
+	char Line[strlen(":< ROOT >:\n")];
 	FILE *File = NULL;
 loop:
 	File = fopen(FileName, "r");
 	if (File) {
 		if (fread(Line, 1, sizeof(Line), File) == sizeof(Line)) {
-			if (!memcmp(Line, "-- ROOT --\n", sizeof(Line))) {
+			if (!memcmp(Line, ":< ROOT >:\n", sizeof(Line))) {
 				fclose(File);
 				*End = 0;
 				return FileName;
+			}
+			if (!memcmp(Line, "-- ROOT --\n", sizeof(Line))) {
+				fclose(File);
+				printf("Version error: Build scripts were written for an older version of Rabs:\n\tLine comments must be changed from -- to :>\n\tThe root build.rabs file should start with :< ROOT >:\n");
+				exit(1);
 			}
 		}
 		fclose(File);

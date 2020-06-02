@@ -22,9 +22,7 @@ minilang/lib/libminilang.a: minilang/Makefile minilang/src/*.c minilang/src/*.h
 radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a RADB_MEM=GC
 
-*.o: *.h minilang/src/*.h
-
-obj/%.o: src/%.c | obj
+obj/%.o: src/%.c | obj minilang/lib/libminilang.a radb/libradb.a
 	$(CC) $(CFLAGS) -c -o $@ $< 
 
 objects = \
@@ -82,10 +80,10 @@ else
 endif
 
 ifdef DEBUG
-$(RABS): Makefile $(objects) src/*.h minilang/lib/libminilang.a radb/libradb.a src/exports.lst bin
+$(RABS): Makefile $(objects) src/*.h src/exports.lst bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 else
-$(RABS): Makefile $(objects) src/*.h minilang/lib/libminilang.a radb/libradb.a src/exports.lst bin
+$(RABS): Makefile $(objects) src/*.h src/exports.lst bin
 	$(CC) $(objects) -o $@ $(LDFLAGS)
 	strip $@
 endif
