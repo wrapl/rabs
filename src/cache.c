@@ -52,6 +52,26 @@ void cache_open(const char *RootPath) {
 		exit(1);
 	} else {
 		MetadataStore = string_store_open(concat(CacheFileName, "/metadata", NULL));
+		{
+			char Temp[16];
+			string_store_get(MetadataStore, CURRENT_VERSION_INDEX, Temp, 16);
+			int Current[3], Working[3] = {WORKING_VERSION};
+			sscanf(Temp, "%d.%d.%d", Current + 0, Current + 1, Current + 2);
+			if (Current[0] < Working[0]) {
+				printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
+				exit(1);
+			} else if (Current[0] == Working[0]) {
+				if (Current[1] < Working[1]) {
+					printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
+					exit(1);
+				} else if (Current[1] == Working[1]) {
+					if (Current[2] < Working[2]) {
+						printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
+						exit(1);
+					}
+				}
+			}
+		}
 		TargetsIndex = string_index_open(concat(CacheFileName, "/targets", NULL));
 		HashStore = string_store_open(concat(CacheFileName, "/hashes", NULL));
 		HashDetailsStore = fixed_store_open(concat(CacheFileName, "/details", NULL));
@@ -59,19 +79,22 @@ void cache_open(const char *RootPath) {
 		DependsStore = string_store_open(concat(CacheFileName, "/depends", NULL));
 		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL));
 		ExprsStore = string_store_open(concat(CacheFileName, "/exprs", NULL));
-		uint32_t Temp;
-		string_store_get(MetadataStore, CURRENT_ITERATION_INDEX, &Temp);
-		CurrentIteration = Temp;
+		{
+			uint32_t Temp;
+			string_store_get(MetadataStore, CURRENT_ITERATION_INDEX, &Temp, 4);
+			CurrentIteration = Temp;
+		}
 	}
 	++CurrentIteration;
-	printf("Rabs version = %s\n", CURRENT_VERSION);
+	printf("Rabs version = %d.%d.%d\n", CURRENT_VERSION);
 	printf("Build iteration = %d\n", CurrentIteration);
 	{
 		uint32_t Temp = CurrentIteration;
 		string_store_set(MetadataStore, CURRENT_ITERATION_INDEX, &Temp, sizeof(uint32_t));
 	}
 	{
-		const char Temp[] = CURRENT_VERSION;
+		char Temp[16];
+		sprintf(Temp, "%d.%d.%d", CURRENT_VERSION);
 		string_store_set(MetadataStore, CURRENT_VERSION_INDEX, Temp, sizeof(Temp));
 	}
 	targetcache_init();
@@ -91,21 +114,21 @@ void cache_close() {
 
 void cache_bump_iteration() {
 	++CurrentIteration;
-	printf("Rabs version = %s\n", CURRENT_VERSION);
+	printf("Rabs version = %d.%d.%d\n", CURRENT_VERSION);
 	printf("Build iteration = %d\n", CurrentIteration);
 	{
 		uint32_t Temp = CurrentIteration;
 		string_store_set(MetadataStore, CURRENT_ITERATION_INDEX, &Temp, sizeof(uint32_t));
 	}
 	{
-		const char Temp[] = CURRENT_VERSION;
+		char Temp[16];
+		sprintf(Temp, "%d.%d.%d", CURRENT_VERSION);
 		string_store_set(MetadataStore, CURRENT_VERSION_INDEX, Temp, sizeof(Temp));
 	}
 }
 
 void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	if (string_store_size(HashStore, Target->CacheIndex)) {
-		string_store_get(HashStore, Target->CacheIndex, Hash);
+	if (string_store_get(HashStore, Target->CacheIndex, Hash, SHA256_BLOCK_SIZE) == SHA256_BLOCK_SIZE) {
 		cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
 		*LastUpdated = Details->LastUpdated;
 		*LastChecked = Details->LastChecked;
@@ -127,9 +150,7 @@ void cache_hash_set(target_t *Target, time_t FileTime) {
 }
 
 void cache_build_hash_get(target_t *Target, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	if (string_store_size(BuildHashStore, Target->CacheIndex)) {
-		string_store_get(BuildHashStore, Target->CacheIndex, Hash);
-	} else {
+	if (string_store_get(BuildHashStore, Target->CacheIndex, Hash, SHA256_BLOCK_SIZE) != SHA256_BLOCK_SIZE) {
 		memset(Hash, 0, SHA256_BLOCK_SIZE);
 	}
 }
@@ -169,7 +190,7 @@ targetset_t *cache_depends_get(target_t *Target) {
 	size_t Length = string_store_size(DependsStore, Target->CacheIndex);
 	if (Length) {
 		uint32_t *Buffer = GC_MALLOC_ATOMIC(Length);
-		string_store_get(DependsStore, Target->CacheIndex, Buffer);
+		string_store_get(DependsStore, Target->CacheIndex, Buffer, Length);
 		return cache_target_set_parse(Buffer);
 	} else {
 		return targetset_new();
@@ -189,7 +210,7 @@ targetset_t *cache_scan_get(target_t *Target) {
 	size_t Length = string_store_size(ScansStore, Target->CacheIndex);
 	if (Length) {
 		uint32_t *Buffer = GC_MALLOC_ATOMIC(Length);
-		string_store_get(ScansStore, Target->CacheIndex, Buffer);
+		string_store_get(ScansStore, Target->CacheIndex, Buffer, Length);
 		return cache_target_set_parse(Buffer);
 	} else {
 		return targetset_new();
@@ -353,7 +374,7 @@ ml_value_t *cache_expr_get(target_t *Target) {
 	size_t Length = string_store_size(ExprsStore, Target->CacheIndex);
 	if (Length) {
 		char *Buffer = GC_MALLOC_ATOMIC(Length);
-		string_store_get(ExprsStore, Target->CacheIndex, Buffer);
+		string_store_get(ExprsStore, Target->CacheIndex, Buffer, Length);
 		cache_expr_value_read(Buffer, &Result);
 	}
 	return Result;
@@ -377,7 +398,7 @@ size_t cache_target_id_to_index_existing(const char *Id) {
 const char *cache_target_index_to_id(size_t Index) {
 	size_t Size = string_index_size(TargetsIndex, Index);
 	char *Id = GC_MALLOC_ATOMIC(Size + 1);
-	string_index_get(TargetsIndex, Index, Id);
+	string_index_get(TargetsIndex, Index, Id, Size);
 	Id[Size] = 0;
 	return Id;
 }

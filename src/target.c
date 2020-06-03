@@ -324,10 +324,12 @@ target_t *target_load(const char *Id, size_t Index, target_t **Slot) {
 	return NULL;
 }
 
+/*
 static int target_print(target_t *Target, void *Data) {
 	printf("%s\n", Target->Id);
 	return 0;
 }
+*/
 
 static int target_affect(target_t *Target, target_t *Depend) {
 	--Target->WaitCount;
@@ -387,10 +389,12 @@ static int target_find_leaves0(target_t *Target, target_t *Parent) {
 	return 0;
 }
 
+/*
 static int target_insert(target_t *Target, targetset_t *Set) {
 	targetset_insert(Set, Target);
 	return 0;
 }
+*/
 
 static int target_set_parent(target_t *Target, target_t *Parent) {
 	if (!Target->Parent) {
@@ -402,10 +406,12 @@ static int target_set_parent(target_t *Target, target_t *Parent) {
 	return 0;
 }
 
+/*
 static int targetset_print(target_t *Target, void *Data) {
 	printf("\t%s\n", Target->Id);
 	return 0;
 }
+*/
 
 static int target_graph_depends(target_t *Depend, target_t *Target) {
 	fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR ";\n", (uintptr_t)Target, (uintptr_t)Depend);

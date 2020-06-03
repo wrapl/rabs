@@ -877,7 +877,7 @@ int main(int Argc, char **Argv) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
 			case 'V': {
-				printf("rabs version %s\n", CURRENT_VERSION);
+				printf("rabs version %d.%d.%d\n", CURRENT_VERSION);
 				exit(0);
 			}
 			case 'D': {
