@@ -44,6 +44,14 @@ This produces the following output:
       test/test12.mini:3
       test/test12.mini:20
 
+Comments
+--------
+
+Comments can be added to *Minilang* code in one of two ways:
+
+#. Line comments extend from :mini:`:>` to the end of the current line.
+#. Block comments extend from :mini:`:<` to a matching :mini:`>:`. Block comments can be nested, each :mini:`:<` increases the comment level and requires a matching :mini:`>:` to close.
+
 Declarations
 ------------
 
@@ -57,23 +65,23 @@ All identifiers in *Minilang* are visible within their scope and any nested scop
 
 .. code-block:: mini
 
-   print('Y = {Y}\n') -- Y is nil here
+   print('Y = {Y}\n') :> Y is nil here
    
    var Y := 1 + 2
    
-   print('Y = {Y}\n') -- Y is 3 here
+   print('Y = {Y}\n') :> Y is 3 here
    
    var X
    
    do
-      X := 1 -- Sets X in surrounding scope
+      X := 1 :> Sets X in surrounding scope
    end
    
    print('X = {X}\n')
    
    do
-      var X -- Shadows declaration of X 
-      X := 2 -- Assigns to X in the previous line
+      var X :> Shadows declaration of X 
+      X := 2 :> Assigns to X in the previous line
       print('X = {X}\n')
    end
    
@@ -152,11 +160,11 @@ Note that :mini:`Function` can be a variable containing a function, or any expre
 
 .. code-block:: mini
 
-   var X := (if nil then add else sub end)(10, 3) -- 7
+   var X := (if nil then add else sub end)(10, 3) :> 7
    
    var f := fun(A) fun(B) A + B
    
-   var Y := f(2)(3) -- 5
+   var Y := f(2)(3) :> 5
 
 As a shorthand, the code :mini:`var Name := fun(Arguments) Body` can be written as :mini:`fun Name(Arguments) Body`. Internally, the two forms are identical.
 

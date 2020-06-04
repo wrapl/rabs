@@ -19,7 +19,7 @@ To build an executable, :file:`hello` from this file with *Rabs*, we can create 
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    file("hello.o")[file("hello.c")] => fun() do
       execute('gcc -c -o{file("hello.o")} {file("hello.c")}')
@@ -54,7 +54,7 @@ Each :file:`build.rabs` file introduces a new scope, which allows per-directory 
 
 .. code-block:: mini
    
-   -- ROOT --
+   :< ROOT >:
 
 No patterns, only code
 ----------------------

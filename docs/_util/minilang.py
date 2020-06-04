@@ -16,8 +16,8 @@ class MinilangLexer(RegexLexer):
         'root': [
             (words((
                 "if", "then", "elseif", "else", "end", "loop",
-                "while", "until", "exit", "next", "for", "all",
-                "in", "is", "fun", "return", "suspend", "ret",
+                "while", "until", "exit", "next", "for", "in",
+                "is", "fun", "return", "suspend", "ret", "let",
                 "susp", "with", "do", "on", "nil", "and", "or",
                 "not", "old", "def", "var", "to"
             ), suffix = r'\b'), Keyword),
@@ -29,7 +29,9 @@ class MinilangLexer(RegexLexer):
             ('\{', Operator, 'braces'),
             (r':[A-Za-z_]+', Name.Function),
             (r'::[!@#$%^&*+=|\\~`/?<>.-]+', Name.Function),
-            (r'--.*\n', Comment),
+            (r':>.*\n', Comment),
+            (':<', Comment, 'comment'),
+            ('>:', Comment),
             (r'\s+', Text),
             (r'[A-Za-z_][A-Za-z0-9_]*', Text),
             (':=', Operator),
@@ -57,7 +59,12 @@ class MinilangLexer(RegexLexer):
         'brackets': [
             ('\)', Operator, '#pop'),
             include('root')
-        ]
+        ],
+		'comment': [
+			(':<', Comment, 'comment'),
+			('>:', Comment, '#pop'),
+			(r'.', Comment)
+		]
     }
 
 minilangDomain = custom_domain('MinilangDomain',

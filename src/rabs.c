@@ -76,7 +76,7 @@ ML_TYPE(RabsPropertyT, MLAnyT, "property",
 
 static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
-	ml_value_t **Slot = stringmap_slot(Cache, Name);
+	ml_value_t **Slot = (ml_value_t **)stringmap_slot(Cache, Name);
 	if (!Slot[0]) {
 		rabs_property_t *Property = new(rabs_property_t);
 		Property->Type = RabsPropertyT;
@@ -159,8 +159,8 @@ static void load_file_result(load_file_state_t *State, ml_value_t *Result) {
 
 static void load_file_loaded(load_file_state_t *State, ml_value_t *Closure) {
 	if (Closure->Type != MLErrorT) {
-		State->Base.run = load_file_result;
-		Closure->Type->call(State, Closure, 0, NULL);
+		State->Base.run = (void *)load_file_result;
+		Closure->Type->call((ml_state_t *)State, Closure, 0, NULL);
 	} else {
 		State->Result = Closure;
 	}
@@ -176,10 +176,10 @@ static ml_value_t *load_file(const char *FileName) {
 	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, (ml_getter_t)rabs_ml_global, NULL);
 
 	load_file_state_t State[1];
-	State->Base.run = load_file_loaded;
+	State->Base.run = (void *)load_file_loaded;
 	State->Base.Context = &MLRootContext;
 	State->Result = MLNil;
-	ml_function_compile(State, Preprocessor->Scanner, NULL);
+	ml_function_compile((ml_state_t *)State, Preprocessor->Scanner, NULL);
 	return State->Result;
 }
 
@@ -209,7 +209,7 @@ static ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
-	context_t *Context = context_scope(Name);
+	context_scope(Name);
 	ml_value_t *Result = ml_call(Args[1], 0, NULL);
 	context_pop();
 	return Result;
@@ -317,17 +317,13 @@ static ml_value_t *cmdify_method(void *Data, int Count, ml_value_t **Args) {
 
 static ml_value_t *cmdify_list(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
-	ml_list_node_t *Node = ((ml_list_t *)Args[1])->Head;
-	if (Node) {
+	int Space = 0;
+	ML_LIST_FOREACH(Args[1], Node) {
+		if (Space) ml_stringbuffer_add(Buffer, " ", 1);
 		ml_inline(CmdifyMethod, 2, Buffer, Node->Value);
-		while ((Node = Node->Next)) {
-			ml_stringbuffer_add(Buffer, " ", 1);
-			ml_inline(CmdifyMethod, 2, Buffer, Node->Value);
-		}
-		return MLSome;
-	} else {
-		return MLNil;
+		Space = 1;
 	}
+	return Space ? MLSome : MLNil;
 }
 
 typedef struct cmdify_context_t {
@@ -670,16 +666,21 @@ static const char *find_root(const char *Path) {
 	char *End = stpcpy(FileName, Path);
 	End[0] = '/';
 	strcpy(End + 1, SystemName);
-	char Line[strlen("-- ROOT --\n")];
+	char Line[strlen(":< ROOT >:\n")];
 	FILE *File = NULL;
 loop:
 	File = fopen(FileName, "r");
 	if (File) {
 		if (fread(Line, 1, sizeof(Line), File) == sizeof(Line)) {
-			if (!memcmp(Line, "-- ROOT --\n", sizeof(Line))) {
+			if (!memcmp(Line, ":< ROOT >:\n", sizeof(Line))) {
 				fclose(File);
 				*End = 0;
 				return FileName;
+			}
+			if (!memcmp(Line, "-- ROOT --\n", sizeof(Line))) {
+				fclose(File);
+				printf("Version error: Build scripts were written for an older version of Rabs:\n\tLine comments must be changed from -- to :>\n\tThe root build.rabs file should start with :< ROOT >:\n");
+				exit(1);
 			}
 		}
 		fclose(File);
@@ -876,7 +877,7 @@ int main(int Argc, char **Argv) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
 			case 'V': {
-				printf("rabs version %s\n", CURRENT_VERSION);
+				printf("rabs version %d.%d.%d\n", CURRENT_VERSION);
 				exit(0);
 			}
 			case 'D': {

@@ -35,7 +35,7 @@ Example
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    var SRC := file("src")
    var BIN := file("bin"):mkdir

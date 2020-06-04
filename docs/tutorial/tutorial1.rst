@@ -10,7 +10,7 @@ Create a new directory called :file:`tutorial` and inside it create a file calle
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
 
@@ -26,11 +26,11 @@ Run ``rabs`` in the directory, which will give the following output (with `/tuto
    Build iteration = 1
    Hello world!
 
-Note that ``rabs`` automatically loads and runs the :file:`build.rabs` file. The first line is a comment since it starts with :mini:`--`. Although comments are generally ignored by ``rabs``, a :mini:`-- ROOT --` comment on the first line of a :file:`build.rabs` serves as a special marker. 
+Note that ``rabs`` automatically loads and runs the :file:`build.rabs` file. The first line is a comment since it starts with :mini:`--`. Although comments are generally ignored by ``rabs``, a :mini:`:< ROOT >:` comment on the first line of a :file:`build.rabs` serves as a special marker. 
 
 .. note::
 
-   The :mini:`-- ROOT --` line is needed to tell ``rabs`` that this is the root directory of our project. Without it, ``rabs`` will search the parent directories until it finds a :file:`build.rabs` file that does start with :mini:`-- ROOT --`. If we omit this line and do not have a suitable :file:`build.rabs` in any parent directory, we get an error:
+   The :mini:`:< ROOT >:` line is needed to tell ``rabs`` that this is the root directory of our project. Without it, ``rabs`` will search the parent directories until it finds a :file:`build.rabs` file that does start with :mini:`:< ROOT >:`. If we omit this line and do not have a suitable :file:`build.rabs` in any parent directory, we get an error:
 
    .. code-block:: console
 
@@ -89,7 +89,7 @@ Update the :file:`build.rabs` file to look as follows:
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    
@@ -132,7 +132,7 @@ Try changing the build function:
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    
@@ -163,7 +163,7 @@ Targets and Dependencies
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    
@@ -179,7 +179,7 @@ In order for :mini:`TEST` to be built, we need to make one more change:
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    
@@ -215,7 +215,7 @@ Not only is the build function for :mini:`TEST` executed, the build function for
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    
@@ -251,7 +251,7 @@ Our current script describes build functions (using :mini:`Target => Function`) 
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    
@@ -268,7 +268,7 @@ Add a few more lines to :file:`build.rabs`:
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    
@@ -309,7 +309,7 @@ Notice that in this example, we added :mini:`Test2` as a dependency of :mini:`DE
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    
@@ -352,7 +352,7 @@ Lets add two more targets to the :file:`build.rabs` script:
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    print("Hello world!\n")
    

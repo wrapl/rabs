@@ -7,6 +7,7 @@
 #include "stringmap.h"
 #include <gc/gc.h>
 #include <unistd.h>
+#include <string.h>
 
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;
@@ -80,7 +81,7 @@ ml_value_t *context_symb_set(context_t *Context, const char *Name, ml_value_t *V
 static ml_value_t *context_get_local(void *Data, int Count, ml_value_t **Args) {
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
-	return target_symb_new(Context, Name);
+	return (ml_value_t *)target_symb_new(Context, Name);
 }
 
 static ml_value_t *context_get_parent(void *Data, int Count, ml_value_t **Args) {
@@ -123,7 +124,7 @@ ml_value_t *context_in_scope(void *Data, int Count, ml_value_t **Args) {
 }
 
 void context_init() {
-	DefaultString = ml_string("DEFAULT", -1);
+	DefaultString = ml_cstring("DEFAULT");
 	ContextT = ml_type(MLAnyT, "context");
 	ml_method_by_name(".", 0, context_get_local, ContextT, MLStringT, NULL);
 	ml_method_by_name("::", 0, context_get_local, ContextT, MLStringT, NULL);
