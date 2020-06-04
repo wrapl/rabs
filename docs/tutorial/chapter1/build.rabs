@@ -1,4 +1,4 @@
--- ROOT --
+:< ROOT >:
    
 file("hello.o")[file("hello.c")] => fun() do
 	execute('gcc -c -o{file("hello.o")} {file("hello.c")}')
