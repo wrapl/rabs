@@ -59,15 +59,17 @@ static ml_value_t *csv_read_fn(void *Data, int Count, ml_value_t **Args) {
 static ml_value_t *csv_write_fn(void *Data, int Count, ml_value_t **Args) {
 	csv_t *Csv = (csv_t *)Args[0];
 	ml_list_t *Values = (ml_list_t *)Args[1];
-	for (ml_list_node_t *Node = Values->Head; Node; Node = Node->Next) {
-		ml_value_t *Field = Node->Value;
+	ml_list_iter_t Iter[1];
+	if (ml_list_iter_forward(Args[1], Iter)) for (;;) {
+		ml_value_t *Field = Iter->Value;
 		if (Field->Type != MLStringT) {
 			Field = ml_call(MLStringOfMethod, 1, &Field);
 			if (Field->Type == MLErrorT) return Field;
 			if (Field->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 		}
 		csv_fwrite(Csv->File, ml_string_value(Field), ml_string_length(Field));
-		if (Node->Next) fputc(',', Csv->File);
+		if (!ml_list_iter_next(Iter)) break;
+		fputc(',', Csv->File);
 	}
 	fputc('\n', Csv->File);
 	return Args[0];

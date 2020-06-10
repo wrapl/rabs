@@ -19,6 +19,7 @@ if LIBPATH then
 	
 	Csv:write(["a", 1, "b", 2])
 	Csv:write(["c", 3, "d", 4])
+	Csv:write(["e", 5, "f", 6])
 	Csv:close
 	
 	Csv := csv("open")("test.csv", "r")
