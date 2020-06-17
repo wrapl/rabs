@@ -374,7 +374,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
 	if (DebugThreads && CurrentThread) {
-		strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command));
+		strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command) - 1);
 		display_threads();
 	}
 	clock_t Start = clock();
@@ -803,8 +803,6 @@ static void restart(void) {
 	execv("/proc/self/exe", SavedArgv);
 }
 
-extern int MLDebugClosures;
-
 int main(int Argc, char **Argv) {
 	CurrentDirectory = "<random>";
 	SavedArgc = Argc;
@@ -954,9 +952,6 @@ int main(int Argc, char **Argv) {
 				break;
 			}
 			case '-': {
-				if (!strcmp(Argv[I] + 2, "debug-compiler")) {
-					MLDebugClosures = 1;
-				}
 				break;
 			}
 			case 'h': default: {
@@ -1010,9 +1005,11 @@ int main(int Argc, char **Argv) {
 	ml_value_t *Result = load_file(concat(RootPath, "/", SystemName, NULL));
 	if (Result->Type == MLErrorT) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		ml_source_t Source;
+		int Level = 0;
+		while (ml_error_source(Result, Level++, &Source)) {
+			printf("\e[31m\t%s:%d\n\e[0m", Source.Name, Source.Line);
+		}
 		exit(1);
 	}
 	target_t *Target;

@@ -361,9 +361,11 @@ static void target_rebuild(target_t *Target) {
 		ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 		if (Result->Type == MLErrorT) {
 			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
-			const char *Source;
-			int Line;
-			for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
+			ml_source_t Source;
+			int Level = 0;
+			while (ml_error_source(Result, Level++, &Source)) {
+				fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source.Name, Source.Line);
+			}
 			exit(1);
 		}
 
@@ -540,9 +542,11 @@ static void target_update(target_t *Target) {
 			ml_value_t *Result = ml_inline(Target->Build, 1, Target);
 			if (Result->Type == MLErrorT) {
 				fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
-				const char *Source;
-				int Line;
-				for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source, Line);
+				ml_source_t Source;
+				int Level = 0;
+				while (ml_error_source(Result, Level++, &Source)) {
+					fprintf(stderr, "\e[31m\t%s:%d\n\e[0m", Source.Name, Source.Line);
+				}
 				exit(1);
 			}
 			if (Target->Type == ExprTargetT) {
