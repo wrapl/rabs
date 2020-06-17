@@ -114,9 +114,11 @@ ml_value_t *context_in_scope(void *Data, int Count, ml_value_t **Args) {
 	ml_value_t *Result = ml_call(Args[1], 0, NULL);
 	if (Result->Type == MLErrorT) {
 		printf("Error: %s\n", ml_error_message(Result));
-		const char *Source;
-		int Line;
-		for (int I = 0; ml_error_trace(Result, I, &Source, &Line); ++I) printf("\e[31m\t%s:%d\n\e[0m", Source, Line);
+		ml_source_t Source;
+		int Level = 0;
+		while (ml_error_source(Result, Level++, &Source)) {
+			printf("\e[31m\t%s:%d\n\e[0m", Source.Name, Source.Line);
+		}
 		exit(1);
 	}
 	CurrentContext = OldContext;
