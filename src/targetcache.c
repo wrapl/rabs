@@ -42,7 +42,7 @@ target_index_slot targetcache_insert(const char *Id) {
 
 target_index_slot targetcache_search(const char *Id) {
 	size_t Index = cache_target_id_to_index_existing(Id);
-	if (Index == 0xFFFFFFFF) return (target_index_slot){NULL, Index};
+	if (Index == INVALID_TARGET) return (target_index_slot){NULL, Index};
 	if (Index >= CacheSize) {
 		size_t NewCacheSize = CacheSize * 2;
 		do NewCacheSize *= 2; while (Index >= NewCacheSize);

@@ -15,4 +15,6 @@ time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, unsigned cha
 target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot);
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args);
 
+int target_scan_is_recursive(target_scan_t *Target);
+
 #endif

@@ -1000,6 +1000,9 @@ int main(int Argc, char **Argv) {
 	context_symb_set(CurrentContext, "ITERATION", (ml_value_t *)Iteration);
 	context_symb_set(CurrentContext, "ROOT", (ml_value_t *)CurrentContext);
 
+	CurrentThread = new(build_thread_t);
+	CurrentThread->Id = 0;
+	CurrentThread->Status = BUILD_IDLE;
 	if (!InteractiveMode) target_threads_start(NumThreads);
 
 	ml_value_t *Result = load_file(concat(RootPath, "/", SystemName, NULL));

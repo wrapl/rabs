@@ -9,6 +9,8 @@
 #include "sha256.h"
 #include "minilang.h"
 
+#define INVALID_TARGET 0xFFFFFFFF
+
 struct target_t {
 	const ml_type_t *Type;
 	target_t *PriorityAdjustNext, *Parent;

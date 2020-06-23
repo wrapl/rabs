@@ -32,7 +32,7 @@ c_program := fun(Executable, Objects, Libraries) do
 			var Source := Object % Extension
 			if Source:exists then
 				Sources:put(Source)
-				var Scan := Source:scan("INCLUDES")[PREBUILDS] => Functions[1]
+				var Scan := Source:scanr("INCLUDES")[PREBUILDS] => Functions[1]
 				Object[Source, Scan] => (Functions[2] !! [Source])
 				exit
 			end
