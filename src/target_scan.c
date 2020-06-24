@@ -13,7 +13,6 @@ struct target_scan_t {
 	target_t *Source;
 	targetset_t *Scans;
 	ml_value_t *Rebuild;
-	int Recursive;
 };
 
 ml_type_t *ScanTargetT;
@@ -34,22 +33,16 @@ static ml_value_t *target_scan_source(void *Data, int Count, ml_value_t **Args) 
 	return (ml_value_t *)Target->Source;
 }
 
-int target_scan_is_recursive(target_scan_t *Target) {
-	return Target->Recursive;
-}
-
 ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	target_t *Source = (target_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	char *Id;
-	int Recursive = !!Data;
-	asprintf(&Id, Recursive ? "scan*:%s::%s" : "scan:%s::%s", Source->Id, Name);
+	asprintf(&Id, "scan:%s::%s", Source->Id, Name);
 	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
 		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, R.Index, R.Slot);
 		Target->Source = Source;
 		Target->Name = Name;
-		Target->Recursive = Recursive;
 		targetset_insert(Target->Base.Depends, Source);
 	}
 	if (Count > 2) {
@@ -62,9 +55,7 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 
 target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
 	target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Index, Slot);
-	int Recursive = Id[4] == '*';
-	const char *SourceIdStart = Id + 5 + Recursive;
-	const char *Name;
+	const char *SourceIdStart = Id + 5, *Name;
 	for (Name = Id + strlen(Id) - 1; --Name > SourceIdStart;) {
 		if (Name[0] == ':' && Name[1] == ':') break;
 	}
@@ -78,7 +69,6 @@ target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Ind
 		exit(1);
 	}
 	Target->Name = Name + 2;
-	Target->Recursive = Recursive;
 	return (target_t *)Target;
 }
 

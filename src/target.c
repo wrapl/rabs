@@ -280,9 +280,6 @@ target_t *target_find(const char *Id) {
 	if (!memcmp(Id, "scan:", 5)) {
 		return target_scan_create(Id, CurrentContext, R.Index, R.Slot);
 	}
-	if (!memcmp(Id, "scan*:", 6)) {
-		return target_scan_create(Id, CurrentContext, R.Index, R.Slot);
-	}
 	if (!memcmp(Id, "meta:", 5)) {
 		return target_meta_create(Id, CurrentContext, R.Index, R.Slot);
 	}
@@ -306,9 +303,6 @@ target_t *target_create(const char *Id) {
 	if (!memcmp(Id, "scan:", 5)) {
 		return target_scan_create(Id, CurrentContext, R.Index, R.Slot);
 	}
-	if (!memcmp(Id, "scan*:", 6)) {
-		return target_scan_create(Id, CurrentContext, R.Index, R.Slot);
-	}
 	if (!memcmp(Id, "meta:", 5)) {
 		return target_meta_create(Id, CurrentContext, R.Index, R.Slot);
 	}
@@ -327,9 +321,6 @@ target_t *target_load(const char *Id, size_t Index, target_t **Slot) {
 		return target_expr_create(Id, CurrentContext, Index, Slot);
 	}
 	if (!memcmp(Id, "scan:", 5)) {
-		return target_scan_create(Id, CurrentContext, Index, Slot);
-	}
-	if (!memcmp(Id, "scan*:", 6)) {
 		return target_scan_create(Id, CurrentContext, Index, Slot);
 	}
 	if (!memcmp(Id, "meta:", 5)) {
@@ -517,14 +508,6 @@ static void target_update(target_t *Target) {
 			targetset_foreach(Depends, &DependsLastUpdated, (void *)target_depends_fn);
 		}
 	}
-	if (DependsLastUpdated <= LastChecked && Target->Type == ScanTargetT) {
-		if (target_scan_is_recursive((target_scan_t *)Target)) {
-			targetset_t *Scans = cache_scan_get(Target);
-			targetset_foreach(Scans, Target, (void *)target_queue);
-			targetset_foreach(Scans, Target, (void *)target_wait);
-			targetset_foreach(Scans, &DependsLastUpdated, (void *)target_depends_fn);
-		}
-	}
 	if ((DependsLastUpdated > LastChecked) || target_missing(Target, LastChecked)) {
 		target_t *Parent;
 		if (!Target->Build && (Parent = cache_parent_get(Target))) {
@@ -577,8 +560,6 @@ static void target_update(target_t *Target) {
 					targetset_foreach(Scans, Target, (void *)target_graph_scans);
 				}
 			}
-			cache_build_hash_set(Target, BuildHash);
-
 			CurrentDirectory = OldDirectory;
 			CurrentContext = OldContext;
 			CurrentTarget = OldTarget;
@@ -596,6 +577,7 @@ static void target_update(target_t *Target) {
 	if (DependencyGraph) {
 		targetset_foreach(Target->BuildDepends, Target, (void *)target_graph_build_depends);
 	}
+	cache_build_hash_set(Target, BuildHash);
 	FileTime = target_hash(Target, FileTime, Previous, DependsLastUpdated);
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 		Target->LastUpdated = CurrentIteration;
@@ -748,7 +730,6 @@ void target_init(void) {
 	MissingMethod = ml_method("missing");
 	ml_method_by_name("[]", NULL, target_depend, TargetT, MLAnyT, NULL);
 	ml_method_by_name("scan", NULL, target_scan_new, TargetT, NULL);
-	ml_method_by_name("scanr", MLTrue, target_scan_new, TargetT, NULL);
 	ml_method_by_name("=>", NULL, target_set_build, TargetT, MLAnyT, NULL);
 	ml_method_by_name("<<", NULL, target_depend, TargetT, MLAnyT, NULL);
 	ml_method_by_name("id", NULL, target_get_id, TargetT, NULL);

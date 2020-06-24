@@ -16,7 +16,8 @@ c_includes := fun(Target) do
 	for File in Files do
 		File := file(File:replace(r"\\ ", " "))
 	end
-	return Files
+	depends(Files)
+	ret Files
 end
 
 var SourceTypes := {
@@ -32,7 +33,7 @@ c_program := fun(Executable, Objects, Libraries) do
 			var Source := Object % Extension
 			if Source:exists then
 				Sources:put(Source)
-				var Scan := Source:scanr("INCLUDES")[PREBUILDS] => Functions[1]
+				var Scan := Source:scan("INCLUDES")[PREBUILDS] => Functions[1]
 				Object[Source, Scan] => (Functions[2] !! [Source])
 				exit
 			end
