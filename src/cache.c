@@ -13,9 +13,7 @@
 
 static string_store_t *MetadataStore;
 static string_index_t *TargetsIndex;
-static string_store_t *HashStore;
-static fixed_store_t *HashDetailsStore;
-static string_store_t *BuildHashStore;
+static fixed_store_t *DetailsStore;
 static string_store_t *DependsStore;
 static string_store_t *ScansStore;
 static string_store_t *ExprsStore;
@@ -28,11 +26,14 @@ enum {
 	METADATA_SIZE
 };
 
-typedef struct cache_hash_details_t {
+typedef struct cache_details_t {
+	uint8_t Hash[SHA256_BLOCK_SIZE];
+	uint8_t BuildHash[SHA256_BLOCK_SIZE];
+	uint32_t Parent;
 	uint32_t LastUpdated;
 	uint32_t LastChecked;
 	time_t FileTime;
-} cache_hash_details_t;
+} cache_details_t;
 
 void cache_open(const char *RootPath) {
 	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", NULL);
@@ -41,9 +42,7 @@ void cache_open(const char *RootPath) {
 		mkdir(CacheFileName, 0777);
 		MetadataStore = string_store_create(concat(CacheFileName, "/metadata", NULL), 16, 0);
 		TargetsIndex = string_index_create(concat(CacheFileName, "/targets", NULL), 32, 4096);
-		HashStore = string_store_create(concat(CacheFileName, "/hashes", NULL), SHA256_BLOCK_SIZE, 4096);
-		HashDetailsStore = fixed_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_hash_details_t), 1024);
-		BuildHashStore = string_store_create(concat(CacheFileName, "/builds", NULL), SHA256_BLOCK_SIZE, 4096);
+		DetailsStore = fixed_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_details_t), 1024);
 		DependsStore = string_store_create(concat(CacheFileName, "/depends", NULL), 32, 4096);
 		ScansStore = string_store_create(concat(CacheFileName, "/scans", NULL), 128, 524288);
 		ExprsStore = string_store_create(concat(CacheFileName, "/exprs", NULL), 16, 512);
@@ -73,9 +72,7 @@ void cache_open(const char *RootPath) {
 			}
 		}
 		TargetsIndex = string_index_open(concat(CacheFileName, "/targets", NULL));
-		HashStore = string_store_open(concat(CacheFileName, "/hashes", NULL));
-		HashDetailsStore = fixed_store_open(concat(CacheFileName, "/details", NULL));
-		BuildHashStore = string_store_open(concat(CacheFileName, "/builds", NULL));
+		DetailsStore = fixed_store_open(concat(CacheFileName, "/details", NULL));
 		DependsStore = string_store_open(concat(CacheFileName, "/depends", NULL));
 		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL));
 		ExprsStore = string_store_open(concat(CacheFileName, "/exprs", NULL));
@@ -104,9 +101,7 @@ void cache_open(const char *RootPath) {
 void cache_close() {
 	string_store_close(MetadataStore);
 	string_index_close(TargetsIndex);
-	string_store_close(HashStore);
-	fixed_store_close(HashDetailsStore);
-	string_store_close(BuildHashStore);
+	fixed_store_close(DetailsStore);
 	string_store_close(DependsStore);
 	string_store_close(ScansStore);
 	string_store_close(ExprsStore);
@@ -128,42 +123,45 @@ void cache_bump_iteration() {
 }
 
 void cache_hash_get(target_t *Target, int *LastUpdated, int *LastChecked, time_t *FileTime, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	if (string_store_get(HashStore, Target->CacheIndex, Hash, SHA256_BLOCK_SIZE) == SHA256_BLOCK_SIZE) {
-		cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
-		*LastUpdated = Details->LastUpdated;
-		*LastChecked = Details->LastChecked;
-		*FileTime = Details->FileTime;
-	} else {
-		memset(Hash, 0, SHA256_BLOCK_SIZE);
-		*LastUpdated = 0;
-		*LastChecked = 0;
-		*FileTime = 0;
-	}
+	cache_details_t *Details = fixed_store_get(DetailsStore, Target->CacheIndex);
+	memcpy(Hash, Details->Hash, SHA256_BLOCK_SIZE);
+	*LastUpdated = Details->LastUpdated;
+	*LastChecked = Details->LastChecked;
+	*FileTime = Details->FileTime;
 }
 
 void cache_hash_set(target_t *Target, time_t FileTime) {
-	cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
+	cache_details_t *Details = fixed_store_get(DetailsStore, Target->CacheIndex);
+	memcpy(Details->Hash, Target->Hash, SHA256_BLOCK_SIZE);
 	Details->LastUpdated = Target->LastUpdated;
 	Details->LastChecked = CurrentIteration;
 	Details->FileTime = FileTime;
-	string_store_set(HashStore, Target->CacheIndex, Target->Hash, SHA256_BLOCK_SIZE);
 }
 
 void cache_build_hash_get(target_t *Target, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	if (string_store_get(BuildHashStore, Target->CacheIndex, Hash, SHA256_BLOCK_SIZE) != SHA256_BLOCK_SIZE) {
-		memset(Hash, 0, SHA256_BLOCK_SIZE);
-	}
+	cache_details_t *Details = fixed_store_get(DetailsStore, Target->CacheIndex);
+	memcpy(Hash, Details->BuildHash, SHA256_BLOCK_SIZE);
 }
 
-void cache_build_hash_set(target_t *Target, unsigned char BuildHash[SHA256_BLOCK_SIZE]) {
-	string_store_set(BuildHashStore, Target->CacheIndex, BuildHash, SHA256_BLOCK_SIZE);
+void cache_build_hash_set(target_t *Target, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	cache_details_t *Details = fixed_store_get(DetailsStore, Target->CacheIndex);
+	memcpy(Details->BuildHash, Hash, SHA256_BLOCK_SIZE);
+	if (Target->Parent) Details->Parent = Target->Parent->CacheIndex;
 }
 
 void cache_last_check_set(target_t *Target, time_t FileTime) {
-	cache_hash_details_t *Details = fixed_store_get(HashDetailsStore, Target->CacheIndex);
+	cache_details_t *Details = fixed_store_get(DetailsStore, Target->CacheIndex);
 	Details->LastUpdated = Target->LastUpdated;
 	Details->LastChecked = CurrentIteration;
 	Details->FileTime = FileTime;
+}
+
+target_t *cache_parent_get(target_t *Target) {
+	cache_details_t *Details = fixed_store_get(DetailsStore, Target->CacheIndex);
+	size_t Parent = Details->Parent;
+	if (!Parent) return NULL;
+	target_id_slot R = targetcache_index(Parent);
+	return R.Slot[0] ?: target_load(R.Id, Parent, R.Slot);
 }
 
 static targetset_t *cache_target_set_parse(uint32_t *Indices) {
@@ -388,7 +386,12 @@ void cache_expr_set(target_t *Target, ml_value_t *Value) {
 }
 
 size_t cache_target_id_to_index(const char *Id) {
-	return string_index_insert(TargetsIndex, Id, 0);
+	string_index_result_t Result = string_index_insert2(TargetsIndex, Id, 0);
+	if (Result.Created) {
+		cache_details_t *Details = fixed_store_get(DetailsStore, Result.Index);
+		memset(Details, 0, sizeof(cache_details_t));
+	}
+	return Result.Index;
 }
 
 size_t cache_target_id_to_index_existing(const char *Id) {

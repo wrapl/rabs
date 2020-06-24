@@ -837,7 +837,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "getenv", ml_function(NULL, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(NULL, ml_setenv));
 	stringmap_insert(Globals, "defined", ml_function(NULL, defined));
-	stringmap_insert(Globals, "check", ml_function(NULL, target_depends_auto_value));
+	stringmap_insert(Globals, "depends", ml_function(NULL, target_depends_auto_value));
 	stringmap_insert(Globals, "debug", ml_function(NULL, debug));
 	stringmap_insert(Globals, "type", ml_function(NULL, type));
 	stringmap_insert(Globals, "error", ml_function(NULL, error));
@@ -1000,6 +1000,9 @@ int main(int Argc, char **Argv) {
 	context_symb_set(CurrentContext, "ITERATION", (ml_value_t *)Iteration);
 	context_symb_set(CurrentContext, "ROOT", (ml_value_t *)CurrentContext);
 
+	CurrentThread = new(build_thread_t);
+	CurrentThread->Id = 0;
+	CurrentThread->Status = BUILD_IDLE;
 	if (!InteractiveMode) target_threads_start(NumThreads);
 
 	ml_value_t *Result = load_file(concat(RootPath, "/", SystemName, NULL));

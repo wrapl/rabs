@@ -55,17 +55,17 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 
 target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
 	target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Index, Slot);
-	const char *Name;
-	for (Name = Id + strlen(Id) - 1; --Name > Id + 5;) {
+	const char *SourceIdStart = Id + 5, *Name;
+	for (Name = Id + strlen(Id) - 1; --Name > SourceIdStart;) {
 		if (Name[0] == ':' && Name[1] == ':') break;
 	}
-	size_t ParentIdLength = Name - Id - 5;
-	char *ParentId = snew(ParentIdLength + 1);
-	memcpy(ParentId, Id + 5, ParentIdLength);
-	ParentId[ParentIdLength] = 0;
-	Target->Source = target_find(ParentId);
+	size_t SourceIdLength = Name - SourceIdStart;
+	char *SourceId = snew(SourceIdLength + 1);
+	memcpy(SourceId, SourceIdStart, SourceIdLength);
+	SourceId[SourceIdLength] = 0;
+	Target->Source = target_find(SourceId);
 	if (!Target->Source) {
-		printf("\e[31mError: target not defined: %s\e[0m\n", ParentId);
+		printf("\e[31mError: target not defined: %s\e[0m\n", SourceId);
 		exit(1);
 	}
 	Target->Name = Name + 2;

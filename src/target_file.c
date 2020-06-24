@@ -148,8 +148,8 @@ time_t target_file_hash(target_file_t *Target, time_t PreviousTime, unsigned cha
 		pthread_mutex_lock(InterpreterLock);
 		printf("\e[33mWarning: file does not exist: %s\e[0m\n", FileName);
 		targetset_foreach(Target->Base.Affects, NULL, target_file_affects_fn);
-		memcpy(Target->Base.Hash, PreviousHash, SHA256_BLOCK_SIZE);
-		return PreviousTime;
+		memset(Target->Base.Hash, 0xF0, SHA256_BLOCK_SIZE);
+		return 0;
 	}
 	if (Stat->st_mtime == PreviousTime) {
 		memcpy(Target->Base.Hash, PreviousHash, SHA256_BLOCK_SIZE);

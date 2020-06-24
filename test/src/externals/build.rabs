@@ -12,7 +12,8 @@ var package := fun(Name, Url, BuildFn) do
 			var Target := Source:map(OutDir, PATH)
 			if Source:isdir then
 				Target:mkdir
-			else	
+			else
+				Target => nil
 				execute('mv', Source, Target)
 				Targets:put(Target)
 			end

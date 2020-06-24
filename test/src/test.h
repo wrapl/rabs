@@ -2,5 +2,6 @@
 #define TEST_H
 
 #include <stdio.h>
+#include "scan_test.h"
 
 #endif
