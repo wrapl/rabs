@@ -813,8 +813,6 @@ int main(int Argc, char **Argv) {
 	ml_object_init(Globals);
 	ml_iterfns_init(Globals);
 	ml_file_init(Globals);
-	ArgifyMethod = ml_method("argify");
-	CmdifyMethod = ml_method("cmdify");
 	stringmap_insert(Globals, "vmount", ml_function(NULL, vmount));
 	stringmap_insert(Globals, "subdir", ml_function(NULL, subdir));
 	stringmap_insert(Globals, "target", ml_function(NULL, ml_target_find));
@@ -837,12 +835,14 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "getenv", ml_function(NULL, ml_getenv));
 	stringmap_insert(Globals, "setenv", ml_function(NULL, ml_setenv));
 	stringmap_insert(Globals, "defined", ml_function(NULL, defined));
-	stringmap_insert(Globals, "depends", ml_function(NULL, target_depends_auto_value));
+	stringmap_insert(Globals, "check", ml_function(NULL, target_depends_auto_value));
 	stringmap_insert(Globals, "debug", ml_function(NULL, debug));
 	stringmap_insert(Globals, "type", ml_function(NULL, type));
 	stringmap_insert(Globals, "error", ml_function(NULL, error));
 	stringmap_insert(Globals, "LIBPATH", lib_path());
 
+	ArgifyMethod = ml_method("argify");
+	CmdifyMethod = ml_method("cmdify");
 	ml_method_by_value(ArgifyMethod, NULL, argify_nil, MLListT, MLNilT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, argify_integer, MLListT, MLIntegerT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, argify_real, MLListT, MLRealT, NULL);
