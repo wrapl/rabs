@@ -368,7 +368,7 @@ static void target_rebuild(target_t *Target) {
 		CurrentContext = Target->BuildContext;
 		CurrentTarget = Target;
 		CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
-		ml_value_t *Result = ml_inline(Target->Build, 1, Target);
+		ml_value_t *Result = ml_simple_inline(Target->Build, 1, Target);
 		if (Result->Type == MLErrorT) {
 			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 			ml_source_t Source;
@@ -529,7 +529,7 @@ static void target_update(target_t *Target) {
 			CurrentContext = Target->BuildContext;
 			CurrentTarget = Target;
 			CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
-			ml_value_t *Result = ml_inline(Target->Build, 1, Target);
+			ml_value_t *Result = ml_simple_inline(Target->Build, 1, Target);
 			if (Result->Type == MLErrorT) {
 				fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 				ml_source_t Source;

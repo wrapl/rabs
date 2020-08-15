@@ -16,7 +16,7 @@ static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Arg
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
-	return ml_inline(MLStringBufferAppendMethod, 2, Buffer, Target->Value);
+	return ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Target->Value);
 }
 
 static ml_value_t *target_expr_argify(void *Data, int Count, ml_value_t **Args) {
@@ -24,7 +24,7 @@ static ml_value_t *target_expr_argify(void *Data, int Count, ml_value_t **Args) 
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
-	return ml_inline(ArgifyMethod, 2, Args[0], Target->Value);
+	return ml_simple_inline(ArgifyMethod, 2, Args[0], Target->Value);
 }
 
 static ml_value_t *target_expr_cmdify(void *Data, int Count, ml_value_t **Args) {
@@ -33,7 +33,7 @@ static ml_value_t *target_expr_cmdify(void *Data, int Count, ml_value_t **Args) 
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
-	return ml_inline(MLStringBufferAppendMethod, 2, Buffer, Target->Value);
+	return ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Target->Value);
 }
 
 static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
@@ -41,7 +41,7 @@ static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Arg
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
-	return ml_inline(MLStringOfMethod, 1, Target->Value);
+	return ml_simple_inline(MLStringOfMethod, 1, Target->Value);
 }
 
 time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {

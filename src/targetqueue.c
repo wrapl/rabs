@@ -95,7 +95,6 @@ target_t *targetqueue_next() {
 	QueueHeap[QueueTop] = 0;
 	if (!QueueTop) return Next;
 	for (;;) {
-		if (Index >= QueueTop) asm("int3");
 		int Left = 2 * Index + 1;
 		int Right = 2 * Index + 2;
 		int Largest = Index;

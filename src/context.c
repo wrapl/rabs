@@ -111,7 +111,7 @@ static ml_value_t *context_get_scope(void *Data, int Count, ml_value_t **Args) {
 ml_value_t *context_in_scope(void *Data, int Count, ml_value_t **Args) {
 	context_t *OldContext = CurrentContext;
 	CurrentContext = (context_t *)Args[0];
-	ml_value_t *Result = ml_call(Args[1], 0, NULL);
+	ml_value_t *Result = ml_simple_call(Args[1], 0, NULL);
 	if (Result->Type == MLErrorT) {
 		printf("Error: %s\n", ml_error_message(Result));
 		ml_source_t Source;

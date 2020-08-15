@@ -297,7 +297,7 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 					File = target_file_check(Absolute, 1);
 				}
 				if (Ls->FilterFn) {
-					ml_value_t *Result = ml_inline(Ls->FilterFn, 1, File);
+					ml_value_t *Result = ml_simple_inline(Ls->FilterFn, 1, File);
 					if (Result->Type == MLErrorT) {
 						Ls->Results = Result;
 						return 1;
