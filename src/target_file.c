@@ -19,7 +19,7 @@
 #endif
 
 extern ml_value_t *ArgifyMethod;
-extern ml_value_t *CmdifyMethod;
+extern ml_value_t *MLStringBufferAppendMethod;
 
 struct target_file_t {
 	target_t Base;
@@ -654,7 +654,7 @@ void target_file_init() {
 	FileTargetT = ml_type(TargetT, "file-target");
 	ml_method_by_value(MLStringBufferAppendMethod, 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
 	ml_method_by_value(ArgifyMethod, 0, target_file_argify, MLListT, FileTargetT, NULL);
-	ml_method_by_value(CmdifyMethod, 0, target_file_cmdify, MLStringBufferT, FileTargetT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, 0, target_file_cmdify, MLStringBufferT, FileTargetT, NULL);
 	ml_method_by_value(MLStringOfMethod, 0, target_file_to_string, FileTargetT, NULL);
 	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
 	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);

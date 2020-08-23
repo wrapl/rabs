@@ -6,7 +6,6 @@
 #include "targetcache.h"
 
 extern ml_value_t *ArgifyMethod;
-extern ml_value_t *CmdifyMethod;
 
 ml_type_t *ExprTargetT;
 
@@ -84,7 +83,7 @@ void target_expr_init(void) {
 	ExprTargetT = ml_type(TargetT, "expr-target");
 	ml_method_by_value(MLStringBufferAppendMethod, NULL, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, target_expr_argify, MLListT, ExprTargetT, NULL);
-	ml_method_by_value(CmdifyMethod, NULL, target_expr_cmdify, MLStringBufferT, ExprTargetT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, NULL, target_expr_cmdify, MLStringBufferT, ExprTargetT, NULL);
 	ml_method_by_value(MLStringOfMethod, NULL, target_expr_to_string, ExprTargetT, NULL);
 
 }

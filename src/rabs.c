@@ -33,7 +33,6 @@
 const char *SystemName = "build.rabs";
 const char *RootPath;
 ml_value_t *ArgifyMethod;
-ml_value_t *CmdifyMethod;
 static int EchoCommands = 0;
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
@@ -321,7 +320,7 @@ static ml_value_t *cmdify_list(void *Data, int Count, ml_value_t **Args) {
 	int Space = 0;
 	ML_LIST_FOREACH(Args[1], Node) {
 		if (Space) ml_stringbuffer_add(Buffer, " ", 1);
-		ml_simple_inline(CmdifyMethod, 2, Buffer, Node->Value);
+		ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Node->Value);
 		Space = 1;
 	}
 	return Space ? MLSome : MLNil;
@@ -368,7 +367,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_simple_inline(CmdifyMethod, 2, Buffer, Args[I]);
+		ml_value_t *Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
 	}
@@ -406,7 +405,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 			if (Size > 0) ml_stringbuffer_add(Output, Chars, Size);
 			//pthread_mutex_unlock(GlobalLock);
 		}
-		Result = ml_stringbuffer_get_string(Output);
+		Result = ml_stringbuffer_value(Output);
 	} else {
 		char Chars[ML_STRINGBUFFER_NODE_SIZE];
 		for (;;) {
@@ -832,7 +831,6 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "LIBPATH", lib_path());
 
 	ArgifyMethod = ml_method("argify");
-	CmdifyMethod = ml_method("cmdify");
 	ml_method_by_value(ArgifyMethod, NULL, argify_nil, MLListT, MLNilT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, argify_integer, MLListT, MLIntegerT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, argify_real, MLListT, MLRealT, NULL);
@@ -841,13 +839,13 @@ int main(int Argc, char **Argv) {
 	ml_method_by_value(ArgifyMethod, NULL, argify_list, MLListT, MLListT, NULL);
 	ml_method_by_value(ArgifyMethod, NULL, argify_map, MLListT, MLMapT, NULL);
 
-	ml_method_by_value(CmdifyMethod, NULL, cmdify_nil, MLStringBufferT, MLNilT, NULL);
-	ml_method_by_value(CmdifyMethod, NULL, cmdify_integer, MLStringBufferT, MLIntegerT, NULL);
-	ml_method_by_value(CmdifyMethod, NULL, cmdify_real, MLStringBufferT, MLRealT, NULL);
-	ml_method_by_value(CmdifyMethod, NULL, cmdify_string, MLStringBufferT, MLStringT, NULL);
-	ml_method_by_value(CmdifyMethod, NULL, cmdify_method, MLStringBufferT, MLMethodT, NULL);
-	ml_method_by_value(CmdifyMethod, NULL, cmdify_list, MLStringBufferT, MLListT, NULL);
-	ml_method_by_value(CmdifyMethod, NULL, cmdify_map, MLStringBufferT, MLMapT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, NULL, cmdify_nil, MLStringBufferT, MLNilT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, NULL, cmdify_integer, MLStringBufferT, MLIntegerT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, NULL, cmdify_real, MLStringBufferT, MLRealT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, NULL, cmdify_string, MLStringBufferT, MLStringT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, NULL, cmdify_method, MLStringBufferT, MLMethodT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, NULL, cmdify_list, MLStringBufferT, MLListT, NULL);
+	ml_method_by_value(MLStringBufferAppendMethod, NULL, cmdify_map, MLStringBufferT, MLMapT, NULL);
 
 	target_init();
 	context_init();
