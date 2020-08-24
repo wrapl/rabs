@@ -29,42 +29,6 @@ struct target_file_t {
 
 ml_type_t *FileTargetT;
 
-static ml_value_t *target_file_stringify(void *Data, int Count, ml_value_t **Args) {
-	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
-	target_file_t *Target = (target_file_t *)Args[1];
-	const char *Path;
-	if (Target->Absolute) {
-		Path = Target->Path;
-	} else if (Target->Path[0]) {
-		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
-	} else {
-		Path = RootPath;
-	}
-	//Path = relative_path(Path, CurrentDirectory);
-	const char *I = Path, *J = Path;
-	for (;; ++J) switch (*J) {
-	case 0: goto done;
-	case ' ':
-	case '#':
-	case '\"':
-	case '\'':
-	case '&':
-	case '(':
-	case ')':
-	case '\\':
-	case '\t':
-	case '\r':
-	case '\n':
-		if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
-		ml_stringbuffer_add(Buffer, "\\", 1);
-		I = J;
-		break;
-	}
-done:
-	if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
-	return MLSome;
-}
-
 static ml_value_t *target_file_argify(void *Data, int Count, ml_value_t **Args) {
 	target_file_t *Target = (target_file_t *)Args[1];
 	const char *Path;
@@ -77,7 +41,7 @@ static ml_value_t *target_file_argify(void *Data, int Count, ml_value_t **Args) 
 	}
 	//Path = relative_path(Path, CurrentDirectory);
 	ml_list_append(Args[0], ml_string(Path, strlen(Path)));
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *target_file_cmdify(void *Data, int Count, ml_value_t **Args) {
@@ -113,7 +77,7 @@ static ml_value_t *target_file_cmdify(void *Data, int Count, ml_value_t **Args) 
 	}
 done:
 	if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Args) {
@@ -652,7 +616,6 @@ ml_value_t *target_file_path(void *Data, int Count, ml_value_t **Args) {
 
 void target_file_init() {
 	FileTargetT = ml_type(TargetT, "file-target");
-	ml_method_by_value(MLStringBufferAppendMethod, 0, target_file_stringify, MLStringBufferT, FileTargetT, NULL);
 	ml_method_by_value(ArgifyMethod, 0, target_file_argify, MLListT, FileTargetT, NULL);
 	ml_method_by_value(MLStringBufferAppendMethod, 0, target_file_cmdify, MLStringBufferT, FileTargetT, NULL);
 	ml_method_by_value(MLStringOfMethod, 0, target_file_to_string, FileTargetT, NULL);

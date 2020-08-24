@@ -63,7 +63,7 @@ static ml_value_t *csv_write_fn(void *Data, int Count, ml_value_t **Args) {
 	if (ml_list_iter_forward(Args[1], Iter)) for (;;) {
 		ml_value_t *Field = Iter->Value;
 		if (Field->Type != MLStringT) {
-			Field = ml_call(MLStringOfMethod, 1, &Field);
+			Field = ml_simple_call(MLStringOfMethod, 1, &Field);
 			if (Field->Type == MLErrorT) return Field;
 			if (Field->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 		}
@@ -95,7 +95,7 @@ static ml_value_t *csv_open(void *Data, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(2);
 	ml_value_t *FileName = Args[0];
 	if (FileName->Type != MLStringT) {
-		FileName = ml_call(MLStringOfMethod, 1, &FileName);
+		FileName = ml_simple_call(MLStringOfMethod, 1, &FileName);
 		if (FileName->Type == MLErrorT) return FileName;
 		if (FileName->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
 	}
@@ -121,6 +121,6 @@ void *init(stringmap_t *Exports, stringmap_t *Globals) {
 	ml_method_by_name("read", 0, csv_read_fn, CsvT, NULL);
 	ml_method_by_name("write", 0, csv_write_fn, CsvT, MLListT, NULL);
 	ml_method_by_name("close", 0, csv_close_fn, CsvT, NULL);
-	stringmap_insert(Exports, "open", ml_function(0, csv_open));
+	stringmap_insert(Exports, "open", ml_cfunction(0, csv_open));
 	return 0;
 }

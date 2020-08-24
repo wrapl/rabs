@@ -289,76 +289,60 @@ static ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
 #endif
 
 static ml_value_t *cmdify_nil(void *Data, int Count, ml_value_t **Args) {
-	return MLNil;
+	return Args[0];
 }
 
 static ml_value_t *cmdify_integer(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	ml_stringbuffer_addf(Buffer, "%ld", ml_integer_value(Args[1]));
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *cmdify_real(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	ml_stringbuffer_addf(Buffer, "%f", ml_real_value(Args[1]));
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *cmdify_string(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	ml_stringbuffer_add(Buffer, ml_string_value(Args[1]), ml_string_length(Args[1]));
-	return ml_string_length(Args[1]) ? MLSome : MLNil;
+	return Args[0];
 }
 
 static ml_value_t *cmdify_method(void *Data, int Count, ml_value_t **Args) {
-	ml_list_append(Args[0], ml_string(ml_method_name(Args[1]), -1));
-	return MLSome;
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
+	const char *Name = ml_method_name(Args[1]);
+	ml_stringbuffer_add(Buffer, Name, strlen(Name));
+	return Args[0];
 }
 
 static ml_value_t *cmdify_list(void *Data, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
-	int Space = 0;
+	int Last = Buffer->Length;
 	ML_LIST_FOREACH(Args[1], Node) {
-		if (Space) ml_stringbuffer_add(Buffer, " ", 1);
+		if (Buffer->Length > Last) ml_stringbuffer_add(Buffer, " ", 1);
+		Last = Buffer->Length;
 		ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Node->Value);
-		Space = 1;
 	}
-	return Space ? MLSome : MLNil;
-}
-
-typedef struct cmdify_context_t {
-	ml_value_t *Argv;
-	ml_value_t *Result;
-	int First;
-} cmdify_context_t;
-
-static int cmdify_map_node(ml_value_t *Key, ml_value_t *Value, cmdify_context_t *Context) {
-	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Context->Argv;
-	if (Context->First) {
-		Context->First = 0;
-	} else {
-		ml_stringbuffer_add(Buffer, " ", 1);
-	}
-	ml_value_t *Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Key);
-	if (Result->Type == MLErrorT) {
-		Context->Result = Result;
-		return 1;
-	}
-	if (Value != MLNil && Value != MLSome) {
-		ml_stringbuffer_add(Buffer, "=", 1);
-		Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Value);
-		if (Result->Type == MLErrorT) {
-			Context->Result = Result;
-			return 1;
-		}
-	}
-	return 0;
+	return Args[0];
 }
 
 static ml_value_t *cmdify_map(void *Data, int Count, ml_value_t **Args) {
-	cmdify_context_t Context = {Args[0], MLSome, 1};
-	ml_map_foreach(Args[1], &Context, (void *)cmdify_map_node);
-	return Context.Result;
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
+	int Last = Buffer->Length;
+	ML_MAP_FOREACH(Args[1], Iter) {
+		if (Buffer->Length > Last) ml_stringbuffer_add(Buffer, " ", 1);
+		Last = Buffer->Length;
+		ml_value_t *Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Iter->Key);
+		if (ml_is_error(Result)) return Result;
+		if (Iter->Value != MLNil && Iter->Value != MLSome) {
+			ml_stringbuffer_add(Buffer, "=", 1);
+			Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Iter->Value);
+			if (ml_is_error(Result)) return Result;
+		}
+	}
+	return Args[0];
 }
 
 static int ErrorLogFile = STDERR_FILENO;
@@ -366,10 +350,12 @@ static int ErrorLogFile = STDERR_FILENO;
 static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+	int Last = Buffer->Length;
 	for (int I = 0; I < Count; ++I) {
+		if (Buffer->Length > Last) ml_stringbuffer_add(Buffer, " ", 1);
+		Last = Buffer->Length;
 		ml_value_t *Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
-		if (Result != MLNil) ml_stringbuffer_add(Buffer, " ", 1);
 	}
 	const char *Command = ml_stringbuffer_get(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
@@ -442,71 +428,54 @@ static ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
 }
 
 static ml_value_t *argify_nil(void *Data, int Count, ml_value_t **Args) {
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *argify_integer(void *Data, int Count, ml_value_t **Args) {
 	char *Chars;
 	size_t Length = asprintf(&Chars, "%ld", ml_integer_value(Args[1]));
 	ml_list_append(Args[0], ml_string(Chars, Length));
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *argify_real(void *Data, int Count, ml_value_t **Args) {
 	char *Chars;
 	size_t Length = asprintf(&Chars, "%f", ml_real_value(Args[1]));
 	ml_list_append(Args[0], ml_string(Chars, Length));
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *argify_string(void *Data, int Count, ml_value_t **Args) {
 	ml_list_append(Args[0], Args[1]);
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *argify_method(void *Data, int Count, ml_value_t **Args) {
 	ml_list_append(Args[0], ml_string(ml_method_name(Args[1]), -1));
-	return MLSome;
+	return Args[0];
 }
 
 static ml_value_t *argify_list(void *Data, int Count, ml_value_t **Args) {
 	ML_LIST_FOREACH(Args[1], Node) {
 		ml_value_t *Result = ml_simple_inline(ArgifyMethod, 2, Args[0], Node->Value);
-		if (Result->Type == MLErrorT) return Result;
+		if (ml_is_error(Result)) return Result;
 	}
-	return MLSome;
-}
-
-typedef struct argify_context_t {
-	ml_value_t *Argv;
-	ml_value_t *Result;
-} argify_context_t;
-
-static int argify_map_node(ml_value_t *Key, ml_value_t *Value, argify_context_t *Context) {
-	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	ml_value_t *Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Key);
-	if (Result->Type == MLErrorT) {
-		Context->Result = Result;
-		return 1;
-	}
-	if (Value != MLNil) {
-		ml_stringbuffer_add(Buffer, "=", 1);
-		Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Value);
-		if (Result->Type == MLErrorT) {
-			Context->Result = Result;
-			return 1;
-		}
-	}
-	size_t Length = Buffer->Length;
-	Result = ml_string(ml_stringbuffer_get(Buffer), Length);
-	ml_list_append(Context->Argv, Result);
-	return 0;
+	return Args[0];
 }
 
 static ml_value_t *argify_map(void *Data, int Count, ml_value_t **Args) {
-	argify_context_t Context = {Args[0], MLSome};
-	ml_map_foreach(Args[1], &Context, (void *)argify_map_node);
-	return Context.Result;
+	ML_MAP_FOREACH(Args[1], Iter) {
+		ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
+		ml_value_t *Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Iter->Key);
+		if (ml_is_error(Result)) return Result;
+		if (Iter->Value != MLNil && Iter->Value != MLSome) {
+			ml_stringbuffer_add(Buffer, "=", 1);
+			Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Iter->Value);
+			if (ml_is_error(Result)) return Result;
+		}
+		ml_list_append(Args[0], ml_stringbuffer_value(Buffer));
+	}
+	return Args[0];
 }
 
 #ifdef Mingw
@@ -693,16 +662,18 @@ loop:
 	return NULL;
 }
 
+static int ml_stringbuffer_print(FILE *File, const char *String, size_t Length) {
+	fwrite(String, 1, Length, File);
+	return 0;
+}
+
 static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
+	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = Args[I];
-		if (Result->Type != MLStringT) {
-			Result = ml_simple_call(MLStringOfMethod, 1, &Result);
-			if (Result->Type == MLErrorT) return Result;
-			if (Result->Type != MLStringT) return ml_error("ResultError", "string method did not return string");
-		}
-		fwrite(ml_string_value(Result), 1, ml_string_length(Result), stdout);
+		ml_value_t *Result = ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Args[I]);
+		if (ml_is_error(Result)) return Result;
 	}
+	ml_stringbuffer_foreach(Buffer, stdout, (void *)ml_stringbuffer_print);
 	fflush(stdout);
 	return MLNil;
 }
