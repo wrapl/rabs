@@ -43,8 +43,8 @@ objects = \
 libraries = \
 	minilang/lib/libminilang.a radb/libradb.a
 
-obj/%.o: src/%.c | obj 
-	$(CC) $(CFLAGS) -c -o $@ $< $(libraries)
+obj/%.o: src/%.c | obj $(libraries)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 CFLAGS += \
 	-std=gnu11 -foptimize-sibling-calls \
@@ -86,10 +86,10 @@ endif
 
 ifdef DEBUG
 $(RABS): Makefile $(objects) $(libraries) src/*.h src/exports.lst bin
-	$(CC) $(objects) -o $@ $(LDFLAGS)
+	$(CC) $(objects) $(libraries) -o $@ $(LDFLAGS)
 else
 $(RABS): Makefile $(objects) $(libraries) src/*.h src/exports.lst bin
-	$(CC) $(objects) -o $@ $(LDFLAGS)
+	$(CC) $(objects) $(libraries) -o $@ $(LDFLAGS)
 	strip $@
 endif
 	
