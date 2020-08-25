@@ -22,9 +22,6 @@ minilang/lib/libminilang.a: minilang/Makefile minilang/src/*.c minilang/src/*.h
 radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a RADB_MEM=GC
 
-obj/%.o: src/%.c | obj minilang/lib/libminilang.a radb/libradb.a
-	$(CC) $(CFLAGS) -c -o $@ $< 
-
 objects = \
 	obj/cache.o \
 	obj/context.o \
@@ -42,6 +39,12 @@ objects = \
 	obj/vfs.o \
 	obj/library.o \
 	obj/whereami.o
+
+libraries = \
+	minilang/lib/libminilang.a radb/libradb.a
+
+obj/%.o: src/%.c | obj $(libraries)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 CFLAGS += \
 	-std=gnu11 -foptimize-sibling-calls \
@@ -82,11 +85,11 @@ else
 endif
 
 ifdef DEBUG
-$(RABS): Makefile $(objects) src/*.h src/exports.lst bin
-	$(CC) $(objects) -o $@ $(LDFLAGS)
+$(RABS): Makefile $(objects) $(libraries) src/*.h src/exports.lst bin
+	$(CC) $(objects) $(libraries) -o $@ $(LDFLAGS)
 else
-$(RABS): Makefile $(objects) src/*.h src/exports.lst bin
-	$(CC) $(objects) -o $@ $(LDFLAGS)
+$(RABS): Makefile $(objects) $(libraries) src/*.h src/exports.lst bin
+	$(CC) $(objects) $(libraries) -o $@ $(LDFLAGS)
 	strip $@
 endif
 	
