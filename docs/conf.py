@@ -3,7 +3,7 @@ from docutils import nodes
 import re
 from pygments import lexers
 import inspect
-import sphinx_bootstrap_theme
+import os
 
 class FoldersDirective(Directive):
 	has_content = True
@@ -71,7 +71,8 @@ author = 'Raja Mukherji'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 
-extensions = []
+extensions = ['sphinx.ext.graphviz']
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -87,12 +88,15 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-#html_theme = "sphinx_rtd_theme"
-html_theme = 'bootstrap'
-html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
-
+html_theme = "sphinx_material"
 html_theme_options = {
-    'bootswatch_theme': "united"
+	'color_primary': 'orange',
+	'color_accent': 'yellow',
+	'globaltoc_depth': 3
+}
+
+html_sidebars = {
+    "**": ["logo-text.html", "globaltoc.html", "localtoc.html", "searchbox.html"]
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -122,4 +126,4 @@ def setup(sphinx):
 	lexers.LEXERS['mini'] = ('minilang', 'Minilang', ('mini',), ('*.mini', '*.rabs'), ('text/x-mini',))
 	#sphinx.add_domain(minilangDomain) 
 	sphinx.add_directive('folders', FoldersDirective)
-	sphinx.add_stylesheet('css/custom.css')
+	sphinx.add_css_file('css/custom.css')

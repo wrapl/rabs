@@ -15,12 +15,16 @@ class MinilangLexer(RegexLexer):
     tokens = {
         'root': [
             (words((
-                "if", "then", "elseif", "else", "end", "loop",
-                "while", "until", "exit", "next", "for", "in",
-                "is", "fun", "return", "suspend", "ret", "let",
-                "susp", "with", "do", "on", "nil", "and", "or",
-                "not", "old", "def", "var", "to"
+                "if", "then", "elseif", "else", "end", "loop", "while",
+                "until", "exit", "next", "for", "each", "to", "in", "is",
+				"fun", "ret", "susp", "with", "do", "on", "nil", "and",
+				"or", "not", "old", "def", "let", "var", "_", "meth"
             ), suffix = r'\b'), Keyword),
+            (words((
+                "class", "method", "any", "type", "function", "number",
+                "integer", "real", "string", "stringbuffer", "list",
+                "map", "tuple", "regex", "array", "file", "boolean"
+			), suffix = r'\b'), Name.Class),
             (r'-?[0-9]+(\.[0-9]*)?((e|E)-?[0-9]+)?', Number),
             (r'-?\.[0-9]+((e|E)-?[0-9]+)?', Number),
             ('\"', String, 'string'),
@@ -28,12 +32,10 @@ class MinilangLexer(RegexLexer):
             ('\(', Operator, 'brackets'),
             ('\{', Operator, 'braces'),
             (r':[A-Za-z_]+', Name.Function),
-            (r'::[!@#$%^&*+=|\\~`/?<>.-]+', Name.Function),
             (r':>.*\n', Comment),
             (':<', Comment, 'comment'),
-            ('>:', Comment),
             (r'\s+', Text),
-            (r'[A-Za-z_][A-Za-z0-9_]*', Text),
+            (r'[A-Za-z_]\w*', Text),
             (':=', Operator),
             (',', Operator),
             (';', Operator),
@@ -60,11 +62,10 @@ class MinilangLexer(RegexLexer):
             ('\)', Operator, '#pop'),
             include('root')
         ],
-		'comment': [
-			(':<', Comment, 'comment'),
-			('>:', Comment, '#pop'),
-			(r'.', Comment)
-		]
+        'comment': [
+        	(':<', Comment, 'comment'),
+        	('>:', Comment, '#pop')
+        ]
     }
 
 minilangDomain = custom_domain('MinilangDomain',
@@ -87,6 +88,7 @@ class MiniStyle(Style):
     styles = {
         Keyword: '#0098dd',
         Name.Function: '#df631c',
+        Name.Class: '#ad00bc',
         Comment: '#a0a1a7',
         String: '#c5a332',
         String.Escape: '#823ff1',
