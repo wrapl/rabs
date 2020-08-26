@@ -1,3 +1,4 @@
+sphinx >= 3
 sphinxcontrib-domaintools
 sphinxcontrib-fulltoc
 sphinx-material
