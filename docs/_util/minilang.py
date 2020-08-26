@@ -64,7 +64,8 @@ class MinilangLexer(RegexLexer):
         ],
         'comment': [
         	(':<', Comment, 'comment'),
-        	('>:', Comment, '#pop')
+        	('>:', Comment, '#pop'),
+        	(r'.', Comment)
         ]
     }
 

@@ -26,7 +26,7 @@ Run ``rabs`` in the directory, which will give the following output (with `/tuto
    Build iteration = 1
    Hello world!
 
-Note that ``rabs`` automatically loads and runs the :file:`build.rabs` file. The first line is a comment since it starts with :mini:`--`. Although comments are generally ignored by ``rabs``, a :mini:`:< ROOT >:` comment on the first line of a :file:`build.rabs` serves as a special marker. 
+Note that ``rabs`` automatically loads and runs the :file:`build.rabs` file. The first line is a comment since it starts with :mini:`:<`. Although comments are generally ignored by ``rabs``, a :mini:`:< ROOT >:` comment on the first line of a :file:`build.rabs` serves as a special marker. 
 
 .. note::
 

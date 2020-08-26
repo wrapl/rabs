@@ -43,7 +43,7 @@ objects = \
 libraries = \
 	minilang/lib/libminilang.a radb/libradb.a
 
-obj/%.o: src/%.c | obj $(libraries)
+obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 CFLAGS += \

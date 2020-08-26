@@ -5,12 +5,14 @@ div.folders {
 div.folders ul {
 	/*font-family: 'Fira Code', monospace;*/
 	/*margin-left: 1em;*/
+	padding-left: 1em;
+	margin: 0 !important;
 }
 
 div.folders ul li {
 	list-style: none;
-	padding-left: 0;
-	margin: 0 0 0 -1em;
+	padding-left: 0.4em;
+	margin: 0;
 	position: relative;
 }
 
@@ -19,26 +21,26 @@ div.folders ul li:not(:last-child):before {
 	content: "";
 	height: 100%;
 	border-left: 1px solid black;
-	left: -1.5em;
+	left: -0.5em;
 	top: 0;
 }
 
 div.folders ul li:last-child:before {
 	position: absolute;
 	content: "";
-	height: 0.6em;
+	height: 0.8em;
 	border-left: 1px solid black;
-	left: -1.5em;
+	left: -0.5em;
 	top: 0;
 }
 
 div.folders ul li:after {
 	position: absolute;
 	content: "";
-	height: 0.6em;
+	height: 0.8em;
 	width: 0.6em;
 	border-bottom: 1px solid black;
-	left: -1.5em;
+	left: -0.5em;
 	top: 0;
 }
 
