@@ -46,10 +46,14 @@ div.folders ul li:after {
 
 code.highlight {
 	color: #333333 !important;
-	background-color: #f5f5f5;
-	border: 1px solid #cccccc;
+	background-color: white;
+}
+
+div.highlight {
+	box-shadow: 0 2px 2px 0 rgba(0,0,0,.14),0 1px 5px 0 rgba(0,0,0,.12),0 3px 1px -2px rgba(0,0,0,.2);
 }
 
 .highlight-console pre {
 	color: #718c00;
 }
+
