@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <regex.h>
 #include <dirent.h>
 #include <gc/gc.h>
 #include "rabs.h"
@@ -238,7 +237,7 @@ typedef struct target_file_ls_t target_file_ls_t;
 struct target_file_ls_t {
 	ml_value_t *Results;
 	ml_value_t *FilterFn;
-	regex_t *Regex;
+	ml_value_t *Regex;
 	int Recursive;
 };
 
@@ -251,7 +250,7 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 	struct dirent *Entry = readdir(Dir);
 	while (Entry) {
 		if (strcmp(Entry->d_name, ".") && strcmp(Entry->d_name, "..")) {
-			if (!(Ls->Regex && regexec(Ls->Regex, Entry->d_name, 0, 0, 0))) {
+			if (!(Ls->Regex && ml_regex_match(Ls->Regex, Entry->d_name, strlen(Entry->d_name)))) {
 				const char *Absolute = concat(Path, "/", Entry->d_name, NULL);
 				const char *Relative = match_prefix(Absolute, RootPath);
 				target_t *File;
@@ -288,17 +287,11 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 	for (int I = 1; I < Count; ++I) {
 		if (Args[I]->Type == MLStringT) {
 			const char *Pattern = ml_string_value(Args[I]);
-			Ls->Regex = new(regex_t);
-			int Error = regcomp(Ls->Regex, Pattern, REG_NOSUB | REG_EXTENDED);
-			if (Error) {
-				size_t Length = regerror(Error, Ls->Regex, NULL, 0);
-				char *Message = snew(Length + 1);
-				regerror(Error, Ls->Regex, Message, Length);
-				regfree(Ls->Regex);
-				return ml_error("RegexError", "%s", Message);
-			}
+			int Length = ml_string_length(Args[I]);
+			Ls->Regex = ml_regex(Pattern, Length);
+			if (ml_is_error(Ls->Regex)) return Ls->Regex;
 		} else if (Args[I]->Type == MLRegexT) {
-			Ls->Regex = ml_regex_value(Args[I]);
+			Ls->Regex = Args[I];
 		} else if (Args[I]->Type == MLMethodT && !strcmp(ml_method_name(Args[I]), "R")) {
 			Ls->Recursive = 1;
 		} else {
