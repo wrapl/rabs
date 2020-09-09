@@ -1,0 +1,12 @@
+Source: rabs
+Maintainer: Raja Mukherji <rajamukherji@gmail.com>
+Section: misc
+Priority: optional
+Standards-Version: 3.9.2
+Build-Depends: debhelper (>= 9), libgc-dev
+
+Package: rabs
+Architecture: any
+Depends: $(shlibs:Depends}, ${misc:Depends}, libgc1c2
+Description: Fast imperative build system
+ rabs is a fast imperative build system.
