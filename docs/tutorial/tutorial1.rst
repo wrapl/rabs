@@ -6,9 +6,10 @@ In this tutorial, we will create a Rabs script that updates a generated file whe
 Hello world
 -----------
 
-Create a new directory called :file:`tutorial` and inside it create a file called :file:`build.rabs` with the following content.
+Create a new directory called :file:`tutorial` and inside it create a file called :file:`build.rabs` with the following content:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -26,7 +27,7 @@ Run ``rabs`` in the directory, which will give the following output (with `/tuto
    Build iteration = 1
    Hello world!
 
-Note that ``rabs`` automatically loads and runs the :file:`build.rabs` file. The first line is a comment since it starts with :mini:`--`. Although comments are generally ignored by ``rabs``, a :mini:`:< ROOT >:` comment on the first line of a :file:`build.rabs` serves as a special marker. 
+Note that ``rabs`` automatically loads and runs the :file:`build.rabs` file. The first line is a comment since it starts with :mini:`:<`. Although comments are generally ignored by ``rabs``, a :mini:`:< ROOT >:` comment on the first line of a :file:`build.rabs` serves as a special marker. 
 
 .. note::
 
@@ -88,6 +89,7 @@ Build Functions
 Update the :file:`build.rabs` file to look as follows:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -131,6 +133,7 @@ This time, the build function for :mini:`DEFAULT` is not executed, and the targe
 Try changing the build function:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -162,6 +165,7 @@ Targets and Dependencies
 `rabs` predefines the :mini:`DEFAULT` target, but other targets can be created in the :file:`build.rabs` script. Change :file:`build.rabs` to contain the following:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -178,6 +182,7 @@ This defines a new meta target, called :mini:`TEST`. However running ``rabs -s``
 In order for :mini:`TEST` to be built, we need to make one more change:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -214,6 +219,7 @@ Running ``rabs -s`` shows us this in action:
 Not only is the build function for :mini:`TEST` executed, the build function for :mini:`DEFAULT` is also executed again. If we change the build function for :mini:`TEST`, both it and :mini:`DEFAULT` will be rebuilt.
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -250,6 +256,7 @@ Shorter Syntax
 Our current script describes build functions (using :mini:`Target => Function`) and dependencies (using :mini:`Target[Dependency]`). Both of these operations return the target itself, so we can combine them on one line:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -267,6 +274,7 @@ Now that we can create and update meta targets, it's time to move on to the most
 Add a few more lines to :file:`build.rabs`:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -308,6 +316,7 @@ Running ``rabs -s`` again creates the file :file:`test.txt` with the expected co
 Notice that in this example, we added :mini:`Test2` as a dependency of :mini:`DEFAULT` on its own line. We could include in the same line as the :mini:`Test` dependency as below:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    
@@ -351,6 +360,7 @@ Changing Dependencies
 Lets add two more targets to the :file:`build.rabs` script:
 
 .. code-block:: mini
+   :linenos:
 
    :< ROOT >:
    

@@ -21,7 +21,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <math.h>
-#include <regex.h>
 #include <dirent.h>
 #include <ml_file.h>
 #include <limits.h>
