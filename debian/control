@@ -7,6 +7,6 @@ Build-Depends: debhelper (>= 9), libgc-dev
 
 Package: rabs
 Architecture: any
-Depends: $(shlibs:Depends}, ${misc:Depends}, libgc1c2
+Depends: libc6, libgc1c2
 Description: Fast imperative build system
  rabs is a fast imperative build system.
