@@ -173,7 +173,7 @@ static ml_value_t *load_file(const char *FileName) {
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
-	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, (ml_getter_t)rabs_ml_global, NULL);
+	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, &MLRootContext, (ml_getter_t)rabs_ml_global, NULL);
 
 	load_file_state_t State[1];
 	State->Base.run = (void *)load_file_loaded;
