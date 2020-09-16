@@ -97,7 +97,7 @@ struct preprocessor_node_t {
 
 typedef struct preprocessor_t {
 	preprocessor_node_t *Nodes;
-	mlc_scanner_t *Scanner;
+	ml_compiler_t *Compiler;
 } preprocessor_t;
 
 static const char *preprocessor_read(preprocessor_t *Preprocessor) {
@@ -106,7 +106,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 		if (!Node->File) {
 			Node->File = fopen(Node->FileName, "r");
 			if (!Node->File) {
-				ml_scanner_error(Preprocessor->Scanner, "LoadError", "error opening %s", Node->FileName);
+				ml_compiler_error(Preprocessor->Compiler, "LoadError", "error opening %s", Node->FileName);
 			}
 		}
 		char *Line = NULL;
@@ -116,7 +116,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 			free(Line);
 			fclose(Node->File);
 			Node = Preprocessor->Nodes = Node->Next;
-			if (Node) ml_scanner_source(Preprocessor->Scanner, Node->Source);
+			if (Node) ml_compiler_source(Preprocessor->Compiler, Node->Source);
 		} else if (!strncmp(Line, "%include ", strlen("%include "))) {
 			while (Line[Actual] <= ' ') Line[Actual--] = 0;
 			const char *FileName = Line + strlen("%include ");
@@ -127,7 +127,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 			preprocessor_node_t *NewNode = new(preprocessor_node_t);
 			NewNode->Next = Node;
 			NewNode->FileName = FileName;
-			Node->Source = ml_scanner_source(Preprocessor->Scanner, (ml_source_t){FileName, 0});
+			Node->Source = ml_compiler_source(Preprocessor->Compiler, (ml_source_t){FileName, 0});
 			++Node->Source.Line;
 			Node = Preprocessor->Nodes = NewNode;
 		} else if (Line[Actual - 1] != '\n') {
@@ -173,13 +173,13 @@ static ml_value_t *load_file(const char *FileName) {
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
-	Preprocessor->Scanner = ml_scanner(FileName, Preprocessor, (void *)preprocessor_read, &MLRootContext, (ml_getter_t)rabs_ml_global, NULL);
+	Preprocessor->Compiler = ml_compiler(FileName, Preprocessor, (void *)preprocessor_read, (ml_getter_t)rabs_ml_global, NULL);
 
 	load_file_state_t State[1];
 	State->Base.run = (void *)load_file_loaded;
 	State->Base.Context = &MLRootContext;
 	State->Result = MLNil;
-	ml_function_compile((ml_state_t *)State, Preprocessor->Scanner, NULL);
+	ml_function_compile((ml_state_t *)State, Preprocessor->Compiler, NULL);
 	return State->Result;
 }
 
