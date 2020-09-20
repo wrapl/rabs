@@ -17,3 +17,7 @@ build.rabs.db*
 /tmp/
 *.pyc
 /obj/
+/debian/rabs*
+/debian/debhelper-build-stamp
+/debian/files
+/work
