@@ -11,7 +11,7 @@ struct target_meta_t {
 	const char *Name;
 };
 
-ml_type_t *MetaTargetT;
+ML_TYPE(MetaTargetT, (TargetT), "meta-target");
 
 time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (DependsLastUpdated == CurrentIteration) {
@@ -54,5 +54,5 @@ target_t *target_meta_create(const char *Id, context_t *BuildContext, size_t Ind
 }
 
 void target_meta_init() {
-	MetaTargetT = ml_type(TargetT, "meta-target");
+#include "target_meta_init.c"
 }

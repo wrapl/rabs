@@ -12,7 +12,7 @@ struct targetset_t {
 	int Size, Space;
 };
 
-extern ml_type_t *TargetSetT;
+extern ml_type_t TargetSetT[];
 
 #define TARGETSET_INIT {TargetSetT, NULL, 0, 0}
 

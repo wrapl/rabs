@@ -52,10 +52,10 @@ pthread_mutex_t InterpreterLock[1] = {PTHREAD_MUTEX_INITIALIZER};
 static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
 static pthread_cond_t TargetUpdated[1] = {PTHREAD_COND_INITIALIZER};
 
-static ml_value_t *SHA256Method;
-static ml_value_t *MissingMethod;
+ML_TYPE(TargetT, (MLAnyT), "target");
 
-ml_type_t *TargetT;
+ML_METHOD_DECL(SHA256, "sha256");
+ML_METHOD_DECL(Missing, "missing");
 
 __thread target_t *CurrentTarget = NULL;
 __thread context_t *CurrentContext = NULL;
@@ -115,7 +115,7 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 	return 1;
 }
 
-static ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
+ML_METHODV("[]", TargetT, MLAnyT) {
 	target_t *Target = (target_t *)Args[0];
 	for (int I = 1; I < Count; ++I) {
 		int Error = target_depends_single(Args[I], Target);
@@ -124,17 +124,30 @@ static ml_value_t *target_depend(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-static ml_value_t *target_get_id(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("<<", TargetT, MLAnyT) {
+	target_t *Target = (target_t *)Args[0];
+	for (int I = 1; I < Count; ++I) {
+		int Error = target_depends_single(Args[I], Target);
+		if (Error) return ml_error("TypeError", "Invalid value in dependency list");
+	}
+	return Args[0];
+}
+
+ML_METHOD("scan", TargetT, MLStringT) {
+	return target_scan_new(NULL, Count, Args);
+}
+
+ML_METHOD("id", TargetT) {
 	target_t *Target = (target_t *)Args[0];
 	return ml_string(Target->Id, -1);
 }
 
-static ml_value_t *target_get_build(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("build", TargetT) {
 	target_t *Target = (target_t *)Args[0];
 	return Target->Build ?: MLNil;
 }
 
-static ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("=>", TargetT, MLAnyT) {
 	target_t *Target = (target_t *)Args[0];
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
@@ -147,24 +160,32 @@ static ml_value_t *target_set_build(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-static ml_value_t *target_get_depends(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("build", TargetT, MLAnyT) {
+	target_t *Target = (target_t *)Args[0];
+	Target->Build = Args[1];
+	Target->BuildContext = CurrentContext;
+	if (CurrentTarget) {
+		Target->Parent = CurrentTarget;
+		if (DependencyGraph) {
+			fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
+		}
+	}
+	return Args[0];
+}
+
+ML_METHOD("depends", TargetT) {
 	target_t *Target = (target_t *)Args[0];
 	return (ml_value_t *)Target->Depends;
 }
 
-static ml_value_t *target_get_affects(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("affects", TargetT) {
 	target_t *Target = (target_t *)Args[0];
 	return (ml_value_t *)Target->Affects;
 }
 
-static ml_value_t *target_get_priority(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("priority", TargetT) {
 	target_t *Target = (target_t *)Args[0];
 	return ml_integer(Target->QueuePriority);
-}
-
-static ml_value_t *target_get_scans(void *Data, int Count, ml_value_t **Args) {
-	target_t *Target = (target_t *)Args[0];
-	return (ml_value_t *)cache_scan_get(Target);
 }
 
 static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
@@ -723,21 +744,7 @@ static void target_threads_kill(void) {
 void target_init(void) {
 	targetqueue_init();
 	targetset_ml_init();
-
-	TargetT = ml_type(MLAnyT, "target");
-	SHA256Method = ml_method("sha256");
-	MissingMethod = ml_method("missing");
-	ml_method_by_name("[]", NULL, target_depend, TargetT, MLAnyT, NULL);
-	ml_method_by_name("scan", NULL, target_scan_new, TargetT, NULL);
-	ml_method_by_name("=>", NULL, target_set_build, TargetT, MLAnyT, NULL);
-	ml_method_by_name("<<", NULL, target_depend, TargetT, MLAnyT, NULL);
-	ml_method_by_name("id", NULL, target_get_id, TargetT, NULL);
-	ml_method_by_name("build", NULL, target_get_build, TargetT, NULL);
-	ml_method_by_name("build", NULL, target_set_build, TargetT, MLAnyT, NULL);
-	ml_method_by_name("depends", NULL, target_get_depends, TargetT, NULL);
-	ml_method_by_name("affects", NULL, target_get_affects, TargetT, NULL);
-	ml_method_by_name("priority", NULL, target_get_priority, TargetT, NULL);
-	ml_method_by_name("scans", NULL, target_get_scans, ScanTargetT, NULL);
+#include "target_init.c"
 	target_expr_init();
 	target_file_init();
 	target_meta_init();

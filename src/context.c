@@ -11,7 +11,7 @@
 
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;
-static ml_type_t *ContextT;
+static ML_TYPE(ContextT, (MLAnyT), "context");
 
 context_t *context_find(const char *Name) {
 	return stringmap_search(ContextCache, Name);
@@ -78,37 +78,43 @@ ml_value_t *context_symb_set(context_t *Context, const char *Name, ml_value_t *V
 	return Value;
 }
 
-static ml_value_t *context_get_local(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD(".", ContextT, MLStringT) {
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	return (ml_value_t *)target_symb_new(Context, Name);
 }
 
-static ml_value_t *context_get_parent(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("::", ContextT, MLStringT) {
+	context_t *Context = (context_t *)Args[0];
+	const char *Name = ml_string_value(Args[1]);
+	return (ml_value_t *)target_symb_new(Context, Name);
+}
+
+ML_METHOD("parent", ContextT) {
 	context_t *Context = (context_t *)Args[0];
 	return (ml_value_t *)Context->Parent ?: MLNil;
 }
 
-static ml_value_t *context_path(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("path", ContextT) {
 	context_t *Context = (context_t *)Args[0];
 	return ml_string(Context->Path, -1);
 }
 
-static ml_value_t *context_get_subdir(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("/", ContextT, MLStringT) {
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	const char *Path = concat(Context->Path, "/", Name, NULL);
 	return (ml_value_t *)context_make(Path) ?: MLNil;
 }
 
-static ml_value_t *context_get_scope(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("@", ContextT, MLStringT) {
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	const char *Path = concat(Context->Path, ":", Name, NULL);
 	return (ml_value_t *)context_make(Path) ?: MLNil;
 }
 
-ml_value_t *context_in_scope(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("in", ContextT, MLFunctionT) {
 	context_t *OldContext = CurrentContext;
 	CurrentContext = (context_t *)Args[0];
 	ml_value_t *Result = ml_simple_call(Args[1], 0, NULL);
@@ -127,12 +133,5 @@ ml_value_t *context_in_scope(void *Data, int Count, ml_value_t **Args) {
 
 void context_init() {
 	DefaultString = ml_cstring("DEFAULT");
-	ContextT = ml_type(MLAnyT, "context");
-	ml_method_by_name(".", 0, context_get_local, ContextT, MLStringT, NULL);
-	ml_method_by_name("::", 0, context_get_local, ContextT, MLStringT, NULL);
-	ml_method_by_name("parent", 0, context_get_parent, ContextT, NULL);
-	ml_method_by_name("path", 0, context_path, ContextT, NULL);
-	ml_method_by_name("/", 0, context_get_subdir, ContextT, MLStringT, NULL);
-	ml_method_by_name("@", 0, context_get_scope, ContextT, MLStringT, NULL);
-	ml_method_by_name("in", 0, context_in_scope, ContextT, MLFunctionT, NULL);
+#include "context_init.c"
 }

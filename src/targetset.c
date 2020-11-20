@@ -24,7 +24,7 @@ static void targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter) {
 	ML_CONTINUE(Caller, MLNil);
 }
 
-static ml_type_t *TargetSetIterT;
+ML_TYPE(TargetSetIterT, (), "targetset-iter");
 
 static void targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
 	target_t **End = Set->Targets + Set->Size;
@@ -40,11 +40,10 @@ static void targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
 	ML_CONTINUE(Caller, MLNil);
 }
 
-ml_type_t *TargetSetT;
+ML_TYPE(TargetSetT, (MLIteratableT), "targetset");
 
 void targetset_ml_init() {
-	TargetSetT = ml_type(MLIteratableT, "targetset");
-	TargetSetIterT = ml_type(MLAnyT, "targetset-iter");
+#include "targetset_init.c"
 	ml_typed_fn_set(TargetSetT, ml_iterate, targetset_iterate);
 	ml_typed_fn_set(TargetSetIterT, ml_iter_next, targetset_iter_next);
 	ml_typed_fn_set(TargetSetIterT, ml_iter_value, targetset_iter_value);

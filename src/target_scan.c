@@ -15,7 +15,7 @@ struct target_scan_t {
 	ml_value_t *Rebuild;
 };
 
-ml_type_t *ScanTargetT;
+ML_TYPE(ScanTargetT, (TargetT), "scan-target");
 
 static int depends_hash_fn(target_t *Depend, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
@@ -28,7 +28,7 @@ time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, unsigned cha
 	return 0;
 }
 
-static ml_value_t *target_scan_source(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("source", ScanTargetT) {
 	target_scan_t *Target = (target_scan_t *)Args[0];
 	return (ml_value_t *)Target->Source;
 }
@@ -72,7 +72,11 @@ target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Ind
 	return (target_t *)Target;
 }
 
+ML_METHOD("scans", ScanTargetT) {
+	target_t *Target = (target_t *)Args[0];
+	return (ml_value_t *)cache_scan_get(Target);
+}
+
 void target_scan_init() {
-	ScanTargetT = ml_type(TargetT, "scan-target");
-	ml_method_by_name("source", 0, target_scan_source, ScanTargetT, NULL);
+#include "target_scan_init.c"
 }
