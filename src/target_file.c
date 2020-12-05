@@ -18,7 +18,6 @@
 #endif
 
 extern ml_value_t *ArgifyMethod;
-extern ml_value_t *MLStringBufferAppendMethod;
 
 struct target_file_t {
 	target_t Base;
@@ -26,9 +25,9 @@ struct target_file_t {
 	const char *Path;
 };
 
-ml_type_t *FileTargetT;
+ML_TYPE(FileTargetT, (TargetT), "file-target");
 
-static ml_value_t *target_file_argify(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD(ArgifyMethod, MLListT, FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[1];
 	const char *Path;
 	if (Target->Absolute) {
@@ -43,7 +42,7 @@ static ml_value_t *target_file_argify(void *Data, int Count, ml_value_t **Args) 
 	return Args[0];
 }
 
-static ml_value_t *target_file_cmdify(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("append", MLStringBufferT, FileTargetT) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_file_t *Target = (target_file_t *)Args[1];
 	const char *Path;
@@ -79,7 +78,7 @@ done:
 	return Args[0];
 }
 
-static ml_value_t *target_file_to_string(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD(MLStringOfMethod, FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Path;
 	if (Target->Absolute) {
@@ -214,7 +213,7 @@ void target_file_watch(target_file_t *Target) {
 #endif
 }
 
-ml_value_t *target_file_dir(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("dir", FileTargetT) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	char *Path;
 	int Absolute;
@@ -282,7 +281,7 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 	return 0;
 }
 
-ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
+ML_METHODV("ls", FileTargetT) {
 	target_file_ls_t Ls[1] = {{ml_list(), NULL, 0}};
 	for (int I = 1; I < Count; ++I) {
 		if (Args[I]->Type == MLStringT) {
@@ -309,7 +308,7 @@ ml_value_t *target_file_ls(void *Data, int Count, ml_value_t **Args) {
 	return Ls->Results;
 }
 
-ml_value_t *target_file_dirname(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("dirname", FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	char *Path;
 	if (Target->Absolute) {
@@ -325,7 +324,7 @@ ml_value_t *target_file_dirname(void *Data, int Count, ml_value_t **Args) {
 	return ml_string(Path, -1);
 }
 
-ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("basename", FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Path = Target->Path;
 	const char *Last = Path - 1;
@@ -333,7 +332,7 @@ ml_value_t *target_file_basename(void *Data, int Count, ml_value_t **Args) {
 	return ml_string(concat(Last + 1, NULL), -1);
 }
 
-ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("extension", FileTargetT) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Path = FileTarget->Path;
 	const char *LastDot = Path;
@@ -349,7 +348,7 @@ ml_value_t *target_file_extension(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
-ml_value_t *target_file_map(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("map", FileTargetT, FileTargetT, FileTargetT) {
 	target_file_t *Input = (target_file_t *)Args[0];
 	target_file_t *Source = (target_file_t *)Args[1];
 	target_file_t *Dest = (target_file_t *)Args[2];
@@ -360,7 +359,7 @@ ml_value_t *target_file_map(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
-ml_value_t *target_file_relative(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("-", FileTargetT, FileTargetT) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	target_file_t *BaseTarget = (target_file_t *)Args[1];
 	const char *Relative = match_prefix(FileTarget->Path, BaseTarget->Path);
@@ -372,7 +371,7 @@ ml_value_t *target_file_relative(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
-ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("exists", FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Base.Build /*&& Target->Build->Type == MLClosureT*/) return (ml_value_t *)Target;
 	const char *FileName;
@@ -389,7 +388,7 @@ ml_value_t *target_file_exists(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
-ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("copy", FileTargetT, FileTargetT) {
 	target_file_t *Source = (target_file_t *)Args[0];
 	target_file_t *Dest = (target_file_t *)Args[1];
 	const char *SourcePath, *DestPath;
@@ -428,7 +427,7 @@ ml_value_t *target_file_copy(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
-ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("/", FileTargetT, MLStringT) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	if (ml_string_length(Args[1]) == 0) return Args[0];
 	const char *Path;
@@ -441,7 +440,7 @@ ml_value_t *target_file_div(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
-ml_value_t *target_file_mod(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("%", FileTargetT, MLStringT) {
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Replacement = ml_string_value(Args[1]);
 	char *Path = concat(FileTarget->Path, ".", Replacement, NULL);
@@ -457,7 +456,7 @@ ml_value_t *target_file_mod(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
-ml_value_t *target_file_open(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("open", FileTargetT, MLStringT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Mode = ml_string_value(Args[1]);
 	const char *FileName;
@@ -508,7 +507,7 @@ TARGET_FILE_IS(lnk, S_ISLNK);
 TARGET_FILE_IS(sock, S_ISSOCK);
 #endif
 
-ml_value_t *target_file_mkdir(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("mkdir", FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	char *Path;
 	if (Target->Absolute) {
@@ -566,7 +565,7 @@ static int rmdir_p(rmdir_t *Info, size_t End) {
 	return 0;
 }
 
-ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("rmdir", FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Path;
 	if (Target->Absolute) {
@@ -586,7 +585,7 @@ ml_value_t *target_file_rmdir(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-ml_value_t *target_file_chdir(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("chdir", FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Absolute) {
 		char *Path2 = GC_MALLOC_ATOMIC(strlen(Target->Path) + 1);
@@ -599,7 +598,7 @@ ml_value_t *target_file_chdir(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-ml_value_t *target_file_path(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("path", FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	return ml_string(Target->Path, -1);
 }
@@ -608,26 +607,7 @@ ml_value_t *target_file_path(void *Data, int Count, ml_value_t **Args) {
 	ml_method_by_name("is" #TYPE, 0, target_file_is_ ## TYPE, FileTargetT, NULL);
 
 void target_file_init() {
-	FileTargetT = ml_type(TargetT, "file-target");
-	ml_method_by_value(ArgifyMethod, 0, target_file_argify, MLListT, FileTargetT, NULL);
-	ml_method_by_value(MLStringBufferAppendMethod, 0, target_file_cmdify, MLStringBufferT, FileTargetT, NULL);
-	ml_method_by_value(MLStringOfMethod, 0, target_file_to_string, FileTargetT, NULL);
-	ml_method_by_name("/", 0, target_file_div, FileTargetT, MLStringT, NULL);
-	ml_method_by_name("%", 0, target_file_mod, FileTargetT, MLStringT, NULL);
-	ml_method_by_name("dir", 0, target_file_dir, FileTargetT, NULL);
-	ml_method_by_name("dirname", 0, target_file_dirname, FileTargetT, NULL);
-	ml_method_by_name("basename", 0, target_file_basename, FileTargetT, NULL);
-	ml_method_by_name("extension", 0, target_file_extension, FileTargetT, NULL);
-	ml_method_by_name("map", 0, target_file_map, FileTargetT, FileTargetT, FileTargetT, NULL);
-	ml_method_by_name("-", 0, target_file_relative, FileTargetT, FileTargetT, NULL);
-	ml_method_by_name("exists", 0, target_file_exists, FileTargetT, NULL);
-	ml_method_by_name("ls", 0, target_file_ls, FileTargetT, NULL);
-	ml_method_by_name("copy", 0, target_file_copy, FileTargetT, FileTargetT, NULL);
-	ml_method_by_name("open", 0, target_file_open, FileTargetT, MLStringT, NULL);
-	ml_method_by_name("mkdir", 0, target_file_mkdir, FileTargetT, NULL);
-	ml_method_by_name("rmdir", 0, target_file_rmdir, FileTargetT, NULL);
-	ml_method_by_name("chdir", 0, target_file_chdir, FileTargetT, NULL);
-	ml_method_by_name("path", 0, target_file_path, FileTargetT, NULL);
+#include "target_file_init.c"
 	target_file_methods_is(dir);
 	target_file_methods_is(chr);
 	target_file_methods_is(blk);

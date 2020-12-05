@@ -11,7 +11,7 @@ struct target_expr_t {
 	ml_value_t *Value;
 };
 
-extern ml_type_t *ExprTargetT;
+extern ml_type_t ExprTargetT[];
 
 void target_expr_init();
 

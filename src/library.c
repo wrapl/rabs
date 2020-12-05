@@ -6,13 +6,23 @@
 #endif
 #include <gc/gc.h>
 
-static ml_type_t *LibraryT;
-
 typedef struct library_t {
 	const ml_type_t *Type;
 	const char *Path;
 	stringmap_t Exports[1];
 } library_t;
+
+static void library_get(ml_state_t *Caller, library_t *Library, int Count, ml_value_t **Args) {
+	ML_CHECKX_ARG_COUNT(1);
+	ML_CHECKX_ARG_TYPE(0, MLStringT);
+	const char *Symbol = ml_string_value(Args[0]);
+	ml_value_t *Value = stringmap_search(Library->Exports, Symbol);
+	ML_CONTINUE(Caller, Value ?: ml_error("LibraryError", "Symbol %s not exported from %s", Symbol, Library->Path));
+}
+
+ML_TYPE(LibraryT, (), "library",
+	.call = (void *)library_get
+);
 
 ml_value_t *library_load(const char *Path, stringmap_t *Globals) {
 #if defined(Linux)
@@ -36,15 +46,6 @@ ml_value_t *library_load(const char *Path, stringmap_t *Globals) {
 #endif
 }
 
-static void library_get(ml_state_t *Caller, library_t *Library, int Count, ml_value_t **Args) {
-	ML_CHECKX_ARG_COUNT(1);
-	ML_CHECKX_ARG_TYPE(0, MLStringT);
-	const char *Symbol = ml_string_value(Args[0]);
-	ml_value_t *Value = stringmap_search(Library->Exports, Symbol);
-	ML_CONTINUE(Caller, Value ?: ml_error("LibraryError", "Symbol %s not exported from %s", Symbol, Library->Path));
-}
-
 void library_init() {
-	LibraryT = ml_type(MLAnyT, "library");
-	LibraryT->call = (void *)library_get;
+#include "library_init.c"
 }

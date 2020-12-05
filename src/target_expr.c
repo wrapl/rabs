@@ -7,18 +7,9 @@
 
 extern ml_value_t *ArgifyMethod;
 
-ml_type_t *ExprTargetT;
+ML_TYPE(ExprTargetT, (TargetT), "expr-target");
 
-static ml_value_t *target_expr_stringify(void *Data, int Count, ml_value_t **Args) {
-	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
-	target_expr_t *Target = (target_expr_t *)Args[1];
-	target_depends_auto((target_t *)Target);
-	target_queue((target_t *)Target, CurrentTarget);
-	target_wait((target_t *)Target, CurrentTarget);
-	return ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Target->Value);
-}
-
-static ml_value_t *target_expr_argify(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD(ArgifyMethod, MLListT, ExprTargetT) {
 	target_expr_t *Target = (target_expr_t *)Args[1];
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
@@ -26,16 +17,16 @@ static ml_value_t *target_expr_argify(void *Data, int Count, ml_value_t **Args) 
 	return ml_simple_inline(ArgifyMethod, 2, Args[0], Target->Value);
 }
 
-static ml_value_t *target_expr_cmdify(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD("append", MLStringBufferT, ExprTargetT) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_expr_t *Target = (target_expr_t *)Args[1];
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
-	return ml_simple_inline(MLStringBufferAppendMethod, 2, Buffer, Target->Value);
+	return ml_stringbuffer_append(Buffer, Target->Value);
 }
 
-static ml_value_t *target_expr_to_string(void *Data, int Count, ml_value_t **Args) {
+ML_METHOD(MLStringOfMethod, ExprTargetT) {
 	target_expr_t *Target = (target_expr_t *)Args[0];
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
@@ -80,10 +71,5 @@ target_t *target_expr_create(const char *Id, context_t *BuildContext, size_t Ind
 }
 
 void target_expr_init(void) {
-	ExprTargetT = ml_type(TargetT, "expr-target");
-	ml_method_by_value(MLStringBufferAppendMethod, NULL, target_expr_stringify, MLStringBufferT, ExprTargetT, NULL);
-	ml_method_by_value(ArgifyMethod, NULL, target_expr_argify, MLListT, ExprTargetT, NULL);
-	ml_method_by_value(MLStringBufferAppendMethod, NULL, target_expr_cmdify, MLStringBufferT, ExprTargetT, NULL);
-	ml_method_by_value(MLStringOfMethod, NULL, target_expr_to_string, ExprTargetT, NULL);
-
+#include "target_expr_init.c"
 }

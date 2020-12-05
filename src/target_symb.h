@@ -6,7 +6,7 @@
 
 typedef struct target_symb_t target_symb_t;
 
-extern ml_type_t *SymbTargetT;
+extern ml_type_t SymbTargetT[];
 
 void target_symb_init();
 

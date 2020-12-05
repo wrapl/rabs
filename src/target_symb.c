@@ -13,8 +13,6 @@ struct target_symb_t {
 	context_t *Context;
 };
 
-ml_type_t *SymbTargetT;
-
 static ml_value_t *symb_target_deref(ml_value_t *Ref) {
 	target_symb_t *Target = (target_symb_t *)Ref;
 	return context_symb_get(Target->Context, Target->Name) ?: rabs_global(Target->Name);
@@ -25,6 +23,11 @@ static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
 	context_symb_set(Target->Context, Target->Name, Value);
 	return Value;
 }
+
+ML_TYPE(SymbTargetT, (TargetT), "symb-target",
+	.deref = (void *)symb_target_deref,
+	.assign = (void *)symb_target_assign
+);
 
 time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	ml_value_t *Value = context_symb_get(Target->Context, Target->Name) ?: MLNil;
@@ -76,7 +79,5 @@ target_t *target_symb_create(const char *Id, context_t *BuildContext, size_t Ind
 }
 
 void target_symb_init() {
-	SymbTargetT = ml_type(TargetT, "symb-target");
-	SymbTargetT->deref = symb_target_deref;
-	SymbTargetT->assign = symb_target_assign;
+#include "target_symb_init.c"
 }
