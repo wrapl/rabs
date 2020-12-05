@@ -735,7 +735,7 @@ static ml_value_t *lib_path(void) {
 	char *LibPath = GC_MALLOC_ATOMIC(LibPathLength + 1);
 	memcpy(LibPath, ExecutablePath, ExecutablePathLength);
 	strcpy(LibPath + ExecutablePathLength, "/lib/rabs");
-	printf("Looking for library path at %s\n", LibPath);
+	//printf("Looking for library path at %s\n", LibPath);
 	struct stat Stat[1];
 	if (lstat(LibPath, Stat) || !S_ISDIR(Stat->st_mode)) {
 		return MLNil;
@@ -802,7 +802,7 @@ int main(int Argc, char **Argv) {
 		if (Argv[I][0] == '-') {
 			switch (Argv[I][1]) {
 			case 'V': {
-				printf("rabs version %d.%d.%d\n", CURRENT_VERSION);
+				printf("%d.%d.%d\n", CURRENT_VERSION);
 				exit(0);
 			}
 			case 'D': {
