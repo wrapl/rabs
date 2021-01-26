@@ -78,7 +78,7 @@ done:
 	return Args[0];
 }
 
-ML_METHOD(MLStringOfMethod, FileTargetT) {
+ML_METHOD(MLStringT, FileTargetT) {
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Path;
 	if (Target->Absolute) {

@@ -173,7 +173,7 @@ static ml_value_t *load_file(const char *FileName) {
 	preprocessor_node_t *Node = new(preprocessor_node_t);
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
-	Preprocessor->Compiler = ml_compiler((void *)preprocessor_read, Preprocessor, (ml_getter_t)rabs_ml_global, NULL);
+	Preprocessor->Compiler = ml_compiler((ml_getter_t)rabs_ml_global, NULL, (void *)preprocessor_read, Preprocessor);
 	ml_compiler_source(Preprocessor->Compiler, (ml_source_t){FileName, 0});
 
 	load_file_state_t State[1];

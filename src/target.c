@@ -368,9 +368,9 @@ static int target_affect(target_t *Target, target_t *Depend) {
 
 static int target_depends_fn(target_t *Depend, int *DependsLastUpdated) {
 	if (Depend->LastUpdated > *DependsLastUpdated) *DependsLastUpdated = Depend->LastUpdated;
-	if (Depend->LastUpdated == CurrentIteration) {
+	/*if (Depend->LastUpdated == CurrentIteration) {
 		if (StatusUpdates) printf("\tUpdating due to \e[32m%s\e[0m\n", Depend->Id);
-	}
+	}*/
 	return 0;
 }
 
