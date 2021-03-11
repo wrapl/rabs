@@ -969,7 +969,7 @@ int main(int Argc, char **Argv) {
 	}
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
-		ml_console(rabs_ml_global, Globals, "--> ", "... ");
+		ml_console(&MLRootContext, rabs_ml_global, Globals, "--> ", "... ");
 	} else if (WatchMode) {
 #ifdef Linux
 		targetwatch_wait(restart);
