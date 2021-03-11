@@ -11,7 +11,7 @@
 
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;
-static ML_TYPE(ContextT, (MLAnyT), "context");
+ML_TYPE(ContextT, (MLAnyT), "context");
 
 context_t *context_find(const char *Name) {
 	return stringmap_search(ContextCache, Name);
@@ -93,6 +93,11 @@ ML_METHOD("::", ContextT, MLStringT) {
 ML_METHOD("parent", ContextT) {
 	context_t *Context = (context_t *)Args[0];
 	return (ml_value_t *)Context->Parent ?: MLNil;
+}
+
+ML_METHOD("name", ContextT) {
+	context_t *Context = (context_t *)Args[0];
+	return ml_string(Context->Name, -1);
 }
 
 ML_METHOD("path", ContextT) {
