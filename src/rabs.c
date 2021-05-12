@@ -69,9 +69,15 @@ static ml_value_t *rabs_property_assign(rabs_property_t *Property, ml_value_t *V
 	return Value;
 }
 
+static void rabs_property_call(ml_state_t *Caller, rabs_property_t *Property, int Count, ml_value_t **Args) {
+	ml_value_t *Value = rabs_property_deref(Property);
+	return ml_call(Caller, Value, Count, Args);
+}
+
 ML_TYPE(RabsPropertyT, (MLAnyT), "property",
 	.deref = (void *)rabs_property_deref,
-	.assign = (void *)rabs_property_assign
+	.assign = (void *)rabs_property_assign,
+	.call = (void *)rabs_property_call
 );
 
 static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
@@ -106,7 +112,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 		if (!Node->File) {
 			Node->File = fopen(Node->FileName, "r");
 			if (!Node->File) {
-				ml_compiler_error(Preprocessor->Compiler, "LoadError", "error opening %s", Node->FileName);
+				ml_parse_error(Preprocessor->Compiler, "LoadError", "error opening %s", Node->FileName);
 			}
 		}
 		char *Line = NULL;

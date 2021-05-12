@@ -13,20 +13,24 @@ struct target_symb_t {
 	context_t *Context;
 };
 
-static ml_value_t *symb_target_deref(ml_value_t *Ref) {
-	target_symb_t *Target = (target_symb_t *)Ref;
+static ml_value_t *symb_target_deref(target_symb_t *Target) {
 	return context_symb_get(Target->Context, Target->Name) ?: rabs_global(Target->Name);
 }
 
-static ml_value_t *symb_target_assign(ml_value_t *Ref, ml_value_t *Value) {
-	target_symb_t *Target = (target_symb_t *)Ref;
+static ml_value_t *symb_target_assign(target_symb_t *Target, ml_value_t *Value) {
 	context_symb_set(Target->Context, Target->Name, Value);
 	return Value;
 }
 
+static void symb_target_call(ml_state_t *Caller, target_symb_t *Target, int Count, ml_value_t **Args) {
+	ml_value_t *Value = symb_target_deref(Target);
+	return ml_call(Caller, Value, Count, Args);
+}
+
 ML_TYPE(SymbTargetT, (TargetT), "symb-target",
 	.deref = (void *)symb_target_deref,
-	.assign = (void *)symb_target_assign
+	.assign = (void *)symb_target_assign,
+	.call = (void *)symb_target_call
 );
 
 time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
