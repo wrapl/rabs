@@ -136,6 +136,18 @@ ML_METHOD("in", ContextT, MLFunctionT) {
 	return Result;
 }
 
+static int context_export_fn(const char *Name, void *Value, ml_value_t *Exports) {
+	ml_list_append(Exports, ml_cstring(Name));
+	return 0;
+}
+
+ML_METHOD("exports", ContextT) {
+	context_t *Context = (context_t *)Args[0];
+	ml_value_t *Exports = ml_list();
+	stringmap_foreach(Context->Locals, Exports, (void *)context_export_fn);
+	return Exports;
+}
+
 void context_init() {
 	DefaultString = ml_cstring("DEFAULT");
 #include "context_init.c"
