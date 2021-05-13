@@ -51,6 +51,12 @@ typedef struct rabs_property_t {
 	const char *Name;
 } rabs_property_t;
 
+static long rabs_property_hash(rabs_property_t *Property, ml_hash_chain_t *Chain) {
+	long Hash = 53817;
+	for (const char *P = Property->Name; P[0]; ++P) Hash = ((Hash << 5) + Hash) + P[0];
+	return Hash;
+}
+
 static ml_value_t *rabs_property_deref(rabs_property_t *Property) {
 	ml_value_t *Value = context_symb_get(CurrentContext, Property->Name);
 	if (Value) {
@@ -75,6 +81,7 @@ static void rabs_property_call(ml_state_t *Caller, rabs_property_t *Property, in
 }
 
 ML_TYPE(RabsPropertyT, (MLAnyT), "property",
+	.hash = (void *)rabs_property_hash,
 	.deref = (void *)rabs_property_deref,
 	.assign = (void *)rabs_property_assign,
 	.call = (void *)rabs_property_call
