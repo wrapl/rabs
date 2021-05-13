@@ -506,6 +506,11 @@ static void target_update(target_t *Target) {
 		cache_build_hash_get(Target, PreviousBuildHash);
 		if (memcmp(PreviousBuildHash, BuildHash, SHA256_BLOCK_SIZE)) {
 			DependsLastUpdated = CurrentIteration;
+			/*ml_closure_list(Target->Build);
+			for (int J = 0; J < SHA256_BLOCK_SIZE; ++J) {
+				printf(" %02x", (unsigned char)BuildHash[J]);
+			}
+			puts("");*/
 			//if (StatusUpdates) printf("\tUpdating due to build function\n");
 		}
 	} else {
