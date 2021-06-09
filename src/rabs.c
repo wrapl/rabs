@@ -129,7 +129,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 			free(Line);
 			fclose(Node->File);
 			Node = Preprocessor->Nodes = Node->Next;
-			if (Node) ml_compiler_source(Preprocessor->Compiler, Node->Source);
+			if (Node) ml_parser_source(Preprocessor->Compiler, Node->Source);
 		} else if (!strncmp(Line, "%include ", strlen("%include "))) {
 			while (Line[Actual] <= ' ') Line[Actual--] = 0;
 			const char *FileName = Line + strlen("%include ");
@@ -140,7 +140,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 			preprocessor_node_t *NewNode = new(preprocessor_node_t);
 			NewNode->Next = Node;
 			NewNode->FileName = FileName;
-			Node->Source = ml_compiler_source(Preprocessor->Compiler, (ml_source_t){FileName, 0});
+			Node->Source = ml_parser_source(Preprocessor->Compiler, (ml_source_t){FileName, 0});
 			++Node->Source.Line;
 			Node = Preprocessor->Nodes = NewNode;
 		} else if (Line[Actual - 1] != '\n') {
@@ -187,7 +187,7 @@ static ml_value_t *load_file(const char *FileName) {
 	Node->FileName = FileName;
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
 	Preprocessor->Compiler = ml_compiler((ml_getter_t)rabs_ml_global, NULL, (void *)preprocessor_read, Preprocessor);
-	ml_compiler_source(Preprocessor->Compiler, (ml_source_t){FileName, 0});
+	ml_parser_source(Preprocessor->Compiler, (ml_source_t){FileName, 0});
 
 	load_file_state_t State[1];
 	State->Base.run = (void *)load_file_loaded;
