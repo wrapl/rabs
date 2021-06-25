@@ -22,7 +22,7 @@ minilang/lib/libminilang.a: minilang/Makefile minilang/src/*.c minilang/src/*.h
 radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a RADB_MEM=GC
 
-obj/%_init.c: src/%.c | obj
+obj/%_init.c: src/%.c | obj src/*.h 
 	echo "" > $@
 	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > $@
 

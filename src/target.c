@@ -468,13 +468,13 @@ void display_threads(void) {
 
 void display_progress(void) {
 	static char *Bars[] = {"", "▏", "▎", "▍", "▌", "▋", "▊", "▉", "█"};
-	printf("\e[s\e[H\e[35m▕");
+	printf("\e[35m▕");
 	double Filled = (64.0 * BuiltTargets) / QueuedTargets;
 	int Full = floor(Filled), Partial = (8 * (Filled - Full));
 	for (int I = 0; I < Full; ++I) fputs("█", stdout);
 	fputs(Bars[Partial], stdout);
 	for (int I = Full - !Partial; I < 63; ++I) putchar(' ');
-	printf("▏ %d / %d\e[0m\e[u", BuiltTargets, QueuedTargets);
+	printf("▏ %d / %d\e[0m\e[G", BuiltTargets, QueuedTargets);
 }
 
 static int build_scan_target_list(ml_value_t *Depend, targetset_t *Scans) {
