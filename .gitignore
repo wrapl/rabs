@@ -21,3 +21,4 @@ build.rabs.db*
 /debian/debhelper-build-stamp
 /debian/files
 /work
+/html/

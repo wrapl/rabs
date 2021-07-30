@@ -33,7 +33,7 @@
 const char *SystemName = "build.rabs";
 const char *RootPath;
 static int EchoCommands = 0;
-ML_METHOD_DECL(Argify, "argify");
+ML_METHOD_DECL(ArgifyMethod, "argify");
 
 static stringmap_t Globals[1] = {STRINGMAP_INIT};
 static stringmap_t Defines[1] = {STRINGMAP_INIT};
