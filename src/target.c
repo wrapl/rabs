@@ -117,6 +117,17 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 
 ML_METHODV("[]", TargetT, MLAnyT) {
 	target_t *Target = (target_t *)Args[0];
+	if (ml_is(Args[Count - 1], MLFunctionT)) {
+		Target->Build = Args[Count - 1];
+		Target->BuildContext = CurrentContext;
+		if (CurrentTarget) {
+			Target->Parent = CurrentTarget;
+			if (DependencyGraph) {
+				fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
+			}
+		}
+		--Count;
+	}
 	for (int I = 1; I < Count; ++I) {
 		int Error = target_depends_single(Args[I], Target);
 		if (Error) return ml_error("TypeError", "Invalid value in dependency list");

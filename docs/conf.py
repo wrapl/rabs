@@ -90,7 +90,8 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 #
 html_theme = "sphinx_material"
 html_theme_options = {
-	'color_primary': 'orange',
+	'logo_icon': '&#xe869',
+	'color_primary': 'light-green',
 	'color_accent': 'yellow',
 	'globaltoc_depth': 3
 }
