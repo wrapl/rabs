@@ -24,6 +24,7 @@
 #include <dirent.h>
 #include <ml_file.h>
 #include <limits.h>
+#include <signal.h>
 #include <inttypes.h>
 #include "ml_bytecode.h"
 
