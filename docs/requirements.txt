@@ -2,3 +2,4 @@ sphinx >= 3
 sphinxcontrib-domaintools
 sphinxcontrib-fulltoc
 pydata-sphinx-theme
+sphinxcontrib-ansi

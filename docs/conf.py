@@ -4,6 +4,7 @@ import re
 from pygments import lexers
 import inspect
 import os
+from sphinx import version_info
 
 class FoldersDirective(Directive):
 	has_content = True
@@ -127,13 +128,20 @@ rst_prolog = """
 .. role:: html(code)
    :language: html
    :class: highlight
+
+.. role:: c(code)
+   :language: c
+   :class: highlight
 """
 
 def setup(sphinx):
 	import sys, os
 	sys.path.insert(0, os.path.abspath('./_util'))
 	from minilang import MinilangLexer, minilangDomain
-	sphinx.add_lexer("mini", MinilangLexer)
+	if version_info[0] >= 4:
+		sphinx.add_lexer("mini", MinilangLexer)
+	else:
+		sphinx.add_lexer("mini", MinilangLexer())
 	lexers.LEXERS['mini'] = ('minilang', 'Minilang', ('mini',), ('*.mini', '*.rabs'), ('text/x-mini',))
 	#sphinx.add_domain(minilangDomain) 
 	sphinx.add_directive('folders', FoldersDirective)
