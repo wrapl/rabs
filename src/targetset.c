@@ -30,11 +30,7 @@ static void targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter) {
 	ML_CONTINUE(Caller, MLNil);
 }
 
-ML_TYPE(TargetSetIterT, (), "targetset-iter",
-	.iter_next = (void *)targetset_iter_next,
-	.iter_key = (void *)targetset_iter_key,
-	.iter_value = (void *)targetset_iter_value
-);
+ML_TYPE(TargetSetIterT, (), "targetset-iter");
 
 static void targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
 	target_t **End = Set->Targets + Set->Size;
@@ -51,12 +47,13 @@ static void targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
 	ML_CONTINUE(Caller, MLNil);
 }
 
-ML_TYPE(TargetSetT, (MLSequenceT), "targetset",
-	.iterate = (void *)targetset_iterate
-);
+ML_TYPE(TargetSetT, (MLSequenceT), "targetset");
 
 void targetset_ml_init() {
 #include "targetset_init.c"
+	ml_typed_fn_set(TargetSetT, ml_iterate, targetset_iterate);
+	ml_typed_fn_set(TargetSetIterT, ml_iter_next, targetset_iter_next);
+	ml_typed_fn_set(TargetSetIterT, ml_iter_value, targetset_iter_value);
 }
 
 targetset_t *targetset_new() {
