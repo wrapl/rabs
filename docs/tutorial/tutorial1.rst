@@ -90,6 +90,7 @@ Update the :file:`build.rabs` file to look as follows:
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 5
 
    :< ROOT >:
    
@@ -134,6 +135,7 @@ Try changing the build function:
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 5
 
    :< ROOT >:
    
@@ -162,10 +164,11 @@ Try changing the build function:
 Targets and Dependencies
 ------------------------
 
-`rabs` predefines the :mini:`DEFAULT` target, but other targets can be created in the :file:`build.rabs` script. Change :file:`build.rabs` to contain the following:
+``rabs`` predefines the :mini:`DEFAULT` target, but other targets can be created in the :file:`build.rabs` script. Change :file:`build.rabs` to contain the following:
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 5, 6
 
    :< ROOT >:
    
@@ -174,7 +177,6 @@ Targets and Dependencies
    var Test := meta("TEST")
    Test => fun() print("Building TEST\n")
    
-   DEFAULT[Test]
    DEFAULT => fun() print("Building DEFAULT again\n")
 
 This defines a new meta target, called :mini:`TEST`. However running ``rabs -s`` will not display `Building TEST` and :mini:`TEST` will not be updated (or even displayed).
@@ -183,6 +185,7 @@ In order for :mini:`TEST` to be built, we need to make one more change:
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 8
 
    :< ROOT >:
    
@@ -220,6 +223,7 @@ Not only is the build function for :mini:`TEST` executed, the build function for
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 6
 
    :< ROOT >:
    
@@ -257,6 +261,7 @@ Our current script describes build functions (using :mini:`Target => Function`) 
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 5
 
    :< ROOT >:
    
@@ -275,6 +280,7 @@ Add a few more lines to :file:`build.rabs`:
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 9-15
 
    :< ROOT >:
    
@@ -317,6 +323,7 @@ Notice that in this example, we added :mini:`Test2` as a dependency of :mini:`DE
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 13
 
    :< ROOT >:
    
@@ -352,7 +359,7 @@ In this example, the :file:`test.txt` target has no dependencies so it will only
    $ cat test.txt
    Hello world!
 
-Here we get to see how file targets are checked for changes. Despite rebuilding :file:`test.txt`, its updated iteration was not increased since its contents did not change since that last build. Like the last build iteration and information about build functions, this information is stored in the :file:`build.rabs.db` directory. Finally, `rabs` does not rebuild :mini:`DEFAULT` despite its dependency on :file:`test.txt`.
+Here we get to see how file targets are checked for changes. Despite rebuilding :file:`test.txt`, its updated iteration was not increased since its contents did not change since that last build. Like the last build iteration and information about build functions, this information is stored in the :file:`build.rabs.db` directory. Finally, ``rabs`` does not rebuild :mini:`DEFAULT` despite its dependency on :file:`test.txt`.
 
 Changing Dependencies
 ---------------------
@@ -361,6 +368,7 @@ Lets add two more targets to the :file:`build.rabs` script:
 
 .. code-block:: mini
    :linenos:
+   :emphasize-lines: 15-20
 
    :< ROOT >:
    
@@ -383,7 +391,7 @@ Lets add two more targets to the :file:`build.rabs` script:
    
    DEFAULT[Output]
 
-We are introducing two new features here, using an external file target and calling a shell command. Running `rabs` gives us an error:
+We are introducing two new features here, using an external file target and calling a shell command. Running ``rabs`` gives us an error:
 
 .. code-block:: console
 
@@ -396,7 +404,7 @@ We are introducing two new features here, using an external file target and call
    Hello world!
    Error: rule failed to build: /tutorial/input.txt
 
-`rabs` needs to check the file :file:`input.txt` before it can build :file:`output.txt`, but this file does not exist and it has no build function. So `rabs` complains that the (:mini:`nil`) build function for :file:`input.txt` failed to build the file. This error will also occur for any file target which has a build function if that build function fails to build the expected file.
+``rabs`` needs to check the file :file:`input.txt` before it can build :file:`output.txt`, but this file does not exist and it has no build function. So ``rabs`` complains that the (:mini:`nil`) build function for :file:`input.txt` failed to build the file. This error will also occur for any file target which has a build function if that build function fails to build the expected file.
 
 Create :file:`input.txt` with some text, and run `rabs`. This time add the extra option ``-c`` when running `rabs`.
 
@@ -423,9 +431,9 @@ Create :file:`input.txt` with some text, and run `rabs`. This time add the extra
    $ cat output.txt
    1
 
-The extra ``-c`` option shows us any shell commands that `rabs` runs, along with the time taken. In this case `rabs` uses `cp` to copy :file:`input.txt` to :file:`output.txt` (`rabs` has its own built in functions for copying files, we used `cp` here as an example).
+The extra ``-c`` option shows us any shell commands that ``rabs`` runs, along with the time taken. In this case ``rabs`` uses `cp` to copy :file:`input.txt` to :file:`output.txt` (``rabs`` has its own built in functions for copying files, we used `cp` here as an example).
 
-If we change the contents of :file:`input.txt`, `rabs` will do its job and rebuild :file:`output.txt`:
+If we change the contents of :file:`input.txt`, ``rabs`` will do its job and rebuild :file:`output.txt`:
 
 .. code-block:: console
 

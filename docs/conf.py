@@ -71,7 +71,7 @@ author = 'Raja Mukherji'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 
-extensions = ['sphinx.ext.graphviz']
+extensions = ['sphinx.ext.graphviz', 'sphinxcontrib.ansi']
 
 
 # Add any paths that contain templates here, relative to this directory.
@@ -88,17 +88,27 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = "sphinx_material"
+#html_theme = "sphinx_material"
+#html_theme_options = {
+#	'logo_icon': '&#xe869',
+#	'color_primary': 'light-green',
+#	'color_accent': 'yellow',
+#	'globaltoc_depth': 3
+#}
+#
+#html_sidebars = {
+#    "**": ["logo-text.html", "globaltoc.html", "localtoc.html", "searchbox.html"]
+#}
+html_theme = "pydata_sphinx_theme"
 html_theme_options = {
-	'logo_icon': '&#xe869',
-	'color_primary': 'light-green',
-	'color_accent': 'yellow',
-	'globaltoc_depth': 3
+	"collapse_navigation": True,
+	"page_sidebar_items": []
+}
+html_sidebars = {
+    "**": ["search-field", "page-toc", "sidebar-nav-bs"]
 }
 
-html_sidebars = {
-    "**": ["logo-text.html", "globaltoc.html", "localtoc.html", "searchbox.html"]
-}
+html_ansi_stylesheet = None
 
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
