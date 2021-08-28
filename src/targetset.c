@@ -5,10 +5,15 @@
 
 #define INITIAL_SIZE 4
 
-typedef struct targetset_iter_t {
+typedef struct {
 	const ml_type_t *Type;
 	target_t **Current, **End;
+	int Index;
 } targetset_iter_t;
+
+static void targetset_iter_key(ml_state_t *Caller, targetset_iter_t *Iter) {
+	ML_CONTINUE(Caller, ml_integer(Iter->Index));
+}
 
 static void targetset_iter_value(ml_state_t *Caller, targetset_iter_t *Iter) {
 	ML_CONTINUE(Caller, Iter->Current[0]);
@@ -18,6 +23,7 @@ static void targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter) {
 	for (target_t **Current = Iter->Current + 1; Current < Iter->End; ++Current) {
 		if (*Current) {
 			Iter->Current = Current;
+			++Iter->Index;
 			ML_CONTINUE(Caller, Iter);
 		}
 	}
@@ -34,13 +40,14 @@ static void targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
 			Iter->Type = TargetSetIterT;
 			Iter->Current = T;
 			Iter->End = End;
+			Iter->Index = 1;
 			ML_CONTINUE(Caller, Iter);
 		}
 	}
 	ML_CONTINUE(Caller, MLNil);
 }
 
-ML_TYPE(TargetSetT, (MLIteratableT), "targetset");
+ML_TYPE(TargetSetT, (MLSequenceT), "targetset");
 
 void targetset_ml_init() {
 #include "targetset_init.c"

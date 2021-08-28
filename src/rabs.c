@@ -14,7 +14,7 @@
 #include "cache.h"
 #include "minilang.h"
 #include "ml_object.h"
-#include "ml_iterfns.h"
+#include "ml_sequence.h"
 #include "ml_file.h"
 #include "rabs.h"
 #include "stringmap.h"
@@ -773,7 +773,7 @@ int main(int Argc, char **Argv) {
 	ml_init();
 	ml_types_init(Globals);
 	ml_object_init(Globals);
-	ml_iterfns_init(Globals);
+	ml_sequence_init(Globals);
 	ml_file_init(Globals);
 	stringmap_insert(Globals, "vmount", ml_cfunction(NULL, vmount));
 	stringmap_insert(Globals, "subdir", ml_cfunction(NULL, subdir));
