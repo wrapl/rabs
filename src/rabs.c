@@ -196,6 +196,10 @@ static ml_value_t *load_file(const char *FileName) {
 	State->Base.Context = &MLRootContext;
 	State->Result = MLNil;
 	mlc_expr_t *Expr = ml_accept_file(Preprocessor->Parser);
+	if (!Expr) {
+		printf("\e[31mError: cannot process file \"%s\"\e[0m\n", FileName);
+		exit(1);
+	}
 	ml_function_compile((ml_state_t *)State, Expr, Preprocessor->Compiler, NULL);
 	return State->Result;
 }
