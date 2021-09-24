@@ -196,6 +196,7 @@ static ml_value_t *load_file(const char *FileName) {
 	State->Base.Context = &MLRootContext;
 	State->Result = MLNil;
 	mlc_expr_t *Expr = ml_accept_file(Preprocessor->Parser);
+	if (!Expr) return ml_error("FileError", "Error loading file %s", FileName);
 	ml_function_compile((ml_state_t *)State, Expr, Preprocessor->Compiler, NULL);
 	return State->Result;
 }
