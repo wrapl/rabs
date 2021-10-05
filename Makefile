@@ -105,7 +105,7 @@ $(RABS): Makefile $(objects) $(libraries) src/*.h src/exports.lst bin
 else
 $(RABS): Makefile $(objects) $(libraries) src/*.h src/exports.lst bin
 	$(CC) $(objects) $(libraries) -o $@ $(LDFLAGS)
-	strip $@
+	# strip $@
 endif
 	
 
