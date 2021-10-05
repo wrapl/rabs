@@ -11,15 +11,15 @@ typedef struct {
 	int Index;
 } targetset_iter_t;
 
-static void targetset_iter_key(ml_state_t *Caller, targetset_iter_t *Iter) {
+static void ML_TYPED_FN(ml_iter_key, TargetSetIterT, ml_state_t *Caller, targetset_iter_t *Iter) {
 	ML_CONTINUE(Caller, ml_integer(Iter->Index));
 }
 
-static void targetset_iter_value(ml_state_t *Caller, targetset_iter_t *Iter) {
+static void ML_TYPED_FN(ml_iter_value, TargetSetIterT, ml_state_t *Caller, targetset_iter_t *Iter) {
 	ML_CONTINUE(Caller, Iter->Current[0]);
 }
 
-static void targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter) {
+static void ML_TYPED_FN(ml_iter_next, TargetSetIterT, ml_state_t *Caller, targetset_iter_t *Iter) {
 	for (target_t **Current = Iter->Current + 1; Current < Iter->End; ++Current) {
 		if (*Current) {
 			Iter->Current = Current;
@@ -32,7 +32,7 @@ static void targetset_iter_next(ml_state_t *Caller, targetset_iter_t *Iter) {
 
 ML_TYPE(TargetSetIterT, (), "targetset-iter");
 
-static void targetset_iterate(ml_state_t *Caller, targetset_t *Set) {
+static void ML_TYPED_FN(ml_iterate, TargetSetT, ml_state_t *Caller, targetset_t *Set) {
 	target_t **End = Set->Targets + Set->Size;
 	for (target_t **T = Set->Targets; T < End; ++T) {
 		if (*T) {
@@ -51,9 +51,6 @@ ML_TYPE(TargetSetT, (MLSequenceT), "targetset");
 
 void targetset_ml_init() {
 #include "targetset_init.c"
-	ml_typed_fn_set(TargetSetT, ml_iterate, targetset_iterate);
-	ml_typed_fn_set(TargetSetIterT, ml_iter_next, targetset_iter_next);
-	ml_typed_fn_set(TargetSetIterT, ml_iter_value, targetset_iter_value);
 }
 
 targetset_t *targetset_new() {
