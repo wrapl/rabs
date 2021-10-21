@@ -17,9 +17,9 @@ static ml_value_t *symb_target_deref(target_symb_t *Target) {
 	return context_symb_get(Target->Context, Target->Name) ?: rabs_global(Target->Name);
 }
 
-static ml_value_t *symb_target_assign(target_symb_t *Target, ml_value_t *Value) {
+static void symb_target_assign(ml_state_t *Caller, target_symb_t *Target, ml_value_t *Value) {
 	context_symb_set(Target->Context, Target->Name, Value);
-	return Value;
+	ML_RETURN(Value);
 }
 
 static void symb_target_call(ml_state_t *Caller, target_symb_t *Target, int Count, ml_value_t **Args) {

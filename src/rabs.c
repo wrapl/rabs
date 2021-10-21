@@ -69,10 +69,10 @@ static ml_value_t *rabs_property_deref(rabs_property_t *Property) {
 	}
 }
 
-static ml_value_t *rabs_property_assign(rabs_property_t *Property, ml_value_t *Value) {
+static void rabs_property_assign(ml_state_t *Caller, rabs_property_t *Property, ml_value_t *Value) {
 	context_symb_set(CurrentContext, Property->Name, Value);
 	//target_symb_update(Name);
-	return Value;
+	ML_RETURN(Value);
 }
 
 static void rabs_property_call(ml_state_t *Caller, rabs_property_t *Property, int Count, ml_value_t **Args) {
