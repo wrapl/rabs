@@ -54,7 +54,7 @@ void cache_open(const char *RootPath) {
 		{
 			char Temp[16];
 			string_store_get(MetadataStore, CURRENT_VERSION_INDEX, Temp, 16);
-			int Current[3], Working[3] = {WORKING_VERSION};
+			int Current[3], Working[3] = {MINIMAL_VERSION};
 			sscanf(Temp, "%d.%d.%d", Current + 0, Current + 1, Current + 2);
 			if (Current[0] < Working[0]) {
 				printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
