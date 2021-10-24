@@ -6,6 +6,9 @@
 #include "cache.h"
 #include "targetcache.h"
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "meta"
+
 struct target_meta_t {
 	target_t Base;
 	const char *Name;
@@ -40,6 +43,13 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 		Target->BuildContext = CurrentContext;
 	}
 	return (ml_value_t *)R.Slot[0];
+}
+
+ML_FUNCTION(Meta) {
+//<Name:string
+//>metatarget
+// Returns a new meta target in the current context with name :mini:`Name`.
+	return target_meta_new(Data, Count, Args);
 }
 
 target_t *target_meta_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {

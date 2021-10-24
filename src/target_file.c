@@ -17,6 +17,9 @@
 #include "targetwatch.h"
 #endif
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "file"
+
 extern ml_value_t *ArgifyMethod;
 
 struct target_file_t {
@@ -26,71 +29,8 @@ struct target_file_t {
 };
 
 ML_TYPE(FileTargetT, (TargetT), "file-target");
-
-ML_METHOD(ArgifyMethod, MLListT, FileTargetT) {
-	target_file_t *Target = (target_file_t *)Args[1];
-	const char *Path;
-	if (Target->Absolute) {
-		Path = Target->Path;
-	} else if (Target->Path[0]) {
-		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
-	} else {
-		Path = RootPath;
-	}
-	//Path = relative_path(Path, CurrentDirectory);
-	ml_list_append(Args[0], ml_string(Path, strlen(Path)));
-	return Args[0];
-}
-
-ML_METHOD("append", MLStringBufferT, FileTargetT) {
-	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
-	target_file_t *Target = (target_file_t *)Args[1];
-	const char *Path;
-	if (Target->Absolute) {
-		Path = Target->Path;
-	} else if (Target->Path[0]) {
-		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
-	} else {
-		Path = RootPath;
-	}
-	//Path = relative_path(Path, CurrentDirectory);
-	const char *I = Path, *J = Path;
-	for (;; ++J) switch (*J) {
-	case 0: goto done;
-	case ' ':
-	case '#':
-	case '\"':
-	case '\'':
-	case '&':
-	case '(':
-	case ')':
-	case '\\':
-	case '\t':
-	case '\r':
-	case '\n':
-		if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
-		ml_stringbuffer_add(Buffer, "\\", 1);
-		I = J;
-		break;
-	}
-done:
-	if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
-	return Args[0];
-}
-
-ML_METHOD(MLStringT, FileTargetT) {
-	target_file_t *Target = (target_file_t *)Args[0];
-	const char *Path;
-	if (Target->Absolute) {
-		Path = Target->Path;
-	} else if (Target->Path[0]) {
-		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
-	} else {
-		Path = RootPath;
-	}
-	//Path = relative_path(Path, CurrentDirectory);
-	return ml_string(Path, strlen(Path));
-}
+// A file target represents a single file or directory in the filesystem.
+// File targets are stored relative to the project root whenever possible, taking into account virtual mounts. They are automatically resolving to absolute paths when required.
 
 static int target_file_affects_fn(target_t *Target, void *Data) {
 	fprintf(stderr, "\t\e[31mRequired by %s\e[0m\n", Target->Id);
@@ -175,7 +115,10 @@ target_t *target_file_check(const char *Path, int Absolute) {
 	return R.Slot[0];
 }
 
-ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(File) {
+//<Path
+//>filetarget
+// Returns a new file target. If :mini:`Path` does not begin with `/`, it is considered relative to the current context path. If :mini:`Path` is specified as an absolute path but lies inside the project directory, it is converted into a relative path.
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
@@ -199,6 +142,76 @@ ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
+ML_METHOD(MLStringT, FileTargetT) {
+//<Target
+//>string
+// Returns the absolute resolved path of :mini:`Target` as a string.
+	target_file_t *Target = (target_file_t *)Args[0];
+	const char *Path;
+	if (Target->Absolute) {
+		Path = Target->Path;
+	} else if (Target->Path[0]) {
+		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
+	} else {
+		Path = RootPath;
+	}
+	//Path = relative_path(Path, CurrentDirectory);
+	return ml_string(Path, strlen(Path));
+}
+
+ML_METHOD(ArgifyMethod, MLListT, FileTargetT) {
+//!internal
+	target_file_t *Target = (target_file_t *)Args[1];
+	const char *Path;
+	if (Target->Absolute) {
+		Path = Target->Path;
+	} else if (Target->Path[0]) {
+		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
+	} else {
+		Path = RootPath;
+	}
+	//Path = relative_path(Path, CurrentDirectory);
+	ml_list_append(Args[0], ml_string(Path, strlen(Path)));
+	return Args[0];
+}
+
+ML_METHOD("append", MLStringBufferT, FileTargetT) {
+//!internal
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
+	target_file_t *Target = (target_file_t *)Args[1];
+	const char *Path;
+	if (Target->Absolute) {
+		Path = Target->Path;
+	} else if (Target->Path[0]) {
+		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
+	} else {
+		Path = RootPath;
+	}
+	//Path = relative_path(Path, CurrentDirectory);
+	const char *I = Path, *J = Path;
+	for (;; ++J) switch (*J) {
+	case 0: goto done;
+	case ' ':
+	case '#':
+	case '\"':
+	case '\'':
+	case '&':
+	case '(':
+	case ')':
+	case '\\':
+	case '\t':
+	case '\r':
+	case '\n':
+		if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
+		ml_stringbuffer_add(Buffer, "\\", 1);
+		I = J;
+		break;
+	}
+done:
+	if (I < J) ml_stringbuffer_add(Buffer, I, J - I);
+	return Args[0];
+}
+
 target_t *target_file_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
 	target_file_t *Target = target_new(target_file_t, FileTargetT, Id, Index, Slot);
 	Target->Absolute = Id[5] == '/';
@@ -214,6 +227,9 @@ void target_file_watch(target_file_t *Target) {
 }
 
 ML_METHOD("dir", FileTargetT) {
+//<Target
+//>filetarget
+// Returns the directory containing :mini:`Target`.
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	char *Path;
 	int Absolute;
@@ -281,7 +297,15 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 	return 0;
 }
 
+ML_METHOD_DECL(RecursiveMethod, "R");
+
 ML_METHODV("ls", FileTargetT) {
+//<Directory
+//<Pattern?:string|regex
+//<Recursive?:method
+//<Filter?:function
+//>list[target]
+// Returns a list of the contents of :mini:`Directory`. Passing :mini:`:R` results in a recursive list.
 	target_file_ls_t Ls[1] = {{ml_list(), NULL, 0}};
 	for (int I = 1; I < Count; ++I) {
 		if (Args[I]->Type == MLStringT) {
@@ -291,7 +315,7 @@ ML_METHODV("ls", FileTargetT) {
 			if (ml_is_error(Ls->Regex)) return Ls->Regex;
 		} else if (Args[I]->Type == MLRegexT) {
 			Ls->Regex = Args[I];
-		} else if (Args[I]->Type == MLMethodT && !strcmp(ml_method_name(Args[I]), "R")) {
+		} else if (Args[I] == RecursiveMethod) {
 			Ls->Recursive = 1;
 		} else {
 			Ls->FilterFn = Args[I];
@@ -309,6 +333,9 @@ ML_METHODV("ls", FileTargetT) {
 }
 
 ML_METHOD("dirname", FileTargetT) {
+//<Target
+//>string
+// Returns the directory containing :mini:`Target` as a string. Virtual mounts are not applied to the result (unlike :mini:`Target:dir`).
 	target_file_t *Target = (target_file_t *)Args[0];
 	char *Path;
 	if (Target->Absolute) {
@@ -325,6 +352,9 @@ ML_METHOD("dirname", FileTargetT) {
 }
 
 ML_METHOD("basename", FileTargetT) {
+//<Target
+//>string
+// Returns the filename component of :mini:`Target`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Path = Target->Path;
 	const char *Last = Path - 1;
@@ -333,6 +363,9 @@ ML_METHOD("basename", FileTargetT) {
 }
 
 ML_METHOD("extension", FileTargetT) {
+//<Target
+//>string
+// Returns the file extension of :mini:`Target`.
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Path = FileTarget->Path;
 	const char *LastDot = Path;
@@ -349,6 +382,11 @@ ML_METHOD("extension", FileTargetT) {
 }
 
 ML_METHOD("map", FileTargetT, FileTargetT, FileTargetT) {
+//<Target
+//<Source
+//<Dest
+//>filetarget|error
+// Returns the relative path of :mini:`Target` in :mini:`Source` applied to :mini:`Dest`, or an error if :mini:`Target` is not contained in :mini:`Source`.
 	target_file_t *Input = (target_file_t *)Args[0];
 	target_file_t *Source = (target_file_t *)Args[1];
 	target_file_t *Dest = (target_file_t *)Args[2];
@@ -360,6 +398,10 @@ ML_METHOD("map", FileTargetT, FileTargetT, FileTargetT) {
 }
 
 ML_METHOD("-", FileTargetT, FileTargetT) {
+//<Target
+//<Source
+//>string|nil
+// Returns the relative path of :mini:`Target` in :mini:`Source`, or :mini:`nil` if :mini:`Target` is not contained in :mini:`Source`.
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	target_file_t *BaseTarget = (target_file_t *)Args[1];
 	const char *Relative = match_prefix(FileTarget->Path, BaseTarget->Path);
@@ -372,6 +414,9 @@ ML_METHOD("-", FileTargetT, FileTargetT) {
 }
 
 ML_METHOD("exists", FileTargetT) {
+//<Target
+//>filetarget|nil
+// Returns :mini:`Target` if the file or directory exists or has a build function defined, otherwise returns :mini:`nil`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Base.Build /*&& Target->Build->Type == MLClosureT*/) return (ml_value_t *)Target;
 	const char *FileName;
@@ -389,6 +434,10 @@ ML_METHOD("exists", FileTargetT) {
 }
 
 ML_METHOD("copy", FileTargetT, FileTargetT) {
+//<Source
+//<Dest
+//>nil
+// Copies the contents of :mini:`Source` to :mini:`Dest`.
 	target_file_t *Source = (target_file_t *)Args[0];
 	target_file_t *Dest = (target_file_t *)Args[1];
 	const char *SourcePath, *DestPath;
@@ -428,6 +477,10 @@ ML_METHOD("copy", FileTargetT, FileTargetT) {
 }
 
 ML_METHOD("/", FileTargetT, MLStringT) {
+//<Directory
+//<Name
+//>filetarget
+// Returns a new file target at :mini:`Directory`\ ``/``\ :mini:`Name`.
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	if (ml_string_length(Args[1]) == 0) return Args[0];
 	const char *Path;
@@ -441,6 +494,10 @@ ML_METHOD("/", FileTargetT, MLStringT) {
 }
 
 ML_METHOD("%", FileTargetT, MLStringT) {
+//<File
+//<Extension
+//>filetarget
+// Returns a new file target by replacing the extension of :mini:`File` with :mini:`Extension`.
 	target_file_t *FileTarget = (target_file_t *)Args[0];
 	const char *Replacement = ml_string_value(Args[1]);
 	char *Path = concat(FileTarget->Path, ".", Replacement, NULL);
@@ -457,6 +514,10 @@ ML_METHOD("%", FileTargetT, MLStringT) {
 }
 
 ML_METHOD("open", FileTargetT, MLStringT) {
+//<Target
+//<Mode
+//>file
+// Opens the file at :mini:`Target` with mode :mini:`Mode`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Mode = ml_string_value(Args[1]);
 	const char *FileName;
@@ -508,6 +569,9 @@ TARGET_FILE_IS(sock, S_ISSOCK);
 #endif
 
 ML_METHOD("mkdir", FileTargetT) {
+//<Directory
+//>filetarget
+// Creates the all directories in the path of :mini:`Directory`. Returns :mini:`Directory`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	char *Path;
 	if (Target->Absolute) {
@@ -566,6 +630,9 @@ static int rmdir_p(rmdir_t *Info, size_t End) {
 }
 
 ML_METHOD("rmdir", FileTargetT) {
+//<Target
+//>filetarget
+// Removes :mini:`Target` recursively. Returns :mini:`Directory`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Path;
 	if (Target->Absolute) {
@@ -586,6 +653,9 @@ ML_METHOD("rmdir", FileTargetT) {
 }
 
 ML_METHOD("chdir", FileTargetT) {
+//<Directory
+//>filetarget
+// Changes the current directory to :mini:`Directory`. Returns :mini:`Directory`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	if (Target->Absolute) {
 		char *Path2 = GC_MALLOC_ATOMIC(strlen(Target->Path) + 1);
@@ -599,6 +669,9 @@ ML_METHOD("chdir", FileTargetT) {
 }
 
 ML_METHOD("path", FileTargetT) {
+//<Target
+//>string
+// Returns the internal (possibly unresolved and relative to project root) path of :mini:`Target`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	return ml_string(Target->Path, -1);
 }

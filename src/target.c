@@ -36,6 +36,9 @@
 #include <sys/wait.h>
 #endif
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "target"
+
 enum {
 	STATE_UNCHECKED = 0,
 	STATE_CHECKING = -1,
@@ -198,29 +201,6 @@ ML_METHOD("affects", TargetT) {
 ML_METHOD("priority", TargetT) {
 	target_t *Target = (target_t *)Args[0];
 	return ml_integer(Target->QueuePriority);
-}
-
-static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
-	if (Arg->Type == MLListT) {
-		ML_LIST_FOREACH(Arg, Iter) {
-			if (target_depends_auto_single(Iter->Value, NULL)) return 1;
-		}
-	} else if (Arg->Type == MLStringT) {
-		target_t *Depend = target_symb_new(CurrentContext, ml_string_value(Arg));
-		target_depends_auto(Depend);
-		return 0;
-	} else if (ml_is(Arg, TargetT)) {
-		target_depends_auto((target_t *)Arg);
-		return 0;
-	} else if (Arg == MLNil) {
-		return 0;
-	}
-	return 1;
-}
-
-ml_value_t *target_depends_auto_value(void *Data, int Count, ml_value_t **Args) {
-	for (int I = 0; I < Count; ++I) target_depends_auto_single(Args[I], NULL);
-	return MLNil;
 }
 
 static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {

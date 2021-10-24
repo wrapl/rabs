@@ -7,6 +7,9 @@
 #include <string.h>
 #include <gc/gc.h>
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "symbol"
+
 struct target_symb_t {
 	target_t Base;
 	const char *Name;
@@ -28,6 +31,8 @@ static void symb_target_call(ml_state_t *Caller, target_symb_t *Target, int Coun
 }
 
 ML_TYPE(SymbTargetT, (TargetT), "symb-target",
+// A symbol target represents a dynamically scoped binding.
+// They can be bound to any other value, and are considered changed if their bound value changes.
 	.deref = (void *)symb_target_deref,
 	.assign = (void *)symb_target_assign,
 	.call = (void *)symb_target_call

@@ -15,6 +15,5 @@ int target_file_missing(target_file_t *Target);
 void target_file_watch(target_file_t *Target);
 
 target_t *target_file_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot);
-ml_value_t *target_file_new(void *Data, int Count, ml_value_t **Args);
 
 #endif

@@ -5,6 +5,9 @@
 #include "cache.h"
 #include "targetcache.h"
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "expr"
+
 extern ml_value_t *ArgifyMethod;
 
 ML_TYPE(ExprTargetT, (TargetT), "expr-target");
@@ -44,7 +47,7 @@ int target_expr_missing(target_expr_t *Target) {
 	return Target->Value == NULL;
 }
 
-ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Expr) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);

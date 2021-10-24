@@ -3,6 +3,9 @@
 #include "target.h"
 #include "ml_macros.h"
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "targetset"
+
 #define INITIAL_SIZE 4
 
 typedef struct {

@@ -17,6 +17,7 @@ Features
 Rabs provides the following features:
 
 * Support for large projects spanning multiple directories with arbitrary nesting.
+* Allows build and source directories to be overlayed so that new files are automatically created in the build directory while input files can be located in either.
 * A free-form imperative programming language for specifying targets, dependencies and build functions.
 * Functional changes to build functions will trigger a rebuild. Comments and formatting do not count as functional changes.
 * File targets are checked for changes using SHA-256 checksums to prevent unnecessary rebuilds.
@@ -68,7 +69,10 @@ Rabs provides several types of targets:
 * :doc:`/targets/expressions`
 * :doc:`/targets/scans`
 
-Rabs build scripts are written using :doc:`/minilang`.
+Rabs build scripts are written using `Minilang <https://minilang.readthedocs.io>`_. Nearly all *Minilang* features are available, with the exception of the following:
+
+* The preemptive scheduler is disabled. Instead, *Rabs* provides its own support for parallel builds.
+* The ``math``, ``array``, ``json`` and ``xml`` modules are not included.
 
 .. toctree::
    :maxdepth: 2
