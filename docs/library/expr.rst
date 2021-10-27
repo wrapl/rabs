@@ -2,17 +2,16 @@ expr
 ====
 
 :mini:`type exprtarget < target`
-   *TBD*
+   An expression target represents the a Minilang value that needs to be recomputed whenever other targets change.
 
-:mini:`meth (Arg₁: list):ArgifyMethod(Arg₂: exprtarget)`
-   *TBD*
+   The value of an expression target is the return value of its build function.
 
-:mini:`meth (Arg₁: string::buffer):append(Arg₂: exprtarget)`
-   *TBD*
 
-:mini:`meth string(Arg₁: exprtarget)`
-   *TBD*
+:mini:`meth string(Target: exprtarget): string`
+   Converts the value of an expression target to a string, calling its build function first if necessary.
 
-:mini:`fun expr(Arg₁: string)`
-   *TBD*
+
+:mini:`fun expr(Name: string): exprtarget`
+   Returns a new expression target with :mini:`Name`.
+
 

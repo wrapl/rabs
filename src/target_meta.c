@@ -15,6 +15,7 @@ struct target_meta_t {
 };
 
 ML_TYPE(MetaTargetT, (TargetT), "meta-target");
+// A meta target represents a target with no other properties other than a build function and dependencies.
 
 time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (DependsLastUpdated == CurrentIteration) {

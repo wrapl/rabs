@@ -2,35 +2,54 @@ target
 ======
 
 :mini:`type target < any`
-   *TBD*
+   Base type for all targets.
 
-:mini:`meth (Arg₁: target)[Arg₂: any, ...]`
-   *TBD*
 
-:mini:`meth (Arg₁: target) << (Arg₂: any)`
-   *TBD*
+:mini:`meth (Target: target)[Dependency: any, ...]: target`
+   Adds a number of dependencies to :mini:`Target`.
 
-:mini:`meth (Arg₁: target):scan(Arg₂: string)`
-   *TBD*
+   * If :mini:`Dependency` is a list then each value is added.
 
-:mini:`meth (Arg₁: target):id`
-   *TBD*
+   * If :mini:`Dependency` is a string then a dependency on the corresponding symbol target is added.
 
-:mini:`meth (Arg₁: target):build`
-   *TBD*
+   * Otherwise :mini:`Dependency` should be another target.
 
-:mini:`meth (Arg₁: target) => (Arg₂: any)`
-   *TBD*
+   Returns :mini:`Target`.
 
-:mini:`meth (Arg₁: target):build(Arg₂: any)`
-   *TBD*
 
-:mini:`meth (Arg₁: target):depends`
-   *TBD*
+:mini:`meth (Target: target) << (Dependency: any): target`
+   Adds a dependency to :mini:`Target`. Equivalent to :mini:`Target[Dependency]`.
 
-:mini:`meth (Arg₁: target):affects`
-   *TBD*
 
-:mini:`meth (Arg₁: target):priority`
-   *TBD*
+:mini:`meth (Target: target):scan(Name: string): scantarget`
+   Returns a new scan target using :mini:`Target` as the base target.
+
+
+:mini:`meth (Target: target):id: string`
+   Returns the id of :mini:`Target`.
+
+
+:mini:`meth (Target: target):build: function | nil`
+   Returns the build function of :mini:`Target` if one has been set, otherwise returns :mini:`nil`.
+
+
+:mini:`meth (Target: target) => (Function: any): target`
+   Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
+
+
+:mini:`meth (Target: target):build(Function: any): target`
+   Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
+
+
+:mini:`meth (Target: target):depends: targetset`
+   Returns the set of dependencies of :mini:`Target`.
+
+
+:mini:`meth (Target: target):affects: targetset`
+   Returns the set of dependencies of :mini:`Target`.
+
+
+:mini:`meth (Target: target):priority: integer`
+   Returns the computed priority of :mini:`Target`.
+
 
