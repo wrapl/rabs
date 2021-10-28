@@ -2,9 +2,10 @@ Reference
 =========
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
    
    /contexts
    /targets
+   /vmounts
    /library

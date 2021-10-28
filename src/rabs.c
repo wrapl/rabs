@@ -303,11 +303,19 @@ ML_FUNCTION(Vmount) {
 	ML_CHECK_ARG_TYPE(1, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
 	const char *Target = ml_string_value(Args[1]);
-	vfs_mount(
-		concat(CurrentContext->Path, "/", Path, NULL),
-		concat(CurrentContext->Path, "/", Target, NULL),
-		Target[0] == '/'
-	);
+	if (Target[0] == '/') {
+		vfs_mount(
+			concat(CurrentContext->Path, "/", Path, NULL),
+			Target,
+			1
+		);
+	} else {
+		vfs_mount(
+			concat(CurrentContext->Path, "/", Path, NULL),
+			concat(CurrentContext->Path, "/", Target, NULL),
+			0
+		);
+	}
 	return MLNil;
 }
 

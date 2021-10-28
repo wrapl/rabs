@@ -15,7 +15,6 @@ struct target_scan_t {
 	const char *Name;
 	target_t *Source;
 	targetset_t *Scans;
-	ml_value_t *Rebuild;
 };
 
 ML_TYPE(ScanTargetT, (TargetT), "scan-target");
