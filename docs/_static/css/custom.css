@@ -56,6 +56,11 @@ div.folders ul li:after {
 	color: #718c00;
 }
 
+.highlight s {
+    text-decoration: none;
+    color: #c5a332;
+}
+
 .ansi-bold {
 	font-weight: bold;
 }
@@ -96,3 +101,6 @@ div.folders ul li:after {
 	color: white;
 }
 
+.bd-sidebar {
+	overflow-y: auto;
+}
