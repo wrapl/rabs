@@ -3,6 +3,9 @@
 #include "target.h"
 #include "ml_macros.h"
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "targetset"
+
 #define INITIAL_SIZE 4
 
 typedef struct {
@@ -31,6 +34,7 @@ static void ML_TYPED_FN(ml_iter_next, TargetSetIterT, ml_state_t *Caller, target
 }
 
 ML_TYPE(TargetSetIterT, (), "targetset-iter");
+//!internal
 
 static void ML_TYPED_FN(ml_iterate, TargetSetT, ml_state_t *Caller, targetset_t *Set) {
 	target_t **End = Set->Targets + Set->Size;
@@ -48,6 +52,7 @@ static void ML_TYPED_FN(ml_iterate, TargetSetT, ml_state_t *Caller, targetset_t 
 }
 
 ML_TYPE(TargetSetT, (MLSequenceT), "targetset");
+// A set of targets.
 
 void targetset_ml_init() {
 #include "targetset_init.c"

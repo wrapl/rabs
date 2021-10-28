@@ -5,11 +5,17 @@
 #include "cache.h"
 #include "targetcache.h"
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "expr"
+
 extern ml_value_t *ArgifyMethod;
 
 ML_TYPE(ExprTargetT, (TargetT), "expr-target");
+// An expression target represents the a Minilang value that needs to be recomputed whenever other targets change.
+// The value of an expression target is the return value of its build function.
 
 ML_METHOD(ArgifyMethod, MLListT, ExprTargetT) {
+//!internal
 	target_expr_t *Target = (target_expr_t *)Args[1];
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
@@ -18,6 +24,7 @@ ML_METHOD(ArgifyMethod, MLListT, ExprTargetT) {
 }
 
 ML_METHOD("append", MLStringBufferT, ExprTargetT) {
+//!internal
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	target_expr_t *Target = (target_expr_t *)Args[1];
 	target_depends_auto((target_t *)Target);
@@ -27,6 +34,9 @@ ML_METHOD("append", MLStringBufferT, ExprTargetT) {
 }
 
 ML_METHOD(MLStringT, ExprTargetT) {
+//<Target
+//>string
+// Converts the value of an expression target to a string, calling its build function first if necessary.
 	target_expr_t *Target = (target_expr_t *)Args[0];
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
@@ -44,7 +54,10 @@ int target_expr_missing(target_expr_t *Target) {
 	return Target->Value == NULL;
 }
 
-ml_value_t *target_expr_new(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Expr) {
+//<Name
+//>exprtarget
+// Returns a new expression target with :mini:`Name`.
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);

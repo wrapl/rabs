@@ -21,6 +21,7 @@ static void library_get(ml_state_t *Caller, library_t *Library, int Count, ml_va
 }
 
 ML_TYPE(LibraryT, (), "library",
+//!internal
 	.call = (void *)library_get
 );
 

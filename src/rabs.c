@@ -81,6 +81,7 @@ static void rabs_property_call(ml_state_t *Caller, rabs_property_t *Property, in
 }
 
 ML_TYPE(RabsPropertyT, (MLAnyT), "property",
+//!internal
 	.hash = (void *)rabs_property_hash,
 	.deref = (void *)rabs_property_deref,
 	.assign = (void *)rabs_property_assign,
@@ -201,7 +202,11 @@ static ml_value_t *load_file(const char *FileName) {
 	return State->Result;
 }
 
-static ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Subdir) {
+//<Name:string
+//>context|error
+// Creates a new directory subcontext with name :mini:`Name` and loads the :file:`build.rabs` file inside the directory.
+// Returns an error if the directory does not exist or does not contain a :file:`build.rabs` file.
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
@@ -223,7 +228,11 @@ static ml_value_t *subdir(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
-static ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Scope) {
+//<Name:string
+//<Function:function
+//>any
+// Creates a new scoped subcontext with name :mini:`Name` and calls :mini:`Function()` in the new context.
 	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Name = ml_string_value(Args[0]);
@@ -233,7 +242,10 @@ static ml_value_t *scope(void *Data, int Count, ml_value_t **Args) {
 	return Result;
 }
 
-static ml_value_t *symbol(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Symbol) {
+//<Name:string
+//>symbol
+// Returns the symbol with name :mini:`Name`.
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	return rabs_ml_global(NULL, ml_string_value(Args[0]));
@@ -249,7 +261,10 @@ static ml_value_t *symbol(void *Data, int Count, ml_value_t **Args) {
 
 #define MAX_EXTENSION 10
 
-static ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Include) {
+//<Path..:string
+//>any
+// Loads the Minilang file or shared library specified by :mini:`Path`.
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
@@ -278,21 +293,37 @@ static ml_value_t *include(void *Data, int Count, ml_value_t **Args) {
 	return ml_error("IncludeError", "Unable to include: %s", FileName);
 }
 
-static ml_value_t *vmount(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Vmount) {
+//<Path:string
+//<Source:string
+//>nil
+// Mounts the directory :mini:`Source` onto :mini:`Path`. Resolving a file in :mini:`Path` will also check :mini:`Source`.
 	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	ML_CHECK_ARG_TYPE(1, MLStringT);
 	const char *Path = ml_string_value(Args[0]);
 	const char *Target = ml_string_value(Args[1]);
-	vfs_mount(
-		concat(CurrentContext->Path, "/", Path, NULL),
-		concat(CurrentContext->Path, "/", Target, NULL),
-		Target[0] == '/'
-	);
+	if (Target[0] == '/') {
+		vfs_mount(
+			concat(CurrentContext->Path, "/", Path, NULL),
+			Target,
+			1
+		);
+	} else {
+		vfs_mount(
+			concat(CurrentContext->Path, "/", Path, NULL),
+			concat(CurrentContext->Path, "/", Target, NULL),
+			0
+		);
+	}
 	return MLNil;
 }
 
-static ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Context) {
+//<Path?:string
+//>context
+// If :mini:`Path` is provided then returns the context with path :mini:`Path` or :mini:`nil` is no such context has been defined.
+// Otherwise returns the current context.
 	if (Count > 0) {
 		ML_CHECK_ARG_TYPE(0, MLStringT);
 		return (ml_value_t *)context_find(ml_string_value(Args[0])) ?: MLNil;
@@ -307,10 +338,12 @@ static ml_value_t *context(void *Data, int Count, ml_value_t **Args) {
 #endif
 
 ML_METHOD("append", MLStringBufferT, MLNilT) {
+//!internal
 	return MLNil;
 }
 
 ML_METHOD("append", MLStringBufferT, MLMethodT) {
+//!internal
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	const char *Name = ml_method_name(Args[1]);
 	ml_stringbuffer_add(Buffer, Name, strlen(Name));
@@ -318,6 +351,7 @@ ML_METHOD("append", MLStringBufferT, MLMethodT) {
 }
 
 ML_METHOD("append", MLStringBufferT, MLListT) {
+//!internal
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	int Last = Buffer->Length;
 	ML_LIST_FOREACH(Args[1], Node) {
@@ -329,6 +363,7 @@ ML_METHOD("append", MLStringBufferT, MLListT) {
 }
 
 ML_METHOD("append", MLStringBufferT, MLMapT) {
+//!internal
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	int Last = Buffer->Length;
 	ML_MAP_FOREACH(Args[1], Iter) {
@@ -421,19 +456,27 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	return Result;
 }
 
-static ml_value_t *execute(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Execute) {
+//<Command..:any
+//>nil|error
+// Builds a shell command from :mini:`Command..` and executes it, discarding the output. Returns :mini:`nil` on success or raises an error.
 	return command(0, Count, Args);
 }
 
-static ml_value_t *shell(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Shell) {
+//<Command..:any
+//>string|error
+// Builds a shell command from :mini:`Command..` and executes it, capturing the output. Returns the captured output on success or raises an error.
 	return command(1, Count, Args);
 }
 
 ML_METHOD(ArgifyMethod, MLListT, MLNilT) {
+//!internal
 	return Args[0];
 }
 
 ML_METHOD(ArgifyMethod, MLListT, MLIntegerT) {
+//!internal
 	char *Chars;
 	size_t Length = asprintf(&Chars, "%ld", ml_integer_value(Args[1]));
 	ml_list_append(Args[0], ml_string(Chars, Length));
@@ -441,6 +484,7 @@ ML_METHOD(ArgifyMethod, MLListT, MLIntegerT) {
 }
 
 ML_METHOD(ArgifyMethod, MLListT, MLRealT) {
+//!internal
 	char *Chars;
 	size_t Length = asprintf(&Chars, "%f", ml_real_value(Args[1]));
 	ml_list_append(Args[0], ml_string(Chars, Length));
@@ -448,16 +492,19 @@ ML_METHOD(ArgifyMethod, MLListT, MLRealT) {
 }
 
 ML_METHOD(ArgifyMethod, MLListT, MLStringT) {
+//!internal
 	ml_list_append(Args[0], Args[1]);
 	return Args[0];
 }
 
 ML_METHOD(ArgifyMethod, MLListT, MLMethodT) {
+//!internal
 	ml_list_append(Args[0], ml_string(ml_method_name(Args[1]), -1));
 	return Args[0];
 }
 
 ML_METHOD(ArgifyMethod, MLListT, MLListT) {
+//!internal
 	ML_LIST_FOREACH(Args[1], Node) {
 		ml_value_t *Result = ml_simple_inline(ArgifyMethod, 2, Args[0], Node->Value);
 		if (ml_is_error(Result)) return Result;
@@ -466,6 +513,7 @@ ML_METHOD(ArgifyMethod, MLListT, MLListT) {
 }
 
 ML_METHOD(ArgifyMethod, MLListT, MLMapT) {
+//!internal
 	ML_MAP_FOREACH(Args[1], Iter) {
 		ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 		ml_value_t *Result = ml_stringbuffer_append(Buffer, Iter->Key);
@@ -481,10 +529,16 @@ ML_METHOD(ArgifyMethod, MLListT, MLMapT) {
 }
 
 #ifdef Mingw
-#define rabs_execv execute
-#define rabs_shellv shell
+
+#define Execv Execute
+#define Shellv Shell
+
 #else
-static ml_value_t *rabs_execv(void *Data, int Count, ml_value_t **Args) {
+
+ML_FUNCTION(Execv) {
+//<Command:list
+//>nil|error
+// Similar to :mini:`execute()` but expects a list of individual arguments instead of letting the shell split the command line.
 	ML_CHECK_ARG_COUNT(1);
 	ml_value_t *ArgList = ml_list();
 	for (int I = 0; I < Count; ++I) {
@@ -533,7 +587,10 @@ static ml_value_t *rabs_execv(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
-static ml_value_t *rabs_shellv(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Shellv) {
+//<Command:list
+//>nil|error
+// Similar to :mini:`shell()` but expects a list of individual arguments instead of letting the shell split the command line.
 	ML_CHECK_ARG_COUNT(1);
 	ml_value_t *ArgList = ml_list();
 	for (int I = 0; I < Count; ++I) {
@@ -596,7 +653,10 @@ static ml_value_t *rabs_shellv(void *Data, int Count, ml_value_t **Args) {
 }
 #endif
 
-static ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Mkdir) {
+//<Path..:any
+//>nil|error
+// Creates a directory with path :mini:`Path` if it does not exist, creating intermediate directories if required.
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
@@ -610,7 +670,10 @@ static ml_value_t *rabs_mkdir(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
-static ml_value_t *rabs_chdir(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Chdir) {
+//<Path..:any
+//>nil
+// Changes the current directory to :mini:`Path`.
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
@@ -622,7 +685,11 @@ static ml_value_t *rabs_chdir(void *Data, int Count, ml_value_t **Args) {
 	return Args[0];
 }
 
-static ml_value_t *rabs_open(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Open) {
+//<Path:any
+//<Mode:string
+//>file
+// Opens the file at path :mini:`Path` with the specified mode.
 	ML_CHECK_ARG_COUNT(2);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[0]);
@@ -669,7 +736,10 @@ static int ml_stringbuffer_print(FILE *File, const char *String, size_t Length) 
 	return 0;
 }
 
-static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Print) {
+//<Values..:any
+//>nil
+// Prints out :mini:`Values` to standard output.
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
@@ -680,7 +750,10 @@ static ml_value_t *print(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
-static ml_value_t *ml_getenv(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Getenv) {
+//<Name:string
+//>string|nil
+// Returns the current value of the environment variable :mini:`Name` or :mini:`nil` if it is not defined.
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Key = ml_string_value(Args[0]);
@@ -692,7 +765,11 @@ static ml_value_t *ml_getenv(void *Data, int Count, ml_value_t **Args) {
 	}
 }
 
-static ml_value_t *ml_setenv(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Setenv) {
+//<Name:string
+//<Value:string
+//>nil
+// Sets the value of the environment variable :mini:`Name` to :mini:`Value`.
 	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	ML_CHECK_ARG_TYPE(1, MLStringT);
@@ -708,7 +785,10 @@ static ml_value_t *ml_setenv(void *Data, int Count, ml_value_t **Args) {
 	return MLNil;
 }
 
-static ml_value_t *ml_target_find(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Target) {
+//<Path:string
+//>target|error
+// Returns the target with path :mini:`Path` if is has been defined, otherwise raises an error.
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Id = ml_string_value(Args[0]);
@@ -717,24 +797,46 @@ static ml_value_t *ml_target_find(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)Target;
 }
 
-static ml_value_t *defined(void *Data, int Count, ml_value_t **Args) {
+ML_FUNCTION(Defined) {
+//<Name:string
+//>string|nil
+// If :mini:`Name` was defined in the *rabs* command line then returns the associated value, otherwise returns :mini:`nil`.
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Key = ml_string_value(Args[0]);
 	return stringmap_search(Defines, Key) ?: MLNil;
 }
 
-static ml_value_t *type(void *Data, int Count, ml_value_t **Args) {
-	ML_CHECK_ARG_COUNT(1);
-	return ml_string(Args[0]->Type->Name, -1);
+static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
+	if (Arg->Type == MLListT) {
+		ML_LIST_FOREACH(Arg, Iter) {
+			if (target_depends_auto_single(Iter->Value, NULL)) return 1;
+		}
+	} else if (Arg->Type == MLStringT) {
+		target_t *Depend = target_symb_new(CurrentContext, ml_string_value(Arg));
+		target_depends_auto(Depend);
+		return 0;
+	} else if (ml_is(Arg, TargetT)) {
+		target_depends_auto((target_t *)Arg);
+		return 0;
+	} else if (Arg == MLNil) {
+		return 0;
+	}
+	return 1;
 }
 
-static ml_value_t *error(void *Data, int Count, ml_value_t **Args) {
-	ML_CHECK_ARG_COUNT(2);
-	ML_CHECK_ARG_TYPE(0, MLStringT);
-	ML_CHECK_ARG_TYPE(1, MLStringT);
-	return ml_error(ml_string_value(Args[0]), "%s", ml_string_value(Args[1]));
+ML_FUNCTION(Check) {
+//<Target..:target
+//>nil
+// Checks that each :mini:`Target` is up to date, building if necessary.
+	for (int I = 0; I < Count; ++I) target_depends_auto_single(Args[I], NULL);
+	return MLNil;
 }
+
+/*static ml_value_t *type(void *Data, int Count, ml_value_t **Args) {
+	ML_CHECK_ARG_COUNT(1);
+	return ml_string(Args[0]->Type->Name, -1);
+}*/
 
 static ml_value_t *lib_path(void) {
 	int ExecutablePathLength = wai_getExecutablePath(NULL, 0, NULL);
@@ -776,31 +878,30 @@ int main(int Argc, char **Argv) {
 	ml_object_init(Globals);
 	ml_sequence_init(Globals);
 	ml_file_init(Globals);
-	stringmap_insert(Globals, "vmount", ml_cfunction(NULL, vmount));
-	stringmap_insert(Globals, "subdir", ml_cfunction(NULL, subdir));
-	stringmap_insert(Globals, "target", ml_cfunction(NULL, ml_target_find));
-	stringmap_insert(Globals, "file", ml_cfunction(NULL, target_file_new));
-	stringmap_insert(Globals, "meta", ml_cfunction(NULL, target_meta_new));
-	stringmap_insert(Globals, "expr", ml_cfunction(NULL, target_expr_new));
+	stringmap_insert(Globals, "vmount", Vmount);
+	stringmap_insert(Globals, "subdir", Subdir);
+	stringmap_insert(Globals, "target", Target);
+	stringmap_insert(Globals, "file", File);
+	stringmap_insert(Globals, "meta", Meta);
+	stringmap_insert(Globals, "expr", Expr);
 	// TODO: add functions to register and create udf targets
-	stringmap_insert(Globals, "symbol", ml_cfunction(NULL, symbol));
-	stringmap_insert(Globals, "include", ml_cfunction(NULL, include));
-	stringmap_insert(Globals, "context", ml_cfunction(NULL, context));
-	stringmap_insert(Globals, "execute", ml_cfunction(NULL, execute));
-	stringmap_insert(Globals, "shell", ml_cfunction(NULL, shell));
-	stringmap_insert(Globals, "execv", ml_cfunction(NULL, rabs_execv));
-	stringmap_insert(Globals, "shellv", ml_cfunction(NULL, rabs_shellv));
-	stringmap_insert(Globals, "mkdir", ml_cfunction(NULL, rabs_mkdir));
-	stringmap_insert(Globals, "chdir", ml_cfunction(NULL, rabs_chdir));
-	stringmap_insert(Globals, "scope", ml_cfunction(NULL, scope));
-	stringmap_insert(Globals, "print", ml_cfunction(NULL, print));
-	stringmap_insert(Globals, "open", ml_cfunction(NULL, rabs_open));
-	stringmap_insert(Globals, "getenv", ml_cfunction(NULL, ml_getenv));
-	stringmap_insert(Globals, "setenv", ml_cfunction(NULL, ml_setenv));
-	stringmap_insert(Globals, "defined", ml_cfunction(NULL, defined));
-	stringmap_insert(Globals, "check", ml_cfunction(NULL, target_depends_auto_value));
-	stringmap_insert(Globals, "type", ml_cfunction(NULL, type));
-	stringmap_insert(Globals, "error", ml_cfunction(NULL, error));
+	stringmap_insert(Globals, "symbol", Symbol);
+	stringmap_insert(Globals, "include", Include);
+	stringmap_insert(Globals, "context", Context);
+	stringmap_insert(Globals, "execute", Execute);
+	stringmap_insert(Globals, "shell", Shell);
+	stringmap_insert(Globals, "execv", Execv);
+	stringmap_insert(Globals, "shellv", Shellv);
+	stringmap_insert(Globals, "mkdir", Mkdir);
+	stringmap_insert(Globals, "chdir", Chdir);
+	stringmap_insert(Globals, "scope", Scope);
+	stringmap_insert(Globals, "print", Print);
+	stringmap_insert(Globals, "open", Open);
+	stringmap_insert(Globals, "getenv", Getenv);
+	stringmap_insert(Globals, "setenv", Setenv);
+	stringmap_insert(Globals, "defined", Defined);
+	stringmap_insert(Globals, "check", Check);
+	stringmap_insert(Globals, "error", MLErrorValueT);
 	stringmap_insert(Globals, "LIBPATH", lib_path());
 #include "rabs_init.c"
 	target_init();

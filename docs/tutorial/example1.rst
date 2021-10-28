@@ -8,7 +8,7 @@ Suppose we have a single *C* source file :file:`hello.c`. To build a program :fi
 
 .. code-block:: mini
 
-   -- ROOT --
+   :< ROOT >:
    
    file("hello.o")[file("hello.c")] => fun() do
       execute('gcc -c -o{file("hello.o")} {file("hello.c")}')

@@ -36,6 +36,9 @@
 #include <sys/wait.h>
 #endif
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "target"
+
 enum {
 	STATE_UNCHECKED = 0,
 	STATE_CHECKING = -1,
@@ -54,6 +57,7 @@ static pthread_cond_t TargetAvailable[1] = {PTHREAD_COND_INITIALIZER};
 static pthread_cond_t TargetUpdated[1] = {PTHREAD_COND_INITIALIZER};
 
 ML_TYPE(TargetT, (MLAnyT), "target");
+// Base type for all targets.
 
 ML_METHOD_DECL(SHA256, "sha256");
 ML_METHOD_DECL(Missing, "missing");
@@ -117,6 +121,14 @@ static int target_depends_single(ml_value_t *Arg, target_t *Target) {
 }
 
 ML_METHODV("[]", TargetT, MLAnyT) {
+//<Target
+//<Dependency
+//>target
+// Adds a number of dependencies to :mini:`Target`.
+// * If :mini:`Dependency` is a list then each value is added.
+// * If :mini:`Dependency` is a string then a dependency on the corresponding symbol target is added.
+// * Otherwise :mini:`Dependency` should be another target.
+// Returns :mini:`Target`.
 	target_t *Target = (target_t *)Args[0];
 	if (ml_is(Args[Count - 1], MLFunctionT)) {
 		Target->Build = Args[Count - 1];
@@ -137,6 +149,10 @@ ML_METHODV("[]", TargetT, MLAnyT) {
 }
 
 ML_METHOD("<<", TargetT, MLAnyT) {
+//<Target
+//<Dependency
+//>target
+// Adds a dependency to :mini:`Target`. Equivalent to :mini:`Target[Dependency]`.
 	target_t *Target = (target_t *)Args[0];
 	for (int I = 1; I < Count; ++I) {
 		int Error = target_depends_single(Args[I], Target);
@@ -146,20 +162,34 @@ ML_METHOD("<<", TargetT, MLAnyT) {
 }
 
 ML_METHOD("scan", TargetT, MLStringT) {
+//<Target
+//<Name
+//>scantarget
+// Returns a new scan target using :mini:`Target` as the base target.
 	return target_scan_new(NULL, Count, Args);
 }
 
 ML_METHOD("id", TargetT) {
+//<Target
+//>string
+// Returns the id of :mini:`Target`.
 	target_t *Target = (target_t *)Args[0];
 	return ml_string(Target->Id, -1);
 }
 
 ML_METHOD("build", TargetT) {
+//<Target
+//>function|nil
+// Returns the build function of :mini:`Target` if one has been set, otherwise returns :mini:`nil`.
 	target_t *Target = (target_t *)Args[0];
 	return Target->Build ?: MLNil;
 }
 
 ML_METHOD("=>", TargetT, MLAnyT) {
+//<Target
+//<Function
+//>target
+// Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
 	target_t *Target = (target_t *)Args[0];
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
@@ -173,6 +203,10 @@ ML_METHOD("=>", TargetT, MLAnyT) {
 }
 
 ML_METHOD("build", TargetT, MLAnyT) {
+//<Target
+//<Function
+//>target
+// Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
 	target_t *Target = (target_t *)Args[0];
 	Target->Build = Args[1];
 	Target->BuildContext = CurrentContext;
@@ -186,41 +220,27 @@ ML_METHOD("build", TargetT, MLAnyT) {
 }
 
 ML_METHOD("depends", TargetT) {
+//<Target
+//>targetset
+// Returns the set of dependencies of :mini:`Target`.
 	target_t *Target = (target_t *)Args[0];
 	return (ml_value_t *)Target->Depends;
 }
 
 ML_METHOD("affects", TargetT) {
+//<Target
+//>targetset
+// Returns the set of dependencies of :mini:`Target`.
 	target_t *Target = (target_t *)Args[0];
 	return (ml_value_t *)Target->Affects;
 }
 
 ML_METHOD("priority", TargetT) {
+//<Target
+//>integer
+// Returns the computed priority of :mini:`Target`.
 	target_t *Target = (target_t *)Args[0];
 	return ml_integer(Target->QueuePriority);
-}
-
-static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
-	if (Arg->Type == MLListT) {
-		ML_LIST_FOREACH(Arg, Iter) {
-			if (target_depends_auto_single(Iter->Value, NULL)) return 1;
-		}
-	} else if (Arg->Type == MLStringT) {
-		target_t *Depend = target_symb_new(CurrentContext, ml_string_value(Arg));
-		target_depends_auto(Depend);
-		return 0;
-	} else if (ml_is(Arg, TargetT)) {
-		target_depends_auto((target_t *)Arg);
-		return 0;
-	} else if (Arg == MLNil) {
-		return 0;
-	}
-	return 1;
-}
-
-ml_value_t *target_depends_auto_value(void *Data, int Count, ml_value_t **Args) {
-	for (int I = 0; I < Count; ++I) target_depends_auto_single(Args[I], NULL);
-	return MLNil;
 }
 
 static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {

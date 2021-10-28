@@ -7,15 +7,19 @@
 #include <string.h>
 #include <gc/gc.h>
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "scan"
+
 struct target_scan_t {
 	target_t Base;
 	const char *Name;
 	target_t *Source;
 	targetset_t *Scans;
-	ml_value_t *Rebuild;
 };
 
 ML_TYPE(ScanTargetT, (TargetT), "scan-target");
+// A scan target is a dynamic set of targets derived from another base target.
+// The build function for a scan target must return a list of targets.
 
 static int depends_hash_fn(target_t *Depend, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
@@ -29,6 +33,9 @@ time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, unsigned cha
 }
 
 ML_METHOD("source", ScanTargetT) {
+//<Target
+//>target
+// Returns the base target for the scan.
 	target_scan_t *Target = (target_scan_t *)Args[0];
 	return (ml_value_t *)Target->Source;
 }
@@ -73,6 +80,9 @@ target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Ind
 }
 
 ML_METHOD("scans", ScanTargetT) {
+//<Target
+//>targetset
+// Returns the results of the last scan.
 	target_t *Target = (target_t *)Args[0];
 	return (ml_value_t *)cache_scan_get(Target);
 }

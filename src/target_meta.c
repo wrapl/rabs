@@ -6,12 +6,16 @@
 #include "cache.h"
 #include "targetcache.h"
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "meta"
+
 struct target_meta_t {
 	target_t Base;
 	const char *Name;
 };
 
 ML_TYPE(MetaTargetT, (TargetT), "meta-target");
+// A meta target represents a target with no other properties other than a build function and dependencies.
 
 time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (DependsLastUpdated == CurrentIteration) {
@@ -40,6 +44,13 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 		Target->BuildContext = CurrentContext;
 	}
 	return (ml_value_t *)R.Slot[0];
+}
+
+ML_FUNCTION(Meta) {
+//<Name:string
+//>metatarget
+// Returns a new meta target in the current context with name :mini:`Name`.
+	return target_meta_new(Data, Count, Args);
 }
 
 target_t *target_meta_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {

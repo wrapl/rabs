@@ -29,12 +29,10 @@ To build an executable, :file:`hello` from this file with *Rabs*, we can create 
       execute('gcc -o{file("hello")} {file("hello.o")}')
    end
 
-Here is some inline code :samp:`Target => Build`.
-
 Folder structure
 ----------------
 
-*Rabs* is designed for building large projects that can span several directories with arbitrary nesting. Each directory contains a :file:`build.rabs` file which specifies the targets to build within that directory, the instructions to build those targets (written in :doc:`/minilang`), and any dependencies.
+*Rabs* is designed for building large projects that can span several directories with arbitrary nesting. Each directory contains a :file:`build.rabs` file which specifies the targets to build within that directory, the instructions to build those targets (written in `Minilang <https://minilang.readthedocs.io>`_), and any dependencies.
 
 .. folders::
    
@@ -97,3 +95,5 @@ This could be used to build a program:
    var Objects := [c_object(file("program.o"))]
    
    file("program")[Objects] => fun(Target) execute(CC, Objects, "-o", Target)
+
+Although this approach may seem more verbose than using patterns, the ability to use functions and looping constructs to create targets means that overall build scripts tend to be shorter. It is also easier to ensure that targets are built with the correct options since the build context is captured when a target's build function is defined.

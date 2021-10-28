@@ -9,9 +9,14 @@
 #include <unistd.h>
 #include <string.h>
 
+#undef ML_CATEGORY
+#define ML_CATEGORY "context"
+
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;
+
 ML_TYPE(ContextT, (MLAnyT), "context");
+// A build context.
 
 context_t *context_find(const char *Name) {
 	return stringmap_search(ContextCache, Name);
@@ -79,47 +84,76 @@ ml_value_t *context_symb_set(context_t *Context, const char *Name, ml_value_t *V
 }
 
 ML_METHOD(".", ContextT, MLStringT) {
+//<Context
+//<Name
+//>symbol
+// Returns the symbol :mini:`Name` resolved in :mini:`Context`.
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	return (ml_value_t *)target_symb_new(Context, Name);
 }
 
 ML_METHOD("::", ContextT, MLStringT) {
+//<Context
+//<Name
+//>symbol
+// Returns the symbol :mini:`Name` resolved in :mini:`Context`.
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	return (ml_value_t *)target_symb_new(Context, Name);
 }
 
 ML_METHOD("parent", ContextT) {
+//<Context
+//>context|nil
+// Returns the parent context of :mini:`Context`, or :mini:`nil` if :mini:`Context` is the root context for the build.
 	context_t *Context = (context_t *)Args[0];
 	return (ml_value_t *)Context->Parent ?: MLNil;
 }
 
 ML_METHOD("name", ContextT) {
+//<Context
+//>string
+// Returns the name of :mini:`Context`.
 	context_t *Context = (context_t *)Args[0];
 	return ml_string(Context->Name, -1);
 }
 
 ML_METHOD("path", ContextT) {
+//<Context
+//>string
+// Returns the path of :mini:`Context`.
 	context_t *Context = (context_t *)Args[0];
 	return ml_string(Context->Path, -1);
 }
 
 ML_METHOD("/", ContextT, MLStringT) {
+//<Context
+//<Name
+//>context|nil
+// Returns the directory-based subcontext of :mini:`Context` named :mini:`Name`, or :mini:`nil` if no such context has been defined.
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	const char *Path = concat(Context->Path, "/", Name, NULL);
-	return (ml_value_t *)context_make(Path) ?: MLNil;
+	return (ml_value_t *)context_find(Path) ?: MLNil;
 }
 
 ML_METHOD("@", ContextT, MLStringT) {
+//<Context
+//<Name
+//>context|nil
+// Returns the scope-based subcontext of :mini:`Context` named :mini:`Name`, or :mini:`nil` if no such context has been defined.
 	context_t *Context = (context_t *)Args[0];
 	const char *Name = ml_string_value(Args[1]);
 	const char *Path = concat(Context->Path, ":", Name, NULL);
-	return (ml_value_t *)context_make(Path) ?: MLNil;
+	return (ml_value_t *)context_find(Path) ?: MLNil;
 }
 
 ML_METHOD("in", ContextT, MLFunctionT) {
+//<Context
+//<Function
+//>any
+// Calls :mini:`Function()` in the context of :mini:`Context`.
 	context_t *OldContext = CurrentContext;
 	CurrentContext = (context_t *)Args[0];
 	ml_value_t *Result = ml_simple_call(Args[1], 0, NULL);
@@ -142,6 +176,9 @@ static int context_export_fn(const char *Name, void *Value, ml_value_t *Exports)
 }
 
 ML_METHOD("exports", ContextT) {
+//<Context
+//>list
+// Returns a list of symbols defined in :mini:`Context`.
 	context_t *Context = (context_t *)Args[0];
 	ml_value_t *Exports = ml_list();
 	stringmap_foreach(Context->Locals, Exports, (void *)context_export_fn);
