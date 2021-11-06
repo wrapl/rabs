@@ -273,7 +273,7 @@ ML_FUNCTION(Include) {
 	}
 	size_t Length = Buffer->Length;
 	char *FileName0 = GC_MALLOC_ATOMIC(Length + MAX_EXTENSION);
-	memcpy(FileName0, ml_stringbuffer_get(Buffer), Length);
+	memcpy(FileName0, ml_stringbuffer_get_string(Buffer), Length);
 	char *FileName = FileName0;
 	struct stat Stat[1];
 
@@ -382,6 +382,13 @@ ML_METHOD("append", MLStringBufferT, MLMapT) {
 
 static int ErrorLogFile = STDERR_FILENO;
 
+typedef struct command_output_t command_output_t;
+
+struct command_output_t {
+	command_output_t *Next;
+	char Chars[ML_STRINGBUFFER_NODE_SIZE];
+};
+
 static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
@@ -392,7 +399,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
-	const char *Command = ml_stringbuffer_get(Buffer);
+	const char *Command = ml_stringbuffer_get_string(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
 	if (DebugThreads && CurrentThread) {
 		strncpy(CurrentThread->Command, Command, sizeof(CurrentThread->Command) - 1);
@@ -417,21 +424,39 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	if (CurrentThread) CurrentThread->Child = Child;
 	pthread_mutex_unlock(InterpreterLock);
 	if (Capture) {
-		ml_stringbuffer_t Output[1] = {ML_STRINGBUFFER_INIT};
-		char Chars[ML_STRINGBUFFER_NODE_SIZE];
+		size_t Total = 0;
+		command_output_t *Head = new(command_output_t), *Current = Head;
+		size_t Space = ML_STRINGBUFFER_NODE_SIZE;
+		char *Chars = Current->Chars;
 		for (;;) {
-			ssize_t Size = read(Pipe[0], Chars, ML_STRINGBUFFER_NODE_SIZE);
-			if (Size <= 0) break;
-			//pthread_mutex_lock(GlobalLock);
-			if (Size > 0) ml_stringbuffer_add(Output, Chars, Size);
-			//pthread_mutex_unlock(GlobalLock);
+			ssize_t Count = read(Pipe[0], Chars, Space);
+			if (Count <= 0) break;
+			if (Count > 0) {
+				Total += Count;
+				Space -= Count;
+				if (!Space) {
+					Current = Current->Next = new(command_output_t);
+					Space = ML_STRINGBUFFER_NODE_SIZE;
+					Chars = Current->Chars;
+				} else {
+					Chars += Count;
+				}
+			}
 		}
-		Result = ml_stringbuffer_value(Output);
+		Chars = snew(Total + 1);
+		char *End = Chars;
+		for (command_output_t *Output = Head; Output != Current; Output = Output->Next) {
+			memcpy(End, Output->Chars, ML_STRINGBUFFER_NODE_SIZE);
+			End += ML_STRINGBUFFER_NODE_SIZE;
+		}
+		memcpy(End, Current->Chars, ML_STRINGBUFFER_NODE_SIZE - Space);
+		Chars[Total] = 0;
+		Result = ml_string(Chars, Total);
 	} else {
 		char Chars[ML_STRINGBUFFER_NODE_SIZE];
 		for (;;) {
-			ssize_t Size = read(Pipe[0], Chars, ML_STRINGBUFFER_NODE_SIZE);
-			if (Size <= 0) break;
+			ssize_t Count = read(Pipe[0], Chars, ML_STRINGBUFFER_NODE_SIZE);
+			if (Count <= 0) break;
 		}
 	}
 	close(Pipe[0]);
@@ -523,7 +548,7 @@ ML_METHOD(ArgifyMethod, MLListT, MLMapT) {
 			Result = ml_stringbuffer_append(Buffer, Iter->Value);
 			if (ml_is_error(Result)) return Result;
 		}
-		ml_list_append(Args[0], ml_stringbuffer_value(Buffer));
+		ml_list_append(Args[0], ml_stringbuffer_get_value(Buffer));
 	}
 	return Args[0];
 }
@@ -644,7 +669,7 @@ ML_FUNCTION(Shellv) {
 			return ml_error("ExecuteError", "process returned non-zero exit code");
 		} else {
 			size_t Length = Buffer->Length;
-			ml_value_t *Result = ml_string(ml_stringbuffer_get(Buffer), Length);
+			ml_value_t *Result = ml_string(ml_stringbuffer_get_string(Buffer), Length);
 			return Result;
 		}
 	} else {
@@ -663,7 +688,7 @@ ML_FUNCTION(Mkdir) {
 		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
-	char *Path = ml_stringbuffer_get(Buffer);
+	char *Path = ml_stringbuffer_get_string(Buffer);
 	if (mkdir_p(Path) < 0) {
 		return ml_error("FileError", "error creating directory %s", Path);
 	}
@@ -694,7 +719,7 @@ ML_FUNCTION(Open) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[0]);
 	if (Result->Type == MLErrorT) return Result;
-	char *FileName = ml_stringbuffer_get(Buffer);
+	char *FileName = ml_stringbuffer_get_string(Buffer);
 	return ml_simple_inline((ml_value_t *)MLFileOpen, 2, ml_string(FileName, -1), Args[1]);
 }
 

@@ -142,23 +142,6 @@ ML_FUNCTION(File) {
 	return (ml_value_t *)Target;
 }
 
-ML_METHOD(MLStringT, FileTargetT) {
-//<Target
-//>string
-// Returns the absolute resolved path of :mini:`Target` as a string.
-	target_file_t *Target = (target_file_t *)Args[0];
-	const char *Path;
-	if (Target->Absolute) {
-		Path = Target->Path;
-	} else if (Target->Path[0]) {
-		Path = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
-	} else {
-		Path = RootPath;
-	}
-	//Path = relative_path(Path, CurrentDirectory);
-	return ml_string(Path, strlen(Path));
-}
-
 ML_METHOD(ArgifyMethod, MLListT, FileTargetT) {
 //!internal
 	target_file_t *Target = (target_file_t *)Args[1];

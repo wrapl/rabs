@@ -33,17 +33,6 @@ ML_METHOD("append", MLStringBufferT, ExprTargetT) {
 	return ml_stringbuffer_append(Buffer, Target->Value);
 }
 
-ML_METHOD(MLStringT, ExprTargetT) {
-//<Target
-//>string
-// Converts the value of an expression target to a string, calling its build function first if necessary.
-	target_expr_t *Target = (target_expr_t *)Args[0];
-	target_depends_auto((target_t *)Target);
-	target_queue((target_t *)Target, CurrentTarget);
-	target_wait((target_t *)Target, CurrentTarget);
-	return ml_simple_inline((ml_value_t *)MLStringT, 1, Target->Value);
-}
-
 time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	target_value_hash(Target->Value, Target->Base.Hash);
 	return 0;
