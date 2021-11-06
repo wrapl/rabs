@@ -11,10 +11,6 @@ file
    Returns a new file target. If :mini:`Path` does not begin with `/`, it is considered relative to the current context path. If :mini:`Path` is specified as an absolute path but lies inside the project directory, it is converted into a relative path.
 
 
-:mini:`meth string(Target: filetarget): string`
-   Returns the absolute resolved path of :mini:`Target` as a string.
-
-
 :mini:`meth (Target: filetarget):dir: filetarget`
    Returns the directory containing :mini:`Target`.
 
