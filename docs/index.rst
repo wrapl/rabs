@@ -33,25 +33,25 @@ Example
 
    :< ROOT >:
    
-   var SRC := file("src")
-   var BIN := file("bin"):mkdir
-   var OBJ := file("obj"):mkdir
+   var Src := file("src")
+   var Bin := file("bin"):mkdir
+   var Obj := file("obj"):mkdir
    
-   var TEST_C := SRC / "test.c"
-   var TEST_H := SRC / "test.h"
-   var TEST_O := OBJ / "test.o"
+   var TestC := Src / "test.c"
+   var TestH := Src / "test.h"
+   var TestO := Obj / "test.o"
    
-   TEST_O[TEST_C, TEST_H] => fun() do
-      execute('gcc -c -o{TEST_O} -I{SRC} {TEST_C}')
+   TestO[TestC, TestH] => fun() do
+      execute('gcc -c -o{TestO} -I{Src} {TestC}')
    end
    
-   var TEST := BIN / "test"
+   var Test := Bin / "test"
    
-   TEST[TEST_O] => fun() do
-      execute('gcc -o{TEST} {TEST_O}')
+   Test[TestO] => fun() do
+      execute('gcc -o{Test} {TestO}')
    end
    
-   DEFAULT[TEST]
+   DEFAULT[Test]
 
 Rabs is designed to build (or rebuild) a set of targets as necessary, by considering dependencies and changes to the contents / values of those dependencies.
 For a general overview of targets in Rabs, see here: :doc:`/targets`. 
