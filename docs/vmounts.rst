@@ -27,5 +27,5 @@ Resolving a file target to a path involves checking each possible resolution for
 
 .. note::
 
-   When using :mini:`subdir` with a virtual mount, the target path should be used, not the source, even though the :file:`build.rabs` file likely in the source directory. ``rabs`` will treat the target path as part of the project and only use the source directory for finding files, including the :file:`build.rabs` file.
+   When using :mini:`subdir` with a virtual mount, the target path should be used, not the source, even though the :file:`build.rabs` file in likely in the source directory. ``rabs`` will treat the target path as part of the project and only use the source directory for finding files, including the :file:`build.rabs` file.
 
