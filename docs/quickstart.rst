@@ -1,6 +1,45 @@
 Quickstart
 ==========
 
+Installation
+------------
+
+*Rabs* has been developed mainly on Linux, with some testing on Mac OS (using *Homebrew*) and FreeBSD and Android.
+
+Building from Source
+~~~~~~~~~~~~~~~~~~~~
+
+* Requirements
+   #. C compiler, mainly tested with *gcc*,
+   #. *make* (use *gmake* on FreeBSD),
+   #. Hans-Boehm garbage collector, available as libgc or similar in most  repositories.
+
+* Clone repository
+   .. code-block:: console
+   
+      $ git clone --recursive https://github.com/wrapl/rabs
+      $ cd rabs
+   
+* Make and install
+   .. code-block:: console
+   
+      $ make -j4
+      $ sudo make install PREFIX=/usr
+      
+* Test
+   .. code-block:: console
+   
+      $ rabs -V
+      2.22.1
+
+Install using Package
+~~~~~~~~~~~~~~~~~~~~~
+
+* From AUR (Arch Linux, Manjaro, etc): `AUR Link <https://aur.archlinux.org/packages/rabs/>`_
+* Homebrew (Mac OS): ``brew install wrapl/rabs/rabs``
+* FreeBSD ``pkg install rabs``
+
+
 Building a small C program
 --------------------------
 
