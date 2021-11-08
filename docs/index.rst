@@ -75,6 +75,7 @@ Rabs build scripts are written using `Minilang <https://minilang.readthedocs.io>
    
    /quickstart
    /tutorial
+   /usage
    /reference
 
 Indices and tables
