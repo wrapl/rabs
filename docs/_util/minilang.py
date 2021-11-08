@@ -24,9 +24,15 @@ class MinilangLexer(RegexLexer):
             (words((
                 "class", "method", "any", "type", "function", "number",
                 "integer", "real", "string", "stringbuffer", "list",
-                "map", "tuple", "regex", "array", "file", "boolean",
+                "map", "tuple", "regex", "array", "boolean",
                 "enum", "flags", "sequence"
 			), suffix = r'\b'), Name.Class),
+			(words((
+				"expr", "file", "subdir", "scope", "symbol", "include",
+				"vmount", "context", "execute", "shell", "execv", "shellv",
+				"mkdir", "chdir", "open", "print", "getenv", "setenv",
+				"target", "defined", "check", "meta"
+			), suffix = r'\b'), Name.Builtin),
             (r'-?[0-9]+(\.[0-9]*)?((e|E)-?[0-9]+)?', Number),
             (r'-?\.[0-9]+((e|E)-?[0-9]+)?', Number),
             ('\"', String, 'string'),
@@ -102,6 +108,7 @@ class MiniStyle(Style):
         Name.Attribute: '#5caf8f',
         Name.Function: '#df631c',
         Name.Class: '#ad00bc',
+        Name.Builtin: '#0da400',
         Comment: '#a0a1a7',
         String: '#c5a332',
         String.Escape: '#823ff1',

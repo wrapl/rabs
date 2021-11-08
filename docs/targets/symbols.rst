@@ -11,7 +11,7 @@ Symbol targets are created automatically whenever an undeclared identifier is us
 
 When symbols are used in any code, they are resolved in the current context. Thus the same symbol in the same function may resolve to different values depending on the current context when the function is called. This is used to have context specific flags or settings in general purpose build functions. See :doc:`/contexts` for an example.
 
-Using a symbol while building a target also adds that symbol as a dependency to that target. In some cases, it may be necessary to explicitly add a symbol as a dependency to a target even if it is not used within the target's build function. Since using a symbol in any code automatically resolves to the symbols value, the symbol name must be added as a string instead.
+Using a symbol while building a target also adds that symbol as a dependency to that target. In some cases, it may be necessary to explicitly add a symbol as a dependency to a target even if it is not used within the target's build function. Since using a symbol in any code automatically resolves to the symbol's value, the symbol name must be added as a string instead.
 
 .. code-block:: mini
 
