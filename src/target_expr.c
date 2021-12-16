@@ -30,7 +30,7 @@ ML_METHOD("append", MLStringBufferT, ExprTargetT) {
 	target_depends_auto((target_t *)Target);
 	target_queue((target_t *)Target, CurrentTarget);
 	target_wait((target_t *)Target, CurrentTarget);
-	return ml_stringbuffer_append(Buffer, Target->Value);
+	return ml_stringbuffer_simple_append(Buffer, Target->Value);
 }
 
 time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {

@@ -268,7 +268,7 @@ ML_FUNCTION(Include) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
 	size_t Length = Buffer->Length;
@@ -346,7 +346,7 @@ ML_METHOD("append", MLStringBufferT, MLMethodT) {
 //!internal
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	const char *Name = ml_method_name(Args[1]);
-	ml_stringbuffer_add(Buffer, Name, strlen(Name));
+	ml_stringbuffer_write(Buffer, Name, strlen(Name));
 	return MLSome;
 }
 
@@ -355,9 +355,9 @@ ML_METHOD("append", MLStringBufferT, MLListT) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	int Last = Buffer->Length;
 	ML_LIST_FOREACH(Args[1], Node) {
-		if (Buffer->Length > Last) ml_stringbuffer_add(Buffer, " ", 1);
+		if (Buffer->Length > Last) ml_stringbuffer_write(Buffer, " ", 1);
 		Last = Buffer->Length;
-		ml_stringbuffer_append(Buffer, Node->Value);
+		ml_stringbuffer_simple_append(Buffer, Node->Value);
 	}
 	return MLSome;
 }
@@ -367,13 +367,13 @@ ML_METHOD("append", MLStringBufferT, MLMapT) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	int Last = Buffer->Length;
 	ML_MAP_FOREACH(Args[1], Iter) {
-		if (Buffer->Length > Last) ml_stringbuffer_add(Buffer, " ", 1);
+		if (Buffer->Length > Last) ml_stringbuffer_write(Buffer, " ", 1);
 		Last = Buffer->Length;
-		ml_value_t *Result = ml_stringbuffer_append(Buffer, Iter->Key);
+		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Iter->Key);
 		if (ml_is_error(Result)) return Result;
 		if (Iter->Value != MLNil && Iter->Value != MLSome) {
-			ml_stringbuffer_add(Buffer, "=", 1);
-			Result = ml_stringbuffer_append(Buffer, Iter->Value);
+			ml_stringbuffer_write(Buffer, "=", 1);
+			Result = ml_stringbuffer_simple_append(Buffer, Iter->Value);
 			if (ml_is_error(Result)) return Result;
 		}
 	}
@@ -394,9 +394,9 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	int Last = Buffer->Length;
 	for (int I = 0; I < Count; ++I) {
-		if (Buffer->Length > Last) ml_stringbuffer_add(Buffer, " ", 1);
+		if (Buffer->Length > Last) ml_stringbuffer_write(Buffer, " ", 1);
 		Last = Buffer->Length;
-		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
 	const char *Command = ml_stringbuffer_get_string(Buffer);
@@ -541,11 +541,11 @@ ML_METHOD(ArgifyMethod, MLListT, MLMapT) {
 //!internal
 	ML_MAP_FOREACH(Args[1], Iter) {
 		ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-		ml_value_t *Result = ml_stringbuffer_append(Buffer, Iter->Key);
+		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Iter->Key);
 		if (ml_is_error(Result)) return Result;
 		if (Iter->Value != MLNil && Iter->Value != MLSome) {
-			ml_stringbuffer_add(Buffer, "=", 1);
-			Result = ml_stringbuffer_append(Buffer, Iter->Value);
+			ml_stringbuffer_write(Buffer, "=", 1);
+			Result = ml_stringbuffer_simple_append(Buffer, Iter->Value);
 			if (ml_is_error(Result)) return Result;
 		}
 		ml_list_append(Args[0], ml_stringbuffer_get_value(Buffer));
@@ -654,7 +654,7 @@ ML_FUNCTION(Shellv) {
 		ssize_t Size = read(Pipe[0], Chars, ML_STRINGBUFFER_NODE_SIZE);
 		if (Size <= 0) break;
 		//pthread_mutex_lock(GlobalLock);
-		if (Size > 0) ml_stringbuffer_add(Buffer, Chars, Size);
+		if (Size > 0) ml_stringbuffer_write(Buffer, Chars, Size);
 		//pthread_mutex_unlock(GlobalLock);
 	}
 	int Status;
@@ -685,7 +685,7 @@ ML_FUNCTION(Mkdir) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
 	char *Path = ml_stringbuffer_get_string(Buffer);
@@ -702,7 +702,7 @@ ML_FUNCTION(Chdir) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
 	}
 	if (CurrentDirectory) GC_free((void *)CurrentDirectory);
@@ -717,7 +717,7 @@ ML_FUNCTION(Open) {
 // Opens the file at path :mini:`Path` with the specified mode.
 	ML_CHECK_ARG_COUNT(2);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[0]);
+	ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[0]);
 	if (Result->Type == MLErrorT) return Result;
 	char *FileName = ml_stringbuffer_get_string(Buffer);
 	return ml_simple_inline((ml_value_t *)MLFileOpen, 2, ml_string(FileName, -1), Args[1]);
@@ -767,7 +767,7 @@ ML_FUNCTION(Print) {
 // Prints out :mini:`Values` to standard output.
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
 		if (ml_is_error(Result)) return Result;
 	}
 	ml_stringbuffer_foreach(Buffer, stdout, (void *)ml_stringbuffer_print);
@@ -898,8 +898,7 @@ int main(int Argc, char **Argv) {
 	SavedArgc = Argc;
 	SavedArgv = Argv;
 	GC_INIT();
-	ml_init();
-	ml_types_init(Globals);
+	ml_init(Globals);
 	ml_object_init(Globals);
 	ml_sequence_init(Globals);
 	ml_file_init(Globals);
