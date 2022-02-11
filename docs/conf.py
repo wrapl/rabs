@@ -24,8 +24,7 @@ class FoldersDirective(Directive):
 			indent = match.start()
 			node = nodes.list_item()
 			text = line[match.end():]
-			print(line[match.end():])
-			if indent <= indents[-1]:
+			while indent <= indents[-1]:
 				stack.pop()
 				indents.pop()
 			stack[-1].append(node)

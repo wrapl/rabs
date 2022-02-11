@@ -1,4 +1,4 @@
-rabs (2.23.2) UNRELEASED; urgency=medium
+rabs (2.24.0) UNRELEASED; urgency=medium
 
   * Updates.
   * Updates.
@@ -33,5 +33,6 @@ rabs (2.23.2) UNRELEASED; urgency=medium
   * Updates.
   * Updates.
   * Updates.
+  * Updates.
 
- -- Raja Mukherji <raja@localhost.localdomain>  Thu, 16 Dec 2021 08:40:33 +0000
+ -- Raja Mukherji <raja@localhost.localdomain>  Fri, 11 Feb 2022 09:27:25 +0000

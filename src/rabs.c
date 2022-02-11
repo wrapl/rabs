@@ -356,7 +356,7 @@ ML_METHOD("append", MLStringBufferT, MLListT) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	int Last = Buffer->Length;
 	ML_LIST_FOREACH(Args[1], Node) {
-		if (Buffer->Length > Last) ml_stringbuffer_write(Buffer, " ", 1);
+		if (Buffer->Length > Last) ml_stringbuffer_put(Buffer, ' ');
 		Last = Buffer->Length;
 		ml_stringbuffer_simple_append(Buffer, Node->Value);
 	}
@@ -368,12 +368,12 @@ ML_METHOD("append", MLStringBufferT, MLMapT) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
 	int Last = Buffer->Length;
 	ML_MAP_FOREACH(Args[1], Iter) {
-		if (Buffer->Length > Last) ml_stringbuffer_write(Buffer, " ", 1);
+		if (Buffer->Length > Last) ml_stringbuffer_put(Buffer, ' ');
 		Last = Buffer->Length;
 		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Iter->Key);
 		if (ml_is_error(Result)) return Result;
 		if (Iter->Value != MLNil && Iter->Value != MLSome) {
-			ml_stringbuffer_write(Buffer, "=", 1);
+			ml_stringbuffer_put(Buffer, '=');
 			Result = ml_stringbuffer_simple_append(Buffer, Iter->Value);
 			if (ml_is_error(Result)) return Result;
 		}
@@ -395,7 +395,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	int Last = Buffer->Length;
 	for (int I = 0; I < Count; ++I) {
-		if (Buffer->Length > Last) ml_stringbuffer_write(Buffer, " ", 1);
+		if (Buffer->Length > Last) ml_stringbuffer_put(Buffer, ' ');
 		Last = Buffer->Length;
 		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
 		if (Result->Type == MLErrorT) return Result;
@@ -545,7 +545,7 @@ ML_METHOD(ArgifyMethod, MLListT, MLMapT) {
 		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Iter->Key);
 		if (ml_is_error(Result)) return Result;
 		if (Iter->Value != MLNil && Iter->Value != MLSome) {
-			ml_stringbuffer_write(Buffer, "=", 1);
+			ml_stringbuffer_put(Buffer, '=');
 			Result = ml_stringbuffer_simple_append(Buffer, Iter->Value);
 			if (ml_is_error(Result)) return Result;
 		}
