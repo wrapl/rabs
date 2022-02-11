@@ -515,7 +515,7 @@ ML_METHOD("open", FileTargetT, MLStringT) {
 	if (!Handle) {
 		return ml_error("FileError", "error opening %s", FileName);
 	} else {
-		return ml_file_new(Handle);
+		return ml_file(Handle);
 	}
 }
 
