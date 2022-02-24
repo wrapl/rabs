@@ -171,7 +171,7 @@ ML_METHOD("in", ContextT, MLFunctionT) {
 }
 
 static int context_export_fn(const char *Name, void *Value, ml_value_t *Exports) {
-	ml_list_append(Exports, ml_cstring(Name));
+	ml_list_append(Exports, ml_string(Name, -1));
 	return 0;
 }
 
