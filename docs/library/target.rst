@@ -17,12 +17,12 @@ target
    Returns the set of dependencies of :mini:`Target`.
 
 
-:mini:`meth (Target: target):build(Function: any): target`
-   Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
-
-
 :mini:`meth (Target: target):build: function | nil`
    Returns the build function of :mini:`Target` if one has been set,  otherwise returns :mini:`nil`.
+
+
+:mini:`meth (Target: target):build(Function: any): target`
+   Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
 
 
 :mini:`meth (Target: target):depends: targetset`

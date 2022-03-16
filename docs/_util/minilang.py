@@ -23,7 +23,7 @@ class MinilangLexer(RegexLexer):
 				"class", "method", "any", "type", "function", "number",
 				"integer", "real", "address", "string", "buffer", "list",
 				"map", "tuple", "regex", "array", "boolean", "enum", "flags",
-				"sequence", "macro"
+				"sequence", "macro", "address", "true", "false"
 			), suffix = r'\b'), Name.Class),
 			(words((
 				"expr", "file", "subdir", "scope", "symbol", "include",
