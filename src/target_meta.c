@@ -14,8 +14,18 @@ struct target_meta_t {
 	const char *Name;
 };
 
-ML_TYPE(MetaTargetT, (TargetT), "meta-target");
+ML_FUNCTION(Meta) {
+//<Name:string
+//<BuildFn?
+//>meta
+// Returns a new meta target in the current context with name :mini:`Name`.
+	return target_meta_new(Data, Count, Args);
+}
+
+ML_TYPE(MetaT, (TargetT), "meta",
 // A meta target represents a target with no other properties other than a build function and dependencies.
+	.Constructor = (ml_value_t *)Meta
+);
 
 time_t target_meta_hash(target_meta_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
 	if (DependsLastUpdated == CurrentIteration) {
@@ -35,7 +45,7 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	asprintf(&Id, "meta:%s::%s", CurrentContext->Path, Name);
 	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
-		target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, R.Index, R.Slot);
+		target_meta_t *Target = target_new(target_meta_t, MetaT, Id, R.Index, R.Slot);
 		Target->Name = Name;
 	}
 	if (Count > 1) {
@@ -46,15 +56,8 @@ ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args) {
 	return (ml_value_t *)R.Slot[0];
 }
 
-ML_FUNCTION(Meta) {
-//<Name:string
-//>metatarget
-// Returns a new meta target in the current context with name :mini:`Name`.
-	return target_meta_new(Data, Count, Args);
-}
-
 target_t *target_meta_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
-	target_meta_t *Target = target_new(target_meta_t, MetaTargetT, Id, Index, Slot);
+	target_meta_t *Target = target_new(target_meta_t, MetaT, Id, Index, Slot);
 	const char *Name;
 	for (Name = Id + strlen(Id) - 1; --Name > Id + 8;) {
 		if (Name[0] == ':' && Name[1] == ':') break;

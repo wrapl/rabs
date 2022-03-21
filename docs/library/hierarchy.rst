@@ -13,12 +13,12 @@ hierarchy
       packMode="node";
       outputorder="edgesfirst";
       node [shape=box,fontsize=24];
-      "target":e -> "symbtarget":w;
+      "target":e -> "symbol":w;
       "sequence":e -> "targetset":w;
-      "target":e -> "scantarget":w;
-      "target":e -> "metatarget":w;
-      "target":e -> "filetarget":w;
-      "target":e -> "exprtarget":w;
+      "target":e -> "scan":w;
+      "target":e -> "meta":w;
+      "target":e -> "file":w;
+      "target":e -> "expr":w;
       "any":e -> "target":w;
       "any":e -> "context":w;
    }

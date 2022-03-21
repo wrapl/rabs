@@ -28,8 +28,9 @@ extern __thread build_thread_t *CurrentThread;
 extern __thread target_t *CurrentTarget;
 
 ml_value_t *rabs_global(const char *Name);
+ml_value_t *rabs_ml_global(void *Data, const char *Name);
 
-#define CURRENT_VERSION 2, 24, 3
+#define CURRENT_VERSION 2, 25, 0
 #define MINIMAL_VERSION 2, 10, 0
 
 #endif

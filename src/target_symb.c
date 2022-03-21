@@ -30,12 +30,22 @@ static void symb_target_call(ml_state_t *Caller, target_symb_t *Target, int Coun
 	return ml_call(Caller, Value, Count, Args);
 }
 
-ML_TYPE(SymbTargetT, (TargetT), "symb-target",
+ML_FUNCTION(Symbol) {
+//<Name:string
+//>symbol
+// Returns the symbol with name :mini:`Name`.
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	return rabs_ml_global(NULL, ml_string_value(Args[0]));
+}
+
+ML_TYPE(SymbolT, (TargetT), "symbol",
 // A symbol target represents a dynamically scoped binding.
 // They can be bound to any other value, and are considered changed if their bound value changes.
 	.deref = (void *)symb_target_deref,
 	.assign = (void *)symb_target_assign,
-	.call = (void *)symb_target_call
+	.call = (void *)symb_target_call,
+	.Constructor = (ml_value_t *)Symbol
 );
 
 time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
@@ -49,7 +59,7 @@ target_t *target_symb_new(context_t *Context, const char *Name) {
 	asprintf(&Id, "symb:%s/%s", Context->Name, Name);
 	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
-		target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, R.Index, R.Slot);
+		target_symb_t *Target = target_new(target_symb_t, SymbolT, Id, R.Index, R.Slot);
 		Target->Context = Context;
 		Target->Name = Name;
 	}
@@ -73,7 +83,7 @@ void target_symb_update(const char *Name) {
 }
 
 target_t *target_symb_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
-	target_symb_t *Target = target_new(target_symb_t, SymbTargetT, Id, Index, Slot);
+	target_symb_t *Target = target_new(target_symb_t, SymbolT, Id, Index, Slot);
 	const char *Name;
 	for (Name = Id + strlen(Id); --Name > Id + 5;) {
 		if (*Name == '/') break;

@@ -5,7 +5,7 @@ all: rabs/csv.so
 *.o: ../src/*.h ../minilang/src/*.h
 
 CFLAGS += -std=gnu11 -fstrict-aliasing -Wstrict-aliasing \
-	-I. -I../src -I../minilang/src -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -fpic
+	-I. -I../src -I../minilang/src -I../minilang/obj -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -fpic
 LDFLAGS += -export-dynamic -lm -ldl -lgc -lsqlite3
 
 ifdef DEBUG

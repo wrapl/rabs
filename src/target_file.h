@@ -6,7 +6,7 @@
 
 typedef struct target_file_t target_file_t;
 
-extern ml_type_t FileTargetT[];
+extern ml_type_t FileT[];
 
 void target_file_init();
 

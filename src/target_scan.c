@@ -17,9 +17,23 @@ struct target_scan_t {
 	targetset_t *Scans;
 };
 
-ML_TYPE(ScanTargetT, (TargetT), "scan-target");
+ML_FUNCTION(Scan) {
+//<Target
+//<Name
+//<BuildFn?
+//>scan
+// Returns a new scan target using :mini:`Target` as the base target.
+	ML_CHECK_ARG_COUNT(2);
+	ML_CHECK_ARG_TYPE(0, TargetT);
+	ML_CHECK_ARG_TYPE(1, MLStringT);
+	return target_scan_new(NULL, Count, Args);
+}
+
+ML_TYPE(ScanT, (TargetT), "scan",
 // A scan target is a dynamic set of targets derived from another base target.
 // The build function for a scan target must return a list of targets.
+	.Constructor = (ml_value_t *)Scan
+);
 
 static int depends_hash_fn(target_t *Depend, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	for (int I = 0; I < SHA256_BLOCK_SIZE; ++I) Hash[I] ^= Depend->Hash[I];
@@ -32,7 +46,7 @@ time_t target_scan_hash(target_scan_t *Target, time_t PreviousTime, unsigned cha
 	return 0;
 }
 
-ML_METHOD("source", ScanTargetT) {
+ML_METHOD("source", ScanT) {
 //<Target
 //>target
 // Returns the base target for the scan.
@@ -47,7 +61,7 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 	asprintf(&Id, "scan:%s::%s", Source->Id, Name);
 	target_index_slot R = targetcache_insert(Id);
 	if (!R.Slot[0]) {
-		target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, R.Index, R.Slot);
+		target_scan_t *Target = target_new(target_scan_t, ScanT, Id, R.Index, R.Slot);
 		Target->Source = Source;
 		Target->Name = Name;
 		targetset_insert(Target->Base.Depends, Source);
@@ -61,7 +75,7 @@ ml_value_t *target_scan_new(void *Data, int Count, ml_value_t **Args) {
 }
 
 target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Index, target_t **Slot) {
-	target_scan_t *Target = target_new(target_scan_t, ScanTargetT, Id, Index, Slot);
+	target_scan_t *Target = target_new(target_scan_t, ScanT, Id, Index, Slot);
 	const char *SourceIdStart = Id + 5, *Name;
 	for (Name = Id + strlen(Id) - 1; --Name > SourceIdStart;) {
 		if (Name[0] == ':' && Name[1] == ':') break;
@@ -79,7 +93,7 @@ target_t *target_scan_create(const char *Id, context_t *BuildContext, size_t Ind
 	return (target_t *)Target;
 }
 
-ML_METHOD("scans", ScanTargetT) {
+ML_METHOD("scans", ScanT) {
 //<Target
 //>targetset
 // Returns the results of the last scan.

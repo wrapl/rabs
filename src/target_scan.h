@@ -6,7 +6,7 @@
 
 typedef struct target_scan_t target_scan_t;
 
-extern ml_type_t ScanTargetT[];
+extern ml_type_t ScanT[];
 
 void target_scan_init();
 

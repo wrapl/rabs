@@ -105,12 +105,6 @@ general
    Mounts the directory :mini:`Source` onto :mini:`Path`. Resolving a file in :mini:`Path` will also check :mini:`Source`.
 
 
-.. _fun-symbol:
-
-:mini:`fun symbol(Name: string): symbol`
-   Returns the symbol with name :mini:`Name`.
-
-
 .. _fun-target:
 
 :mini:`fun target(Path: string): target | error`
