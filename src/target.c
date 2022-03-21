@@ -164,7 +164,7 @@ ML_METHOD("<<", TargetT, MLAnyT) {
 ML_METHOD("scan", TargetT, MLStringT) {
 //<Target
 //<Name
-//>scantarget
+//>scan
 // Returns a new scan target using :mini:`Target` as the base target.
 	return target_scan_new(NULL, Count, Args);
 }
@@ -301,17 +301,17 @@ void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE])
 }
 
 time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
-	if (Target->Type == FileTargetT) return target_file_hash((target_file_t *)Target, PreviousTime, PreviousHash);
-	if (Target->Type == MetaTargetT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash, DependsLastUpdated);
-	if (Target->Type == ScanTargetT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
-	if (Target->Type == SymbTargetT) return target_symb_hash((target_symb_t *)Target, PreviousTime, PreviousHash);
-	if (Target->Type == ExprTargetT) return target_expr_hash((target_expr_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == FileT) return target_file_hash((target_file_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == MetaT) return target_meta_hash((target_meta_t *)Target, PreviousTime, PreviousHash, DependsLastUpdated);
+	if (Target->Type == ScanT) return target_scan_hash((target_scan_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == SymbolT) return target_symb_hash((target_symb_t *)Target, PreviousTime, PreviousHash);
+	if (Target->Type == ExprT) return target_expr_hash((target_expr_t *)Target, PreviousTime, PreviousHash);
 	return 0;
 }
 
 static int target_missing(target_t *Target, int LastChecked) {
-	if (Target->Type == FileTargetT) return target_file_missing((target_file_t *)Target);
-	if (Target->Type == ExprTargetT) return target_expr_missing((target_expr_t *)Target);
+	if (Target->Type == FileT) return target_file_missing((target_file_t *)Target);
+	if (Target->Type == ExprT) return target_expr_missing((target_expr_t *)Target);
 	return 0;
 }
 
@@ -599,10 +599,10 @@ static void target_update(target_t *Target) {
 				}
 				exit(1);
 			}
-			if (Target->Type == ExprTargetT) {
+			if (Target->Type == ExprT) {
 				((target_expr_t *)Target)->Value = Result;
 				cache_expr_set(Target, Result);
-			} else if (Target->Type == ScanTargetT) {
+			} else if (Target->Type == ScanT) {
 				targetset_t Scans[1] = {TARGETSET_INIT};
 				if (Result->Type != MLListT) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
@@ -625,7 +625,7 @@ static void target_update(target_t *Target) {
 			CurrentTarget = OldTarget;
 		}
 	} else {
-		if (Target->Type == ScanTargetT) {
+		if (Target->Type == ScanT) {
 			targetset_t *Scans = cache_scan_get(Target);
 			if (DependencyGraph) {
 				targetset_foreach(Scans, Target, (void *)target_graph_scans);
@@ -655,7 +655,7 @@ static void target_update(target_t *Target) {
 	targetset_foreach(Target->Affects, Target, (void *)target_affect);
 
 #ifdef Linux
-	if (WatchMode && !Target->Build && Target->Type == FileTargetT) {
+	if (WatchMode && !Target->Build && Target->Type == FileT) {
 		target_file_watch((target_file_t *)Target);
 	}
 #endif

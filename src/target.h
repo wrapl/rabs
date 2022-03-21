@@ -46,9 +46,11 @@ void target_init();
 time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated);
 void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]);
 
-extern ml_cfunction_t File[];
-extern ml_cfunction_t Meta[];
-extern ml_cfunction_t Expr[];
+extern ml_type_t FileT[];
+extern ml_type_t MetaT[];
+extern ml_type_t ExprT[];
+extern ml_type_t SymbolT[];
+extern ml_type_t ScanT[];
 
 ml_value_t *target_dir_new(void *Data, int Count, ml_value_t **Args);
 ml_value_t *target_meta_new(void *Data, int Count, ml_value_t **Args);

@@ -37,7 +37,7 @@ target
    Returns the computed priority of :mini:`Target`.
 
 
-:mini:`meth (Target: target):scan(Name: string): scantarget`
+:mini:`meth (Target: target):scan(Name: string): scan`
    Returns a new scan target using :mini:`Target` as the base target.
 
 

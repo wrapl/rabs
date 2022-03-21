@@ -6,7 +6,7 @@
 
 typedef struct target_meta_t target_meta_t;
 
-extern ml_type_t MetaTargetT[];
+extern ml_type_t MetaT[];
 
 void target_meta_init();
 

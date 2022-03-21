@@ -89,7 +89,7 @@ ML_TYPE(RabsPropertyT, (MLAnyT), "property",
 	.call = (void *)rabs_property_call
 );
 
-static ml_value_t *rabs_ml_global(void *Data, const char *Name) {
+ml_value_t *rabs_ml_global(void *Data, const char *Name) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
 	ml_value_t **Slot = (ml_value_t **)stringmap_slot(Cache, Name);
 	if (!Slot[0]) {
@@ -241,15 +241,6 @@ ML_FUNCTION(Scope) {
 	ml_value_t *Result = ml_simple_call(Args[1], 0, NULL);
 	context_pop();
 	return Result;
-}
-
-ML_FUNCTION(Symbol) {
-//<Name:string
-//>symbol
-// Returns the symbol with name :mini:`Name`.
-	ML_CHECK_ARG_COUNT(1);
-	ML_CHECK_ARG_TYPE(0, MLStringT);
-	return rabs_ml_global(NULL, ml_string_value(Args[0]));
 }
 
 #if defined(Darwin)
@@ -907,11 +898,12 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "vmount", Vmount);
 	stringmap_insert(Globals, "subdir", Subdir);
 	stringmap_insert(Globals, "target", Target);
-	stringmap_insert(Globals, "file", File);
-	stringmap_insert(Globals, "meta", Meta);
-	stringmap_insert(Globals, "expr", Expr);
+	stringmap_insert(Globals, "file", FileT);
+	stringmap_insert(Globals, "meta", MetaT);
+	stringmap_insert(Globals, "expr", ExprT);
 	// TODO: add functions to register and create udf targets
-	stringmap_insert(Globals, "symbol", Symbol);
+	stringmap_insert(Globals, "symbol", SymbolT);
+	stringmap_insert(Globals, "scan", ScanT);
 	stringmap_insert(Globals, "include", Include);
 	stringmap_insert(Globals, "context", Context);
 	stringmap_insert(Globals, "execute", Execute);
@@ -928,6 +920,8 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "defined", Defined);
 	stringmap_insert(Globals, "check", Check);
 	stringmap_insert(Globals, "error", MLErrorValueT);
+	int Version[] = {CURRENT_VERSION};
+	stringmap_insert(Globals, "VERSION", ml_tuplev(3, ml_integer(Version[0]), ml_integer(Version[1]), ml_integer(Version[2])));
 	stringmap_insert(Globals, "LIBPATH", lib_path());
 #include "rabs_init.c"
 	target_init();
