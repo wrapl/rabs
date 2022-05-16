@@ -760,9 +760,8 @@ void target_interactive_start(int NumThreads) {
 	pthread_mutex_unlock(InterpreterLock);
 }
 
-void target_threads_wait(target_t *Target) {
+void target_threads_wait() {
 	--RunningThreads;
-	target_queue(Target, NULL);
 	pthread_mutex_unlock(InterpreterLock);
 	while (BuildThreads) {
 		pthread_join(BuildThreads->Handle, NULL);

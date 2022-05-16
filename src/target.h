@@ -64,7 +64,7 @@ target_t *target_load(const char *Id, size_t Index, target_t **Slot);
 void target_push(target_t *Target);
 target_t *target_file_check(const char *Path, int Absolute);
 void target_threads_start(int NumThreads);
-void target_threads_wait(target_t *Target);
+void target_threads_wait();
 void target_interactive_start(int NumThreads);
 
 int target_wait(target_t *Target, target_t *Waiter);

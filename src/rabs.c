@@ -885,6 +885,14 @@ static void restart(void) {
 	execv("/proc/self/exe", SavedArgv);
 }
 
+typedef struct target_arg_t target_arg_t;
+
+struct target_arg_t {
+	target_arg_t *Next;
+	const char *Name;
+	target_t *Target;
+};
+
 int main(int Argc, char **Argv) {
 	CurrentDirectory = "<random>";
 	SavedArgc = Argc;
@@ -933,7 +941,8 @@ int main(int Argc, char **Argv) {
 	Action->sa_handler = (void *)exit;
 	sigaction(SIGINT, Action, NULL);
 
-	const char *TargetName = NULL;
+
+	target_arg_t *TargetArgs = NULL;
 	int NumThreads = 1;
 	int InteractiveMode = 0;
 	for (int I = 1; I < Argc; ++I) {
@@ -1035,7 +1044,10 @@ int main(int Argc, char **Argv) {
 			}
 			}
 		} else {
-			TargetName = Argv[I];
+			target_arg_t *Arg = new(target_arg_t);
+			Arg->Name = Argv[I];
+			Arg->Next = TargetArgs;
+			TargetArgs = Arg;
 		}
 	}
 
@@ -1080,17 +1092,18 @@ int main(int Argc, char **Argv) {
 		}
 		exit(1);
 	}
-	target_t *Target;
-	if (TargetName) {
-		int HasPrefix = !strncmp(TargetName, "meta:", strlen("meta:"));
-		HasPrefix |= !strncmp(TargetName, "file:", strlen("file:"));
-		if (!HasPrefix) {
-			TargetName = concat("meta:", match_prefix(Path, RootPath), "::", TargetName, NULL);
-		}
-		Target = target_find(TargetName);
-		if (!Target) {
-			printf("\e[31mError: target not defined: %s\e[0m\n", TargetName);
-			exit(1);
+	if (TargetArgs) {
+		for (target_arg_t *Arg = TargetArgs; Arg; Arg = Arg->Next) {
+			int HasPrefix = !strncmp(Arg->Name, "meta:", strlen("meta:"));
+			HasPrefix |= !strncmp(Arg->Name, "file:", strlen("file:"));
+			if (!HasPrefix) {
+				Arg->Name = concat("meta:", match_prefix(Path, RootPath), "::", Arg->Name, NULL);
+			}
+			Arg->Target = target_find(Arg->Name);
+			if (!Arg->Target) {
+				printf("\e[31mError: target not defined: %s\e[0m\n", Arg->Name);
+				exit(1);
+			}
 		}
 	} else {
 		context_t *Context = context_find(match_prefix(Path, RootPath));
@@ -1098,9 +1111,14 @@ int main(int Argc, char **Argv) {
 			printf("\e[31mError: current directory is not in project\e[0m");
 			exit(1);
 		}
-		Target = Context->Default;
+		target_arg_t *Arg = new(target_arg_t);
+		Arg->Target = Context->Default;
+		TargetArgs = Arg;
 	}
-	target_threads_wait(Target);
+	for (target_arg_t *Arg = TargetArgs; Arg; Arg = Arg->Next) {
+		target_queue(Arg->Target, NULL);
+	}
+	target_threads_wait();
 	if (DependencyGraph) {
 		fprintf(DependencyGraph, "}");
 		fclose(DependencyGraph);
