@@ -64,7 +64,7 @@ obj/%.o: src/%.c | obj $(libraries) src/*.h
 CFLAGS += \
 	-std=gnu11 -foptimize-sibling-calls \
 	-fstrict-aliasing -Wstrict-aliasing -Wall \
-	-Iobj -Isrc -Iradb -Iminilang/src -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
+	-Iobj -Isrc -Iradb -Iminilang/src -Iminilang/obj -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
 LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread
 
 ifeq ($(MACHINE), i686)
