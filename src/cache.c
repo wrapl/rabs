@@ -407,5 +407,5 @@ const char *cache_target_index_to_id(size_t Index) {
 }
 
 size_t cache_target_count() {
-	return string_index_count(TargetsIndex);
+	return string_index_num_entries(TargetsIndex);
 }
