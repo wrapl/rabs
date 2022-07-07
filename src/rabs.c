@@ -191,14 +191,16 @@ static ml_value_t *load_file(const char *FileName) {
 	preprocessor_t Preprocessor[1] = {{Node, NULL,}};
 	Preprocessor->Parser = ml_parser((void *)preprocessor_read, Preprocessor);
 	Preprocessor->Compiler = ml_compiler((ml_getter_t)rabs_ml_global, NULL);
-	ml_parser_source(Preprocessor->Parser, (ml_source_t){FileName, 0});
+	ml_parser_source(Preprocessor->Parser, (ml_source_t){FileName, 1});
 
 	load_file_state_t State[1];
 	State->Base.run = (void *)load_file_loaded;
 	State->Base.Context = &MLRootContext;
 	State->Result = MLNil;
 	mlc_expr_t *Expr = ml_accept_file(Preprocessor->Parser);
-	if (!Expr) return ml_error("FileError", "Error loading file %s", FileName);
+	if (!Expr) {
+		return ml_parser_value(Preprocessor->Parser) ?: ml_error("FileError", "Error loading file %s", FileName);
+	}
 	ml_function_compile((ml_state_t *)State, Expr, Preprocessor->Compiler, NULL);
 	return State->Result;
 }
