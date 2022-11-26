@@ -24,7 +24,8 @@ radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 
 obj/%_init.c: src/%.c | obj src/*.h 
 	echo "" > $@
-	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > $@
+	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > $@.tmp
+	mv $@.tmp $@
 
 obj/rabs.o: obj/rabs_init.c
 obj/context.o: obj/context_init.c

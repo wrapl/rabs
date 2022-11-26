@@ -7,6 +7,8 @@
 general
 =======
 
+.. rst-class:: mini-api
+
 .. _fun-chdir:
 
 :mini:`fun chdir(Path..: any): nil`

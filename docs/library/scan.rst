@@ -7,6 +7,8 @@
 scan
 ====
 
+.. rst-class:: mini-api
+
 .. _type-scan:
 
 :mini:`type scan < target`

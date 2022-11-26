@@ -7,6 +7,8 @@
 targetset
 =========
 
+.. rst-class:: mini-api
+
 .. _type-targetset:
 
 :mini:`type targetset < sequence`

@@ -102,7 +102,7 @@ target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, size_t Index, 
 }
 
 static int target_depends_single(ml_value_t *Arg, target_t *Target) {
-	if (Arg->Type == MLListT) {
+	if (ml_is(Arg, MLListT)) {
 		return ml_list_foreach(Arg, Target, (void *)target_depends_single);
 	} else if (Arg->Type == MLStringT) {
 		target_t *Depend = target_symb_new(CurrentContext, ml_string_value(Arg));
@@ -143,7 +143,10 @@ ML_METHODV("[]", TargetT, MLAnyT) {
 	}
 	for (int I = 1; I < Count; ++I) {
 		int Error = target_depends_single(Args[I], Target);
-		if (Error) return ml_error("TypeError", "Invalid value in dependency list");
+		if (Error) {
+			asm("int3");
+			return ml_error("TypeError", "Invalid value in dependency list");
+		}
 	}
 	return Args[0];
 }
@@ -243,61 +246,71 @@ ML_METHOD("priority", TargetT) {
 	return ml_integer(Target->QueuePriority);
 }
 
-static int list_update_hash(ml_value_t *Value, SHA256_CTX *Ctx) {
-	unsigned char ChildHash[SHA256_BLOCK_SIZE];
-	target_value_hash(Value, ChildHash);
-	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-	return 0;
-}
-
-static int map_update_hash(ml_value_t *Key, ml_value_t *Value, SHA256_CTX *Ctx) {
-	unsigned char ChildHash[SHA256_BLOCK_SIZE];
-	target_value_hash(Key, ChildHash);
-	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-	target_value_hash(Value, ChildHash);
-	sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-	return 0;
-}
-
 void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	if (Value->Type == MLNilT) {
-		memset(Hash, -1, SHA256_BLOCK_SIZE);
-	} else if (Value->Type == MLIntegerT) {
-		memset(Hash, 0, SHA256_BLOCK_SIZE);
-		*(long *)Hash = ml_integer_value(Value);
-		Hash[SHA256_BLOCK_SIZE - 1] = 1;
-	} else if (Value->Type == MLRealT) {
-		memset(Hash, 0, SHA256_BLOCK_SIZE);
-		*(double *)Hash = ml_real_value(Value);
-		Hash[SHA256_BLOCK_SIZE - 1] = 1;
-	} else if (Value->Type == MLStringT) {
-		const char *String = ml_string_value(Value);
-		size_t Len = ml_string_length(Value);
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		sha256_update(Ctx, (unsigned char *)String, Len);
-		sha256_final(Ctx, Hash);
-	} else if (Value->Type == MLListT) {
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		ml_list_foreach(Value, Ctx, (void *)list_update_hash);
-		sha256_final(Ctx, Hash);
-	} else if (Value->Type == MLMapT) {
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		ml_map_foreach(Value, Ctx, (void *)map_update_hash);
-		sha256_final(Ctx, Hash);
-	} else if (Value->Type == MLClosureT) {
-		ml_closure_sha256(Value, Hash);
-	} else if (ml_is(Value, TargetT)) {
-		target_t *Target = (target_t *)Value;
-		SHA256_CTX Ctx[1];
-		sha256_init(Ctx);
-		sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
-		sha256_final(Ctx, Hash);
-	} else {
-		memset(Hash, -1, SHA256_BLOCK_SIZE);
+	typeof(target_value_hash) *function = ml_typed_fn_get(ml_typeof(Value), target_value_hash);
+	if (function) return function(Value, Hash);
+	memset(Hash, -1, SHA256_BLOCK_SIZE);
+}
+
+void ML_TYPED_FN(target_value_hash, MLNilT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	memset(Hash, -1, SHA256_BLOCK_SIZE);
+}
+
+void ML_TYPED_FN(target_value_hash, MLIntegerT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	memset(Hash, 0, SHA256_BLOCK_SIZE);
+	*(long *)Hash = ml_integer_value(Value);
+	Hash[SHA256_BLOCK_SIZE - 1] = 1;
+}
+
+void ML_TYPED_FN(target_value_hash, MLRealT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	memset(Hash, 0, SHA256_BLOCK_SIZE);
+	*(double *)Hash = ml_real_value(Value);
+	Hash[SHA256_BLOCK_SIZE - 1] = 1;
+}
+
+void ML_TYPED_FN(target_value_hash, MLStringT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	const char *String = ml_string_value(Value);
+	size_t Len = ml_string_length(Value);
+	SHA256_CTX Ctx[1];
+	sha256_init(Ctx);
+	sha256_update(Ctx, (unsigned char *)String, Len);
+	sha256_final(Ctx, Hash);
+}
+
+void ML_TYPED_FN(target_value_hash, MLListT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	SHA256_CTX Ctx[1];
+	sha256_init(Ctx);
+	ML_LIST_FOREACH(Value, Iter) {
+		unsigned char ChildHash[SHA256_BLOCK_SIZE];
+		target_value_hash(Iter->Value, ChildHash);
+		sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
 	}
+	sha256_final(Ctx, Hash);
+}
+
+void ML_TYPED_FN(target_value_hash, MLMapT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	SHA256_CTX Ctx[1];
+	sha256_init(Ctx);
+	ML_MAP_FOREACH(Value, Iter) {
+		unsigned char ChildHash[SHA256_BLOCK_SIZE];
+		target_value_hash(Iter->Key, ChildHash);
+		sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+		target_value_hash(Iter->Value, ChildHash);
+		sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
+	}
+	sha256_final(Ctx, Hash);
+}
+
+void ML_TYPED_FN(target_value_hash, MLClosureT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	ml_closure_sha256(Value, Hash);
+}
+
+void ML_TYPED_FN(target_value_hash, TargetT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	target_t *Target = (target_t *)Value;
+	SHA256_CTX Ctx[1];
+	sha256_init(Ctx);
+	sha256_update(Ctx, (unsigned char *)Target->Id, strlen(Target->Id));
+	sha256_final(Ctx, Hash);
 }
 
 time_t target_hash(target_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE], int DependsLastUpdated) {
@@ -421,7 +434,7 @@ static void target_rebuild(target_t *Target) {
 		CurrentTarget = Target;
 		CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
 		ml_value_t *Result = ml_simple_inline(Target->Build, 1, Target);
-		if (Result->Type == MLErrorT) {
+		if (ml_is_error(Result)) {
 			fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 			ml_source_t Source;
 			int Level = 0;
@@ -512,9 +525,9 @@ void display_progress(void) {
 }
 
 static int build_scan_target_list(ml_value_t *Depend, targetset_t *Scans) {
-	if (Depend->Type == MLListT) {
+	if (ml_is(Depend, MLListT)) {
 		ml_list_foreach(Depend, Scans, (void *)build_scan_target_list);
-	} else if (ml_is((ml_value_t *)Depend, TargetT)) {
+	} else if (ml_is(Depend, TargetT)) {
 		targetset_insert(Scans, (target_t *)Depend);
 	}
 	return 0;
@@ -529,7 +542,7 @@ static void target_update(target_t *Target) {
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
 	unsigned char BuildHash[SHA256_BLOCK_SIZE];
-	if (Target->Build && Target->Build->Type == MLClosureT) {
+	if (Target->Build && ml_is(Target->Build, MLClosureT)) {
 		ml_closure_sha256(Target->Build, BuildHash);
 		int I = 0;
 		for (const unsigned char *P = (unsigned char *)Target->BuildContext->Path; *P; ++P) {
@@ -590,7 +603,7 @@ static void target_update(target_t *Target) {
 			CurrentTarget = Target;
 			CurrentDirectory = CurrentContext ? CurrentContext->FullPath : RootPath;
 			ml_value_t *Result = ml_simple_inline(Target->Build, 1, Target);
-			if (Result->Type == MLErrorT) {
+			if (ml_is_error(Result)) {
 				fprintf(stderr, "\e[31mError: %s: %s\n\e[0m", Target->Id, ml_error_message(Result));
 				ml_source_t Source;
 				int Level = 0;
@@ -604,7 +617,7 @@ static void target_update(target_t *Target) {
 				cache_expr_set(Target, Result);
 			} else if (Target->Type == ScanT) {
 				targetset_t Scans[1] = {TARGETSET_INIT};
-				if (Result->Type != MLListT) {
+				if (!ml_is(Result, MLListT)) {
 					fprintf(stderr, "\e[31mError: %s: scan results must be a list of targets\n\e[0m", Target->Id);
 					exit(1);
 				}

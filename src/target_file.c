@@ -262,7 +262,7 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 				}
 				if (Ls->FilterFn) {
 					ml_value_t *Result = ml_simple_inline(Ls->FilterFn, 1, File);
-					if (Result->Type == MLErrorT) {
+					if (ml_is_error(Result)) {
 						Ls->Results = Result;
 						return 1;
 					} else if (Result != MLNil) {
@@ -502,7 +502,7 @@ ML_METHOD("%", FileT, MLStringT) {
 ML_METHOD("open", FileT, MLStringT) {
 //<Target
 //<Mode
-//>file
+//>stream
 // Opens the file at :mini:`Target` with mode :mini:`Mode`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	const char *Mode = ml_string_value(Args[1]);

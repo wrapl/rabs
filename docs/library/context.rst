@@ -7,10 +7,16 @@
 context
 =======
 
+.. rst-class:: mini-api
+
 .. _type-context:
 
 :mini:`type context < any`
    A build context.
+
+
+:mini:`meth (Context: context) :: (Name: string): symbol`
+   Returns the symbol :mini:`Name` resolved in :mini:`Context`.
 
 
 :mini:`meth (Context: context) . (Name: string): symbol`
@@ -21,8 +27,8 @@ context
    Returns the directory-based subcontext of :mini:`Context` named :mini:`Name`,  or :mini:`nil` if no such context has been defined.
 
 
-:mini:`meth (Context: context) :: (Name: string): symbol`
-   Returns the symbol :mini:`Name` resolved in :mini:`Context`.
+:mini:`meth (Context: context) @ (Name: string): context | nil`
+   Returns the scope-based subcontext of :mini:`Context` named :mini:`Name`,  or :mini:`nil` if no such context has been defined.
 
 
 :mini:`meth (Context: context):exports: list`
@@ -43,9 +49,5 @@ context
 
 :mini:`meth (Context: context):path: string`
    Returns the path of :mini:`Context`.
-
-
-:mini:`meth (Context: context) @ (Name: string): context | nil`
-   Returns the scope-based subcontext of :mini:`Context` named :mini:`Name`,  or :mini:`nil` if no such context has been defined.
 
 
