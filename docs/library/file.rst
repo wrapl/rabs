@@ -7,6 +7,8 @@
 file
 ====
 
+.. rst-class:: mini-api
+
 .. _type-file:
 
 :mini:`type file < target`
@@ -72,7 +74,7 @@ file
    Creates the all directories in the path of :mini:`Directory`. Returns :mini:`Directory`.
 
 
-:mini:`meth (Target: file):open(Mode: string): file`
+:mini:`meth (Target: file):open(Mode: string): stream`
    Opens the file at :mini:`Target` with mode :mini:`Mode`.
 
 

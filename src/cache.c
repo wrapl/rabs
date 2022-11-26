@@ -262,14 +262,8 @@ static int cache_expr_value_size(ml_value_t *Value) {
 #define CACHE_EXPR_TARGET		6
 
 static char *cache_expr_value_write(ml_value_t *Value, char *Buffer) {
-	if (Value->Type == MLStringT) {
-		int Length = ml_string_length(Value);
-		*Buffer++ = CACHE_EXPR_STRING;
-		*(int32_t *)Buffer = Length;
-		Buffer += 4;
-		memcpy(Buffer, ml_string_value(Value), Length);
-		Buffer[Length] = 0;
-		Buffer += Length + 1;
+	if (Value == MLNil) {
+		*Buffer++ = CACHE_EXPR_NIL;
 	} else if (Value->Type == MLIntegerT) {
 		*Buffer++ = CACHE_EXPR_INTEGER;
 		*(int64_t *)Buffer = ml_integer_value(Value);
@@ -278,8 +272,14 @@ static char *cache_expr_value_write(ml_value_t *Value, char *Buffer) {
 		*Buffer++ = CACHE_EXPR_REAL;
 		*(double *)Buffer = ml_real_value(Value);
 		Buffer += 8;
-	} else if (Value == MLNil) {
-		*Buffer++ = CACHE_EXPR_NIL;
+	} else if (Value->Type == MLStringT) {
+		int Length = ml_string_length(Value);
+		*Buffer++ = CACHE_EXPR_STRING;
+		*(int32_t *)Buffer = Length;
+		Buffer += 4;
+		memcpy(Buffer, ml_string_value(Value), Length);
+		Buffer[Length] = 0;
+		Buffer += Length + 1;
 	} else if (Value->Type == MLListT) {
 		*Buffer++ = CACHE_EXPR_LIST;
 		*(int32_t *)Buffer = ml_list_length(Value);
@@ -312,6 +312,14 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 		*Output = MLNil;
 		return Buffer;
 	}
+	case CACHE_EXPR_INTEGER: {
+		*Output = ml_integer(*(int64_t *)Buffer);
+		return Buffer + 8;
+	}
+	case CACHE_EXPR_REAL: {
+		*Output = ml_real(*(double *)Buffer);
+		return Buffer + 8;
+	}
 	case CACHE_EXPR_STRING: {
 		int Length = *(int32_t *)Buffer;
 		Buffer += 4;
@@ -320,14 +328,6 @@ static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output
 		Chars[Length] = 0;
 		*Output = ml_string(Chars, Length);
 		return Buffer + Length + 1;
-	}
-	case CACHE_EXPR_INTEGER: {
-		*Output = ml_integer(*(int64_t *)Buffer);
-		return Buffer + 8;
-	}
-	case CACHE_EXPR_REAL: {
-		*Output = ml_real(*(double *)Buffer);
-		return Buffer + 8;
 	}
 	case CACHE_EXPR_LIST: {
 		int Length = *(int32_t *)Buffer;

@@ -7,6 +7,8 @@
 meta
 ====
 
+.. rst-class:: mini-api
+
 .. _type-meta:
 
 :mini:`type meta < target`

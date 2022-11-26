@@ -224,7 +224,7 @@ ML_FUNCTION(Subdir) {
 	if (Count < 2 || Args[1] != MLNil) targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	ml_value_t *Result = load_file(FileName);
 	context_pop();
-	if (Result->Type == MLErrorT) {
+	if (ml_is_error(Result)) {
 		return Result;
 	} else {
 		return (ml_value_t *)Context;
@@ -263,7 +263,7 @@ ML_FUNCTION(Include) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
-		if (Result->Type == MLErrorT) return Result;
+		if (ml_is_error(Result)) return Result;
 	}
 	size_t Length = Buffer->Length;
 	char *FileName0 = GC_MALLOC_ATOMIC(Length + MAX_EXTENSION);
@@ -391,7 +391,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 		if (Buffer->Length > Last) ml_stringbuffer_put(Buffer, ' ');
 		Last = Buffer->Length;
 		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
-		if (Result->Type == MLErrorT) return Result;
+		if (ml_is_error(Result)) return Result;
 	}
 	const char *Command = ml_stringbuffer_get_string(Buffer);
 	if (EchoCommands) printf("\e[34m%s: %s\e[0m\n", CurrentDirectory, Command);
@@ -562,7 +562,7 @@ ML_FUNCTION(Execv) {
 	ml_value_t *ArgList = ml_list();
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = ml_simple_inline(ArgifyMethod, 2, ArgList, Args[I]);
-		if (Result->Type == MLErrorT) return Result;
+		if (ml_is_error(Result)) return Result;
 	}
 	int Argc = ml_list_length(ArgList);
 	const char *Argv[Argc + 1];
@@ -614,7 +614,7 @@ ML_FUNCTION(Shellv) {
 	ml_value_t *ArgList = ml_list();
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = ml_simple_inline(ArgifyMethod, 2, ArgList, Args[I]);
-		if (Result->Type == MLErrorT) return Result;
+		if (ml_is_error(Result)) return Result;
 	}
 	int Argc = ml_list_length(ArgList);
 	const char *Argv[Argc + 1];
@@ -680,7 +680,7 @@ ML_FUNCTION(Mkdir) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
-		if (Result->Type == MLErrorT) return Result;
+		if (ml_is_error(Result)) return Result;
 	}
 	char *Path = ml_stringbuffer_get_string(Buffer);
 	if (mkdir_p(Path) < 0) {
@@ -697,7 +697,7 @@ ML_FUNCTION(Chdir) {
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
 		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
-		if (Result->Type == MLErrorT) return Result;
+		if (ml_is_error(Result)) return Result;
 	}
 	if (CurrentDirectory) GC_free((void *)CurrentDirectory);
 	CurrentDirectory = ml_stringbuffer_get_uncollectable(Buffer);
@@ -712,7 +712,7 @@ ML_FUNCTION(Open) {
 	ML_CHECK_ARG_COUNT(2);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[0]);
-	if (Result->Type == MLErrorT) return Result;
+	if (ml_is_error(Result)) return Result;
 	char *FileName = ml_stringbuffer_get_string(Buffer);
 	return ml_simple_inline((ml_value_t *)MLFileOpen, 2, ml_string(FileName, -1), Args[1]);
 }
@@ -827,11 +827,11 @@ ML_FUNCTION(Defined) {
 }
 
 static int target_depends_auto_single(ml_value_t *Arg, void *Data) {
-	if (Arg->Type == MLListT) {
+	if (ml_is(Arg, MLListT)) {
 		ML_LIST_FOREACH(Arg, Iter) {
 			if (target_depends_auto_single(Iter->Value, NULL)) return 1;
 		}
-	} else if (Arg->Type == MLStringT) {
+	} else if (ml_is(Arg, MLStringT)) {
 		target_t *Depend = target_symb_new(CurrentContext, ml_string_value(Arg));
 		target_depends_auto(Depend);
 		return 0;
@@ -1085,7 +1085,7 @@ int main(int Argc, char **Argv) {
 	if (!InteractiveMode) target_threads_start(NumThreads);
 
 	ml_value_t *Result = load_file(concat(RootPath, "/", SystemName, NULL));
-	if (Result->Type == MLErrorT) {
+	if (ml_is_error(Result)) {
 		printf("\e[31mError: %s\n\e[0m", ml_error_message(Result));
 		ml_source_t Source;
 		int Level = 0;
