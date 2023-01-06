@@ -12,7 +12,7 @@
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 
 static string_store_t *MetadataStore;
-static string_index_t *TargetsIndex;
+static string_index2_t *TargetsIndex;
 static fixed_store_t *DetailsStore;
 static string_store_t *DependsStore;
 static string_store_t *ScansStore;
@@ -41,7 +41,7 @@ void cache_open(const char *RootPath) {
 	if (stat(CacheFileName, Stat)) {
 		mkdir(CacheFileName, 0777);
 		MetadataStore = string_store_create(concat(CacheFileName, "/metadata", NULL), 16, 0);
-		TargetsIndex = string_index_create(concat(CacheFileName, "/targets", NULL), 32, 4096);
+		TargetsIndex = string_index2_create(concat(CacheFileName, "/targets", NULL), 32, 4096);
 		DetailsStore = fixed_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_details_t), 1024);
 		DependsStore = string_store_create(concat(CacheFileName, "/depends", NULL), 32, 4096);
 		ScansStore = string_store_create(concat(CacheFileName, "/scans", NULL), 128, 524288);
@@ -71,7 +71,7 @@ void cache_open(const char *RootPath) {
 				}
 			}
 		}
-		TargetsIndex = string_index_open(concat(CacheFileName, "/targets", NULL));
+		TargetsIndex = string_index2_open(concat(CacheFileName, "/targets", NULL));
 		DetailsStore = fixed_store_open(concat(CacheFileName, "/details", NULL));
 		DependsStore = string_store_open(concat(CacheFileName, "/depends", NULL));
 		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL));
@@ -100,7 +100,7 @@ void cache_open(const char *RootPath) {
 
 void cache_close() {
 	string_store_close(MetadataStore);
-	string_index_close(TargetsIndex);
+	string_index2_close(TargetsIndex);
 	fixed_store_close(DetailsStore);
 	string_store_close(DependsStore);
 	string_store_close(ScansStore);
@@ -386,7 +386,7 @@ void cache_expr_set(target_t *Target, ml_value_t *Value) {
 }
 
 size_t cache_target_id_to_index(const char *Id) {
-	string_index_result_t Result = string_index_insert2(TargetsIndex, Id, 0);
+	index_result_t Result = string_index2_insert2(TargetsIndex, Id, 0);
 	if (Result.Created) {
 		cache_details_t *Details = fixed_store_get(DetailsStore, Result.Index);
 		memset(Details, 0, sizeof(cache_details_t));
@@ -395,17 +395,17 @@ size_t cache_target_id_to_index(const char *Id) {
 }
 
 size_t cache_target_id_to_index_existing(const char *Id) {
-	return string_index_search(TargetsIndex, Id, 0);
+	return string_index2_search(TargetsIndex, Id, 0);
 }
 
 const char *cache_target_index_to_id(size_t Index) {
-	size_t Size = string_index_size(TargetsIndex, Index);
+	size_t Size = string_index2_size(TargetsIndex, Index);
 	char *Id = GC_MALLOC_ATOMIC(Size + 1);
-	string_index_get(TargetsIndex, Index, Id, Size);
+	string_index2_get(TargetsIndex, Index, Id, Size);
 	Id[Size] = 0;
 	return Id;
 }
 
 size_t cache_target_count() {
-	return string_index_num_entries(TargetsIndex);
+	return string_index2_num_entries(TargetsIndex);
 }
