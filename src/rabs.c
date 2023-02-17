@@ -89,7 +89,7 @@ ML_TYPE(RabsPropertyT, (MLAnyT), "property",
 	.call = (void *)rabs_property_call
 );
 
-ml_value_t *rabs_ml_global(void *Data, const char *Name, const char *Source, int Line) {
+ml_value_t *rabs_ml_global(void *Data, const char *Name, const char *Source, int Line, int Mode) {
 	static stringmap_t Cache[1] = {STRINGMAP_INIT};
 	ml_value_t **Slot = (ml_value_t **)stringmap_slot(Cache, Name);
 	if (!Slot[0]) {
