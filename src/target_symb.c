@@ -36,7 +36,7 @@ ML_FUNCTION(Symbol) {
 // Returns the symbol with name :mini:`Name`.
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
-	return rabs_ml_global(NULL, ml_string_value(Args[0]), "", 0);
+	return rabs_ml_global(NULL, ml_string_value(Args[0]), "", 0, 0);
 }
 
 ML_TYPE(SymbolT, (TargetT), "symbol",
