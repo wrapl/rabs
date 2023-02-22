@@ -242,23 +242,23 @@ struct target_file_ls_t {
 	int Recursive;
 };
 
-static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
-	DIR *Dir = opendir(Path);
+static int target_file_ls_fn(target_file_ls_t *Ls, const char *Base) {
+	DIR *Dir = opendir(Base);
 	if (!Dir) {
-		Ls->Results = ml_error("DirError", "failed to open directory %s", Path);
+		Ls->Results = ml_error("DirError", "failed to open directory %s", Base);
 		return 1;
 	}
 	struct dirent *Entry = readdir(Dir);
 	while (Entry) {
 		if (strcmp(Entry->d_name, ".") && strcmp(Entry->d_name, "..")) {
 			if (!(Ls->Regex && ml_regex_match(Ls->Regex, Entry->d_name, strlen(Entry->d_name)))) {
-				const char *Absolute = concat(Path, "/", Entry->d_name, NULL);
-				const char *Relative = match_prefix(Absolute, RootPath);
+				const char *Path = vfs_unsolve(concat(Base, "/", Entry->d_name, NULL));
+				const char *Relative = match_prefix(Path, RootPath);
 				target_t *File;
 				if (Relative) {
 					File = target_file_check(Relative + 1, 0);
 				} else {
-					File = target_file_check(Absolute, 1);
+					File = target_file_check(Path, 1);
 				}
 				if (Ls->FilterFn) {
 					ml_value_t *Result = ml_simple_inline(Ls->FilterFn, 1, File);
@@ -273,7 +273,7 @@ static int target_file_ls_fn(target_file_ls_t *Ls, const char *Path) {
 				}
 			}
 			if (Ls->Recursive && (Entry->d_type == DT_DIR)) {
-				const char *Subdir = concat(Path, "/", Entry->d_name, NULL);
+				const char *Subdir = concat(Base, "/", Entry->d_name, NULL);
 				target_file_ls_fn(Ls, Subdir);
 			}
 		}
@@ -660,6 +660,22 @@ ML_METHOD("path", FileT) {
 // Returns the internal (possibly unresolved and relative to project root) path of :mini:`Target`.
 	target_file_t *Target = (target_file_t *)Args[0];
 	return ml_string(Target->Path, -1);
+}
+
+ML_METHOD("absolute", FileT) {
+//<Target
+//>target|nil
+// Returns :mini:`Target` if is has an absolute path, otherwise returns :mini:`nil`.
+	target_file_t *Target = (target_file_t *)Args[0];
+	return Target->Absolute ? (ml_value_t *)Target : MLNil;
+}
+
+ML_METHOD("relative", FileT) {
+//<Target
+//>target|nil
+// Returns :mini:`Target` if is has a relative path, otherwise returns :mini:`nil`.
+	target_file_t *Target = (target_file_t *)Args[0];
+	return Target->Absolute ? MLNil : (ml_value_t *)Target;
 }
 
 #define target_file_methods_is(TYPE) \
