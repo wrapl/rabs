@@ -143,10 +143,7 @@ ML_METHODV("[]", TargetT, MLAnyT) {
 	}
 	for (int I = 1; I < Count; ++I) {
 		int Error = target_depends_single(Args[I], Target);
-		if (Error) {
-			asm("int3");
-			return ml_error("TypeError", "Invalid value in dependency list");
-		}
+		if (Error) return ml_error("TypeError", "Invalid value in dependency list");
 	}
 	return Args[0];
 }
