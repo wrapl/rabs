@@ -710,11 +710,15 @@ ML_FUNCTION(Open) {
 //>file
 // Opens the file at path :mini:`Path` with the specified mode.
 	ML_CHECK_ARG_COUNT(2);
+	ML_CHECK_ARG_TYPE(1, MLStringT);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[0]);
 	if (ml_is_error(Result)) return Result;
-	char *FileName = ml_stringbuffer_get_string(Buffer);
-	return ml_simple_inline((ml_value_t *)MLFileOpen, 2, ml_string(FileName, -1), Args[1]);
+	const char *Path = ml_stringbuffer_get_string(Buffer);
+	const char *Mode = ml_string_value(Args[1]);
+	FILE *Handle = fopen(Path, Mode);
+	if (!Handle) return ml_error("FileError", "failed to open %s in mode %s: %s", Path, Mode, strerror(errno));
+	return ml_file(Handle);
 }
 
 static const char *find_root(const char *Path) {
