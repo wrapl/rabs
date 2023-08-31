@@ -17,6 +17,8 @@
 #include "ml_sequence.h"
 #include "ml_stream.h"
 #include "ml_file.h"
+#include "ml_time.h"
+#include "ml_json.h"
 #include "rabs.h"
 #include "stringmap.h"
 #include "library.h"
@@ -122,7 +124,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 		if (!Node->File) {
 			Node->File = fopen(Node->FileName, "r");
 			if (!Node->File) {
-				ml_parse_error(Preprocessor->Parser, "LoadError", "error opening %s", Node->FileName);
+				ml_parse_warn(Preprocessor->Parser, "LoadError", "error opening %s", Node->FileName);
 			}
 		}
 		char *Line = NULL;
@@ -909,6 +911,8 @@ int main(int Argc, char **Argv) {
 	ml_sequence_init(Globals);
 	ml_stream_init(Globals);
 	ml_file_init(Globals);
+	ml_time_init(Globals);
+	ml_json_init(Globals);
 	stringmap_insert(Globals, "vmount", Vmount);
 	stringmap_insert(Globals, "subdir", Subdir);
 	stringmap_insert(Globals, "target", Target);
