@@ -9,8 +9,6 @@ context
 
 .. rst-class:: mini-api
 
-.. _type-context:
-
 :mini:`type context < any`
    A build context.
 
