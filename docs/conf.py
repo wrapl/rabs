@@ -74,11 +74,12 @@ extensions = [
 	'sphinx.ext.graphviz',
 	'sphinx.ext.viewcode',
 	'sphinx_toolbox.collapse',
+	'sphinxcontrib.ansi',
 	#"sphinxawesome_theme"
 	#'sphinx_design'
 ]
 
-extensions = ['sphinx.ext.graphviz', 'sphinxcontrib.ansi']
+graphviz_output_format = "svg"
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
