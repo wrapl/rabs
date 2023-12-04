@@ -9,14 +9,10 @@ file
 
 .. rst-class:: mini-api
 
-.. _type-file:
-
 :mini:`type file < target`
    A file target represents a single file or directory in the filesystem.
    File targets are stored relative to the project root whenever possible,  taking into account virtual mounts. They are automatically resolving to absolute paths when required.
 
-
-.. _fun-file:
 
 :mini:`fun file(Path: string, BuildFn?: any): file`
    Returns a new file target. If :mini:`Path` does not begin with `/`,  it is considered relative to the current context path. If :mini:`Path` is specified as an absolute path but lies inside the project directory,  it is converted into a relative path.
@@ -32,6 +28,10 @@ file
 
 :mini:`meth (Directory: file) / (Name: string): file`
    Returns a new file target at :mini:`Directory`\ ``/``\ :mini:`Name`.
+
+
+:mini:`meth (Target: file):absolute: target | nil`
+   Returns :mini:`Target` if is has an absolute path,  otherwise returns :mini:`nil`.
 
 
 :mini:`meth (Target: file):basename: string`
@@ -80,6 +80,10 @@ file
 
 :mini:`meth (Target: file):path: string`
    Returns the internal (possibly unresolved and relative to project root) path of :mini:`Target`.
+
+
+:mini:`meth (Target: file):relative: target | nil`
+   Returns :mini:`Target` if is has a relative path,  otherwise returns :mini:`nil`.
 
 
 :mini:`meth (Target: file):rmdir: file`

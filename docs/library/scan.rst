@@ -9,14 +9,10 @@ scan
 
 .. rst-class:: mini-api
 
-.. _type-scan:
-
 :mini:`type scan < target`
    A scan target is a dynamic set of targets derived from another base target.
    The build function for a scan target must return a list of targets.
 
-
-.. _fun-scan:
 
 :mini:`fun scan(Target: target, Name: string, BuildFn?: any): scan`
    Returns a new scan target using :mini:`Target` as the base target.

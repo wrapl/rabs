@@ -1,5 +1,7 @@
-sphinx >= 4.0.0
+sphinx
 sphinxcontrib-domaintools
 sphinxcontrib-fulltoc
-pydata-sphinx-theme
-sphinxcontrib-ansi
+sphinx_toolbox
+sphinx-a4doc
+insipid-sphinx-theme
+graphviz

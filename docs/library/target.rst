@@ -9,8 +9,6 @@ target
 
 .. rst-class:: mini-api
 
-.. _type-target:
-
 :mini:`type target < any`
    Base type for all targets.
 

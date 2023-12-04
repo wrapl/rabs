@@ -46,6 +46,10 @@ div.folders ul li:after {
 	top: 0;
 }
 
+div.highlight {
+	margin-bottom: 2em;
+}
+
 .highlight {
 	color: #333333 !important;
 	background-color: #f5f5f5;
@@ -103,4 +107,25 @@ div.folders ul li:after {
 
 .bd-sidebar {
 	overflow-y: auto;
+}
+
+.railroad-diagram text {
+	dominant-baseline: central;
+}
+
+.railroad-diagram .terminal text {
+	font-weight: bold;
+}
+
+.railroad-diagram .non-terminal text {
+	font-weight: normal;
+	font-style: italic;
+}
+
+.mini-api dt {
+	font-size: 110%;
+}
+
+section {
+	max-width: unset !important;
 }

@@ -16,14 +16,16 @@ class MinilangLexer(RegexLexer):
 		'root': [
 			(words((
 				"_", "and", "case", "debug", "def", "do", "each", "else", "elseif", "end", "exit", "for",
-				"fun", "if", "in", "is", "let", "loop", "meth", "next", "nil", "not", "old", "on", "or", "ref",
-				"ret", "susp", "switch", "then", "to", "until", "var", "when", "while", "with"
+				"fun", "if", "in", "is", "it", "let", "loop", "meth", "must", "next", "nil", "not", "old",
+				"on", "or", "ref", "ret", "susp", "switch", "then", "to", "until", "var", "when", "while",
+				"with"
 			), suffix = r'\b'), Keyword),
 			(words((
 				"class", "method", "any", "type", "function", "number",
 				"integer", "real", "address", "string", "buffer", "list",
 				"map", "tuple", "regex", "array", "boolean", "enum", "flags",
-				"sequence", "macro", "address", "true", "false"
+				"sequence", "macro", "address", "true", "false",
+				"import", "export", "complex", "file"
 			), suffix = r'\b'), Name.Class),
 			(words((
 				"expr", "file", "subdir", "scope", "symbol", "include",
