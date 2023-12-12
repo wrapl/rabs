@@ -62,7 +62,7 @@ var ScanTest := Generated:scan("ScanTest") => fun() do
 		Object[Source, Scan] => (c_compile !! [Source])
 		Objects:put(Meta)
 	end
-	return Objects
+	ret Objects
 end
 
 DEFAULT[ScanTest]
