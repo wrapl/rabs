@@ -27,16 +27,16 @@ obj/%_init.c: src/%.c | obj src/*.h
 	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > $@.tmp
 	mv $@.tmp $@
 
-obj/rabs.o: obj/rabs_init.c
-obj/context.o: obj/context_init.c
-obj/target.o: obj/target_init.c
-obj/target_expr.o: obj/target_expr_init.c
-obj/target_file.o: obj/target_file_init.c
-obj/target_scan.o: obj/target_scan_init.c
-obj/target_meta.o: obj/target_meta_init.c
-obj/target_symb.o: obj/target_symb_init.c
-obj/targetset.o: obj/targetset_init.c
-obj/library.o: obj/library_init.c
+obj/rabs.o: obj/rabs_init.c src/*.h 
+obj/context.o: obj/context_init.c src/*.h 
+obj/target.o: obj/target_init.c src/*.h 
+obj/target_expr.o: obj/target_expr_init.c src/*.h 
+obj/target_file.o: obj/target_file_init.c src/*.h 
+obj/target_scan.o: obj/target_scan_init.c src/*.h 
+obj/target_meta.o: obj/target_meta_init.c src/*.h 
+obj/target_symb.o: obj/target_symb_init.c src/*.h 
+obj/targetset.o: obj/targetset_init.c src/*.h 
+obj/library.o: obj/library_init.c src/*.h 
 
 objects = \
 	obj/cache.o \
