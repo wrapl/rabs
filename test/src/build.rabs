@@ -75,3 +75,21 @@ if defined("TEST2") then
 	end
 	DEFAULT[Target]
 end
+
+let ScopeTest := file("scope_test")
+
+CFLAGS := old + ["-DTEST2"]
+
+:>scope("scope_test";)
+do
+	:>CFLAGS := ["-DTEST1"]
+	let Object := file("scope_test.o")
+	let Source := file("scope_test.c")
+	let Scan := Source:scan("INCLUDES")[PREBUILDS] => c_includes
+	Object[Source, Scan] => (c_compile !! [Source])
+	ScopeTest[Object] => fun(Executable) do
+		execute('cc', '-o', Executable, Object, LDFLAGS)
+	end
+end
+
+DEFAULT[ScopeTest]

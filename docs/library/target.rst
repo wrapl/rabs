@@ -41,6 +41,10 @@ target
    Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
 
 
+:mini:`meth (Target: target):context: context | nil`
+   Returns the build context of :mini:`Target` if one has been set,  otherwise returns :mini:`nil`.
+
+
 :mini:`meth (Target: target):depends: targetset`
    Returns the set of dependencies of :mini:`Target`.
 

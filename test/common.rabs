@@ -10,11 +10,12 @@ c_compile := fun(Source, Object) do
 end
 
 c_includes := fun(Target) do
-	var Lines := shell('cc -c {CFLAGS} -M -MG {Target:source}')
-	var Files := Lines:trim:replace(r"\\\n ", "") / r"[^\\]( +)"
-	Files:pop
+	var Lines := shell('cc', '-c', CFLAGS, '-M -MG', Target:source)
+	Lines := Lines:replace("\\\n ", "")
+	Lines := Lines[Lines:find(": ") + 2, 0]:trim
+	var Files := Lines / r"[^\\]( +)"
 	for File in Files do
-		File := file(File:replace(r"\\ ", " "))
+		File := file(File:replace("\\ ", " "))
 	end
 	check(Files)
 	ret Files

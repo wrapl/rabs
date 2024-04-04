@@ -185,6 +185,14 @@ ML_METHOD("build", TargetT) {
 	return Target->Build ?: MLNil;
 }
 
+ML_METHOD("context", TargetT) {
+//<Target
+//>context|nil
+// Returns the build context of :mini:`Target` if one has been set, otherwise returns :mini:`nil`.
+	target_t *Target = (target_t *)Args[0];
+	return (ml_value_t *)Target->BuildContext ?: MLNil;
+}
+
 ML_METHOD("=>", TargetT, MLAnyT) {
 //<Target
 //<Function
@@ -542,7 +550,7 @@ static void target_update(target_t *Target) {
 	if (Target->Build && ml_is(Target->Build, MLClosureT)) {
 		ml_closure_sha256(Target->Build, BuildHash);
 		int I = 0;
-		for (const unsigned char *P = (unsigned char *)Target->BuildContext->Path; *P; ++P) {
+		for (const unsigned char *P = (unsigned char *)Target->BuildContext->Name; *P; ++P) {
 			BuildHash[I] ^= *P;
 			I = (I + 1) % SHA256_BLOCK_SIZE;
 		}
