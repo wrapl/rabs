@@ -33,11 +33,6 @@ general
    Builds a shell command from :mini:`Command..` and executes it,  capturing the output. Returns the captured output on success or raises an error.
 
 
-:mini:`fun context(Path?: string): context`
-   If :mini:`Path` is provided then returns the context with path :mini:`Path` or :mini:`nil` is no such context has been defined.
-   Otherwise returns the current context.
-
-
 :mini:`fun execv(Command: list): nil | error`
    Similar to :mini:`execute()` but expects a list of individual arguments instead of letting the shell split the command line.
 

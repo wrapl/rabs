@@ -315,19 +315,6 @@ ML_FUNCTION(Vmount) {
 	return MLNil;
 }
 
-ML_FUNCTION(Context) {
-//<Path?:string
-//>context
-// If :mini:`Path` is provided then returns the context with path :mini:`Path` or :mini:`nil` is no such context has been defined.
-// Otherwise returns the current context.
-	if (Count > 0) {
-		ML_CHECK_ARG_TYPE(0, MLStringT);
-		return (ml_value_t *)context_find(ml_string_value(Args[0])) ?: MLNil;
-	} else {
-		return (ml_value_t *)CurrentContext;
-	}
-}
-
 #ifdef __MINGW32__
 #define WIFEXITED(Status) (((Status) & 0x7f) == 0)
 #define WEXITSTATUS(Status) (((Status) & 0xff00) >> 8)
@@ -923,7 +910,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "symbol", SymbolT);
 	stringmap_insert(Globals, "scan", ScanT);
 	stringmap_insert(Globals, "include", Include);
-	stringmap_insert(Globals, "context", Context);
+	stringmap_insert(Globals, "context", ContextT);
 	stringmap_insert(Globals, "execute", Execute);
 	stringmap_insert(Globals, "shell", Shell);
 	stringmap_insert(Globals, "execv", Execv);

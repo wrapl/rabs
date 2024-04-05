@@ -13,6 +13,11 @@ context
    A build context.
 
 
+:mini:`fun context(Path?: string): context`
+   If :mini:`Path` is provided then returns the context with path :mini:`Path` or :mini:`nil` is no such context has been defined.
+   Otherwise returns the current context.
+
+
 :mini:`meth (Context: context) :: (Name: string): symbol`
    Returns the symbol :mini:`Name` resolved in :mini:`Context`.
 
