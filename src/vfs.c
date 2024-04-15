@@ -79,7 +79,7 @@ char *vfs_unsolve(const char *Path) {
 	while (Mount) {
 		//printf("%s -> %s\n", Mount->Path, Mount->Target);
 		const char *Suffix = match_prefix(Path, Mount->Target);
-		if (Suffix) Path = concat(Mount->Path, Suffix, NULL);
+		if (Suffix) Path = vfs_unsolve(concat(Mount->Path, Suffix, NULL));
 		Mount = Mount->Previous;
 	}
 	if (Path == Orig) Path = concat(Path, NULL);

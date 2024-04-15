@@ -15,6 +15,8 @@ struct context_t {
 	stringmap_t Locals[1];
 };
 
+extern ml_type_t ContextT[];
+
 void context_init();
 
 context_t *context_find(const char *Name);

@@ -15,8 +15,23 @@
 static stringmap_t ContextCache[1] = {STRINGMAP_INIT};
 static ml_value_t *DefaultString;
 
-ML_TYPE(ContextT, (MLAnyT), "context");
+ML_FUNCTION(Context) {
+//<Path?:string
+//>context
+// If :mini:`Path` is provided then returns the context with path :mini:`Path` or :mini:`nil` is no such context has been defined.
+// Otherwise returns the current context.
+	if (Count > 0) {
+		ML_CHECK_ARG_TYPE(0, MLStringT);
+		return (ml_value_t *)context_find(ml_string_value(Args[0])) ?: MLNil;
+	} else {
+		return (ml_value_t *)CurrentContext;
+	}
+}
+
+ML_TYPE(ContextT, (MLAnyT), "context",
 // A build context.
+	.Constructor = (ml_value_t *)Context
+);
 
 context_t *context_find(const char *Name) {
 	return stringmap_search(ContextCache, Name);

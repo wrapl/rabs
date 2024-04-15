@@ -78,6 +78,10 @@ ifeq ($(PLATFORM), Linux)
 	objects += obj/targetwatch.o
 endif
 
+ifeq ($(PLATFORM), Android)
+	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+endif
+
 ifeq ($(PLATFORM), FreeBSD)
 	CFLAGS += -I/usr/local/include
 	LDFLAGS += -L/usr/local/lib -lgc-threaded
