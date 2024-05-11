@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <gc/gc.h>
 #include <sys/stat.h>
 #include <targetcache.h>
@@ -40,6 +43,17 @@ void cache_open(const char *RootPath) {
 	struct stat Stat[1];
 	if (stat(CacheFileName, Stat)) {
 		mkdir(CacheFileName, 0777);
+		int LockFile = open(concat(CacheFileName, "/lock", NULL), O_CREAT | O_WRONLY | O_TRUNC, 0600);
+		if (LockFile < 0) {
+			fprintf(stderr, "Failed to lock build database: %s", strerror(errno));
+			exit(-1);
+		}
+		struct flock Lock = {0,};
+		Lock.l_type = F_WRLCK;
+		if (fcntl(LockFile, F_SETLK, &Lock) < 0) {
+			fprintf(stderr, "Failed to lock build database: %s", strerror(errno));
+			exit(-1);
+		}
 		MetadataStore = string_store_create(concat(CacheFileName, "/metadata", NULL), 16, 0);
 		TargetsIndex = string_index0_create(concat(CacheFileName, "/targets", NULL), 32, 4096);
 		DetailsStore = fixed_store_create(concat(CacheFileName, "/details", NULL), sizeof(cache_details_t), 1024);
@@ -50,6 +64,17 @@ void cache_open(const char *RootPath) {
 		printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
 		exit(1);
 	} else {
+		int LockFile = open(concat(CacheFileName, "/lock", NULL), O_CREAT | O_WRONLY | O_TRUNC, 0600);
+		if (LockFile < 0) {
+			fprintf(stderr, "Failed to lock build database: %s", strerror(errno));
+			exit(-1);
+		}
+		struct flock Lock = {0,};
+		Lock.l_type = F_WRLCK;
+		if (fcntl(LockFile, F_SETLK, &Lock) < 0) {
+			fprintf(stderr, "Failed to lock build database: %s", strerror(errno));
+			exit(-1);
+		}
 		MetadataStore = string_store_open(concat(CacheFileName, "/metadata", NULL));
 		{
 			char Temp[16];
