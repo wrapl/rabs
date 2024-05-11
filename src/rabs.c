@@ -893,7 +893,7 @@ int main(int Argc, char **Argv) {
 	SavedArgc = Argc;
 	SavedArgv = Argv;
 	GC_INIT();
-	ml_init(Globals);
+	ml_init(Argv[0], Globals);
 	ml_object_init(Globals);
 	ml_sequence_init(Globals);
 	ml_stream_init(Globals);

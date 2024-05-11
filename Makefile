@@ -74,7 +74,7 @@ ifeq ($(MACHINE), i686)
 endif
 
 ifeq ($(PLATFORM), Linux)
-	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -lunwind
 	objects += obj/targetwatch.o
 endif
 
