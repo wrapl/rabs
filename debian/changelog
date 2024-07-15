@@ -1,4 +1,4 @@
-rabs (2.30.11) UNRELEASED; urgency=medium
+rabs (2.30.12) UNRELEASED; urgency=medium
 
   * Updates.
   * Updates.
@@ -61,5 +61,7 @@ rabs (2.30.11) UNRELEASED; urgency=medium
   * Updates.
   * Updates.
   * Updates.
+  * Updates.
+  * Updates.
 
- -- Raja Mukherji <raja@hinano>  Tue, 09 Jul 2024 08:50:12 +0100
+ -- Raja Mukherji <raja@hinano>  Mon, 15 Jul 2024 18:39:00 +0100
