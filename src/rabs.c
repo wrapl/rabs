@@ -61,15 +61,10 @@ static long rabs_property_hash(rabs_property_t *Property, ml_hash_chain_t *Chain
 }
 
 static ml_value_t *rabs_property_deref(rabs_property_t *Property) {
-	ml_value_t *Value = context_symb_get(CurrentContext, Property->Name);
-	if (Value) {
-		if (CurrentTarget) {
-			target_depends_auto(target_symb_new(CurrentContext, Property->Name));
-		}
-		return Value;
-	} else {
-		return stringmap_search(Globals, Property->Name) ?: MLNil; //ml_error("NameError", "%s undefined", Name);
-	}
+	ml_value_t *Value = context_symb_get(CurrentContext, Property->Name) ?:
+		stringmap_search(Globals, Property->Name) ?: MLNil;
+	if (CurrentTarget) target_depends_auto(target_symb_new(CurrentContext, Property->Name));
+	return Value;
 }
 
 static void rabs_property_assign(ml_state_t *Caller, rabs_property_t *Property, ml_value_t *Value) {
