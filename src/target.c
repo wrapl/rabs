@@ -235,6 +235,14 @@ ML_METHOD("depends", TargetT) {
 	return (ml_value_t *)Target->Depends;
 }
 
+ML_METHOD("cached_depends", TargetT) {
+//<Target
+//>targetset
+// Returns the set of dependencies of :mini:`Target`.
+	target_t *Target = (target_t *)Args[0];
+	return (ml_value_t *)cache_depends_get(Target);
+}
+
 ML_METHOD("affects", TargetT) {
 //<Target
 //>targetset
@@ -638,6 +646,7 @@ static void target_update(target_t *Target) {
 					targetset_foreach(Scans, Target, (void *)target_graph_scans);
 				}
 			}
+			cache_depends_set(Target, Target->BuildDepends);
 			CurrentDirectory = OldDirectory;
 			CurrentContext = OldContext;
 			CurrentTarget = OldTarget;
@@ -660,7 +669,6 @@ static void target_update(target_t *Target) {
 	if (!LastUpdated || memcmp(Previous, Target->Hash, SHA256_BLOCK_SIZE)) {
 		Target->LastUpdated = CurrentIteration;
 		cache_hash_set(Target, FileTime);
-		cache_depends_set(Target, Target->BuildDepends);
 	} else {
 		Target->LastUpdated = LastUpdated;
 		cache_last_check_set(Target, FileTime);
