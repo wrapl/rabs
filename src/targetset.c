@@ -19,7 +19,8 @@ static void ML_TYPED_FN(ml_iter_key, TargetSetIterT, ml_state_t *Caller, targets
 }
 
 static void ML_TYPED_FN(ml_iter_value, TargetSetIterT, ml_state_t *Caller, targetset_iter_t *Iter) {
-	ML_CONTINUE(Caller, Iter->Current[0]);
+	target_t *Target = Iter->Current[0];
+	ML_CONTINUE(Caller, ml_string(Target->Id, Target->IdLength));
 }
 
 static void ML_TYPED_FN(ml_iter_next, TargetSetIterT, ml_state_t *Caller, targetset_iter_t *Iter) {
