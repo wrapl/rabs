@@ -22,21 +22,22 @@ minilang/lib/libminilang.a: minilang/Makefile minilang/src/*.c minilang/src/*.h
 radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a RADB_MEM=GC
 
-obj/%_init.c: src/%.c | obj src/*.h 
-	echo "" > $@
-	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > $@.tmp
-	mv $@.tmp $@
+obj/%_init.done: src/%.c | obj src/*.h 
+	echo "" > obj/$*_init.c
+	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > obj/$*_init.tmp
+	mv obj/$*_init.tmp obj/$*_init.c
+	touch obj/$*_init.done
 
-obj/rabs.o: obj/rabs_init.c src/*.h 
-obj/context.o: obj/context_init.c src/*.h 
-obj/target.o: obj/target_init.c src/*.h 
-obj/target_expr.o: obj/target_expr_init.c src/*.h 
-obj/target_file.o: obj/target_file_init.c src/*.h 
-obj/target_scan.o: obj/target_scan_init.c src/*.h 
-obj/target_meta.o: obj/target_meta_init.c src/*.h 
-obj/target_symb.o: obj/target_symb_init.c src/*.h 
-obj/targetset.o: obj/targetset_init.c src/*.h 
-obj/library.o: obj/library_init.c src/*.h 
+obj/rabs.o: obj/rabs_init.done src/*.h 
+obj/context.o: obj/context_init.done src/*.h 
+obj/target.o: obj/target_init.done src/*.h 
+obj/target_expr.o: obj/target_expr_init.done src/*.h 
+obj/target_file.o: obj/target_file_init.done src/*.h 
+obj/target_scan.o: obj/target_scan_init.done src/*.h 
+obj/target_meta.o: obj/target_meta_init.done src/*.h 
+obj/target_symb.o: obj/target_symb_init.done src/*.h 
+obj/targetset.o: obj/targetset_init.done src/*.h 
+obj/library.o: obj/library_init.done src/*.h 
 
 objects = \
 	obj/cache.o \

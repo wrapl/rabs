@@ -37,21 +37,21 @@ class MinilangLexer(RegexLexer):
 			(r'-?\.[0-9]+((e|E)-?[0-9]+)?', Number),
 			('\"', String, 'string'),
 			('\'', String, 'string2'),
-			('\(', Operator, 'brackets'),
-			('\{', Operator, 'braces'),
+			(r'\(', Operator, 'brackets'),
+			(r'\{', Operator, 'braces'),
 			(r'::[A-Za-z_][A-Za-z0-9_]*', Name.Attribute),
 			(r':[A-Za-z_][A-Za-z0-9_]*', Name.Function),
 			(':\"', Name.Function, 'method'),
 			(r':>.*\n', Comment),
 			(':<', Comment.Multiline, 'comment'),
 			(r'\s+', Text),
-			(r'[A-Za-z_]\w*', Text),
+			(r'[A-Za-z_](\w|[₊₋₌₍₎⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉])*', Text),
 			(':=', Operator),
 			(',', Operator),
 			(';', Operator),
 			(':', Operator),
-			(']', Operator),
-			('\[', Operator),
+			(r'\]', Operator),
+			(r'\[', Operator),
 			(r'[!@#$%^&*+=|\\~`/?<>.-]+', Operator)
 		],
 		'string': [
@@ -62,7 +62,7 @@ class MinilangLexer(RegexLexer):
 		'string2': [
 			('\'', String, '#pop'),
 			(r'\\.', String.Escape),
-			('{', Operator, 'braces'),
+			(r'\{', Operator, 'braces'),
 			(r'.', String)
 		],
 		'method': [
@@ -71,11 +71,11 @@ class MinilangLexer(RegexLexer):
 			(r'.', Name.Function)
 		],
 		'braces': [
-			('}', Operator, '#pop'),
+			(r'\}', Operator, '#pop'),
 			include('root')
 		],
 		'brackets': [
-			('\)', Operator, '#pop'),
+			(r'\)', Operator, '#pop'),
 			include('root')
 		],
 		'comment': [
