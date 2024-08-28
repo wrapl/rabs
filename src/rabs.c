@@ -192,9 +192,9 @@ static ml_value_t *load_file(const char *FileName) {
 
 	load_file_state_t State[1];
 	State->Base.run = (void *)load_file_loaded;
-	State->Base.Context = &MLRootContext;
+	State->Base.Context = MLRootContext;
 	State->Result = MLNil;
-	mlc_expr_t *Expr = ml_accept_file(Preprocessor->Parser);
+	const mlc_expr_t *Expr = ml_accept_file(Preprocessor->Parser);
 	if (!Expr) {
 		return ml_parser_value(Preprocessor->Parser) ?: ml_error("FileError", "Error loading file %s", FileName);
 	}
@@ -1117,7 +1117,7 @@ int main(int Argc, char **Argv) {
 	}
 	if (InteractiveMode) {
 		target_interactive_start(NumThreads);
-		ml_console(&MLRootContext, rabs_ml_global, Globals, "--> ", "... ");
+		ml_console(MLRootContext, rabs_ml_global, Globals, "--> ", "... ");
 	} else if (WatchMode) {
 #ifdef Linux
 		targetwatch_wait(restart);
