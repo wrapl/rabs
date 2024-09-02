@@ -190,7 +190,7 @@ static ml_value_t *load_file(const char *FileName) {
 	Preprocessor->Compiler = ml_compiler((ml_getter_t)rabs_ml_global, NULL);
 	ml_parser_source(Preprocessor->Parser, (ml_source_t){FileName, 1});
 
-	load_file_state_t State[1];
+	load_file_state_t *State = new(load_file_state_t);
 	State->Base.run = (void *)load_file_loaded;
 	State->Base.Context = MLRootContext;
 	State->Result = MLNil;
