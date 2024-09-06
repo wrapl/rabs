@@ -102,5 +102,7 @@ ML_METHOD("scans", ScanT) {
 }
 
 void target_scan_init() {
+#ifndef GENERATE_INIT
 #include "target_scan_init.c"
+#endif
 }

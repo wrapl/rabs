@@ -682,7 +682,9 @@ ML_METHOD("relative", FileT) {
 	ml_method_by_name("is" #TYPE, 0, target_file_is_ ## TYPE, FileT, NULL);
 
 void target_file_init() {
+#ifndef GENERATE_INIT
 #include "target_file_init.c"
+#endif
 	target_file_methods_is(dir);
 	target_file_methods_is(chr);
 	target_file_methods_is(blk);

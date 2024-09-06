@@ -76,5 +76,7 @@ target_t *target_expr_create(const char *Id, context_t *BuildContext, size_t Ind
 }
 
 void target_expr_init(void) {
+#ifndef GENERATE_INIT
 #include "target_expr_init.c"
+#endif
 }

@@ -202,5 +202,7 @@ ML_METHOD("exports", ContextT) {
 
 void context_init() {
 	DefaultString = ml_cstring("DEFAULT");
+#ifndef GENERATE_INIT
 #include "context_init.c"
+#endif
 }
