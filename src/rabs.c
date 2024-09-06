@@ -140,7 +140,7 @@ static const char *preprocessor_read(preprocessor_t *Preprocessor) {
 			preprocessor_node_t *NewNode = new(preprocessor_node_t);
 			NewNode->Next = Node;
 			NewNode->FileName = FileName;
-			Node->Source = ml_parser_source(Preprocessor->Parser, (ml_source_t){FileName, 0});
+			Node->Source = ml_parser_source(Preprocessor->Parser, (ml_source_t){FileName, 1});
 			++Node->Source.Line;
 			Node = Preprocessor->Nodes = NewNode;
 		} else if (Line[Actual - 1] != '\n') {
