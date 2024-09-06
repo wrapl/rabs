@@ -130,7 +130,7 @@ ML_METHODV("[]", TargetT, MLAnyT) {
 // * Otherwise :mini:`Dependency` should be another target.
 // Returns :mini:`Target`.
 	target_t *Target = (target_t *)Args[0];
-	if (ml_is(Args[Count - 1], MLFunctionT)) {
+	if ((Count > 1) && (Args[Count - 1] != MLNil) && ml_is(Args[Count - 1], MLFunctionT)) {
 		Target->Build = Args[Count - 1];
 		Target->BuildContext = CurrentContext;
 		if (CurrentTarget) {
