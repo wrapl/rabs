@@ -68,5 +68,7 @@ target_t *target_meta_create(const char *Id, context_t *BuildContext, size_t Ind
 }
 
 void target_meta_init() {
+#ifndef GENERATE_INIT
 #include "target_meta_init.c"
+#endif
 }

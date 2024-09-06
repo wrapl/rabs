@@ -48,5 +48,7 @@ ml_value_t *library_load(const char *Path, stringmap_t *Globals) {
 }
 
 void library_init() {
+#ifndef GENERATE_INIT
 #include "library_init.c"
+#endif
 }

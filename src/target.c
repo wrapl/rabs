@@ -809,7 +809,9 @@ static void target_threads_kill(void) {
 void target_init(void) {
 	targetqueue_init();
 	targetset_ml_init();
+#ifndef GENERATE_INIT
 #include "target_init.c"
+#endif
 	target_expr_init();
 	target_file_init();
 	target_meta_init();

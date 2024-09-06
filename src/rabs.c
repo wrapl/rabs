@@ -923,7 +923,9 @@ int main(int Argc, char **Argv) {
 	int Version[] = {CURRENT_VERSION};
 	stringmap_insert(Globals, "VERSION", ml_tuplev(3, ml_integer(Version[0]), ml_integer(Version[1]), ml_integer(Version[2])));
 	stringmap_insert(Globals, "LIBPATH", lib_path());
+#ifndef GENERATE_INIT
 #include "rabs_init.c"
+#endif
 	target_init();
 	context_init();
 	library_init();

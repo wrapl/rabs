@@ -98,5 +98,7 @@ target_t *target_symb_create(const char *Id, context_t *BuildContext, size_t Ind
 }
 
 void target_symb_init() {
+#ifndef GENERATE_INIT
 #include "target_symb_init.c"
+#endif
 }
