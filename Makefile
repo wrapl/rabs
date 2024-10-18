@@ -22,7 +22,11 @@ minilang/lib/libminilang.a: minilang/Makefile minilang/src/*.c minilang/src/*.h
 radb/libradb.a: radb/Makefile radb/*.c radb/*.h
 	$(MAKE) -C radb PLATFORM=$(PLATFORM) libradb.a RADB_MEM=GC
 
-obj/%_init.c: src/%.c | obj src/*.h 
+libraries = \
+	minilang/lib/libminilang.a \
+	radb/libradb.a
+
+obj/%_init.c: src/%.c | obj $(libraries) src/*.h 
 	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > $@
 
 obj/rabs.o: obj/rabs_init.c src/*.h 
@@ -53,9 +57,6 @@ objects = \
 	obj/vfs.o \
 	obj/library.o \
 	obj/whereami.o
-
-libraries = \
-	minilang/lib/libminilang.a radb/libradb.a
 
 obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
