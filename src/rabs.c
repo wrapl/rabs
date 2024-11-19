@@ -193,12 +193,13 @@ static ml_value_t *load_file(const char *FileName) {
 	load_file_state_t *State = new(load_file_state_t);
 	State->Base.run = (void *)load_file_loaded;
 	State->Base.Context = MLRootContext;
-	State->Result = MLNil;
 	const mlc_expr_t *Expr = ml_accept_file(Preprocessor->Parser);
 	if (!Expr) {
 		return ml_parser_value(Preprocessor->Parser) ?: ml_error("FileError", "Error loading file %s", FileName);
 	}
 	ml_function_compile((ml_state_t *)State, Expr, Preprocessor->Compiler, NULL);
+	ml_scheduler_t *Scheduler = ml_context_get_static(MLRootContext, ML_SCHEDULER_INDEX);
+	while (!State->Result) Scheduler->run(Scheduler);
 	return State->Result;
 }
 
