@@ -11,6 +11,7 @@
 #include <sys/stat.h>
 #include <targetcache.h>
 #include <radb.h>
+#include "ml_cbor.h"
 
 #define new(T) ((T *)GC_MALLOC(sizeof(T)))
 
@@ -37,6 +38,16 @@ typedef struct cache_details_t {
 	uint32_t LastChecked;
 	time_t FileTime;
 } cache_details_t;
+
+static int version_compare(int *A, int *B) {
+	if (A[0] < B[0]) return -1;
+	if (A[0] > B[0]) return 1;
+	if (A[1] < B[1]) return -1;
+	if (A[1] > B[1]) return 1;
+	if (A[2] < B[2]) return -1;
+	if (A[2] > B[2]) return 1;
+	return 0;
+}
 
 void cache_open(const char *RootPath) {
 	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", NULL);
@@ -79,21 +90,15 @@ void cache_open(const char *RootPath) {
 		{
 			char Temp[16];
 			string_store_get(MetadataStore, CURRENT_VERSION_INDEX, Temp, 16);
-			int Current[3], Working[3] = {MINIMAL_VERSION};
-			sscanf(Temp, "%d.%d.%d", Current + 0, Current + 1, Current + 2);
-			if (Current[0] < Working[0]) {
+			int Current[3] = {CURRENT_VERSION}, Minimal[3] = {MINIMAL_VERSION}, Actual[3];
+			sscanf(Temp, "%d.%d.%d", Actual + 0, Actual + 1, Actual + 2);
+			if (version_compare(Actual, Minimal) < 0) {
 				printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
 				exit(1);
-			} else if (Current[0] == Working[0]) {
-				if (Current[1] < Working[1]) {
-					printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
-					exit(1);
-				} else if (Current[1] == Working[1]) {
-					if (Current[2] < Working[2]) {
-						printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
-						exit(1);
-					}
-				}
+			}
+			if (version_compare(Current, Actual) < 0) {
+				printf("Version error: database was built with an newer version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
+				exit(1);
 			}
 		}
 		TargetsIndex = string_index0_open(concat(CacheFileName, "/targets", NULL));
@@ -249,165 +254,26 @@ void cache_scan_set(target_t *Target, targetset_t *Scans) {
 	string_store_set(ScansStore, Target->CacheIndex, Indices, (Size + 1) * sizeof(uint32_t));
 }
 
-static int cache_expr_value_size(ml_value_t *Value) {
-	if (Value->Type == MLStringT) {
-		return 6 + ml_string_length(Value);
-	} else if (Value->Type == MLIntegerT) {
-		return 9;
-	} else if (Value->Type == MLRealT) {
-		return 9;
-	} else if (Value == MLNil) {
-		return 1;
-	} else if (Value->Type == MLListT) {
-		int Size = 5;
-		ML_LIST_FOREACH(Value, Node) {
-			Size += cache_expr_value_size(Node->Value);
-		}
-		return Size;
-	} else if (Value->Type == MLMapT) {
-		int Size = 5;
-		ML_MAP_FOREACH(Value, Node) {
-			Size += cache_expr_value_size(Node->Key);
-			Size += cache_expr_value_size(Node->Value);
-		}
-		return Size;
-	} else if (ml_is(Value, TargetT)) {
-		target_t *Target = (target_t *)Value;
-		return 6 + Target->IdLength;
-	}
-	return 0;
-}
-
-#define CACHE_EXPR_NIL			0
-#define CACHE_EXPR_STRING		1
-#define CACHE_EXPR_INTEGER		2
-#define CACHE_EXPR_REAL			3
-#define CACHE_EXPR_LIST			4
-#define CACHE_EXPR_MAP			5
-#define CACHE_EXPR_TARGET		6
-
-static char *cache_expr_value_write(ml_value_t *Value, char *Buffer) {
-	if (Value == MLNil) {
-		*Buffer++ = CACHE_EXPR_NIL;
-	} else if (Value->Type == MLIntegerT) {
-		*Buffer++ = CACHE_EXPR_INTEGER;
-		*(int64_t *)Buffer = ml_integer_value(Value);
-		Buffer += 8;
-	} else if (Value->Type == MLRealT) {
-		*Buffer++ = CACHE_EXPR_REAL;
-		*(double *)Buffer = ml_real_value(Value);
-		Buffer += 8;
-	} else if (Value->Type == MLStringT) {
-		int Length = ml_string_length(Value);
-		*Buffer++ = CACHE_EXPR_STRING;
-		*(int32_t *)Buffer = Length;
-		Buffer += 4;
-		memcpy(Buffer, ml_string_value(Value), Length);
-		Buffer[Length] = 0;
-		Buffer += Length + 1;
-	} else if (Value->Type == MLListT) {
-		*Buffer++ = CACHE_EXPR_LIST;
-		*(int32_t *)Buffer = ml_list_length(Value);
-		Buffer += 4;
-		ML_LIST_FOREACH(Value, Node) {
-			Buffer = cache_expr_value_write(Node->Value, Buffer);
-		}
-	} else if (Value->Type == MLMapT) {
-		*Buffer++ = CACHE_EXPR_MAP;
-		*(int32_t *)Buffer = ml_map_size(Value);
-		Buffer += 4;
-		ML_MAP_FOREACH(Value, Node) {
-			Buffer = cache_expr_value_write(Node->Key, Buffer);
-			Buffer = cache_expr_value_write(Node->Value, Buffer);
-		}
-	} else if (ml_is(Value, TargetT)) {
-		*Buffer++ = CACHE_EXPR_TARGET;
-		target_t *Target = (target_t *)Value;
-		*(int32_t *)Buffer = Target->IdLength;
-		memcpy(Buffer, Target->Id, Target->IdLength);
-		Buffer[Target->IdLength] = 0;
-		Buffer += Target->IdLength + 1;
-	}
-	return Buffer;
-}
-
-static const char *cache_expr_value_read(const char *Buffer, ml_value_t **Output) {
-	switch (*Buffer++) {
-	case CACHE_EXPR_NIL: {
-		*Output = MLNil;
-		return Buffer;
-	}
-	case CACHE_EXPR_INTEGER: {
-		*Output = ml_integer(*(int64_t *)Buffer);
-		return Buffer + 8;
-	}
-	case CACHE_EXPR_REAL: {
-		*Output = ml_real(*(double *)Buffer);
-		return Buffer + 8;
-	}
-	case CACHE_EXPR_STRING: {
-		int Length = *(int32_t *)Buffer;
-		Buffer += 4;
-		char *Chars = GC_MALLOC_ATOMIC(Length + 1);
-		memcpy(Chars, Buffer, Length);
-		Chars[Length] = 0;
-		*Output = ml_string(Chars, Length);
-		return Buffer + Length + 1;
-	}
-	case CACHE_EXPR_LIST: {
-		int Length = *(int32_t *)Buffer;
-		Buffer += 4;
-		ml_value_t *List = *Output = ml_list();
-		for (int I = 0; I < Length; ++I) {
-			ml_value_t *Value;
-			Buffer = cache_expr_value_read(Buffer, &Value);
-			ml_list_append(List, Value);
-		}
-		return Buffer;
-	}
-	case CACHE_EXPR_MAP: {
-		int Length = *(int32_t *)Buffer;
-		Buffer += 4;
-		ml_value_t *Map = *Output = ml_map();
-		for (int I = 0; I < Length; ++I) {
-			ml_value_t *Key, *Value;
-			Buffer = cache_expr_value_read(Buffer, &Key);
-			Buffer = cache_expr_value_read(Buffer, &Value);
-			ml_map_insert(Map, Key, Value);
-		}
-		return Buffer;
-	}
-	case CACHE_EXPR_TARGET: {
-		int Length = *(int32_t *)Buffer;
-		Buffer += 4;
-		target_t *Target = target_find(Buffer);
-		if (!Target) {
-			printf("\e[31mError: target not defined: %s\e[0m\n", Buffer);
-			exit(1);
-		}
-		*Output = (ml_value_t *)Target;
-		return Buffer + Length + 1;
-	}
-	}
-	return Buffer;
-}
-
 ml_value_t *cache_expr_get(target_t *Target) {
-	ml_value_t *Result = 0;
 	size_t Length = string_store_size(ExprsStore, Target->CacheIndex);
-	if (Length) {
-		char *Buffer = GC_MALLOC_ATOMIC(Length);
-		string_store_get(ExprsStore, Target->CacheIndex, Buffer, Length);
-		cache_expr_value_read(Buffer, &Result);
-	}
-	return Result;
+	if (Length == INVALID_INDEX) return ml_error("IndexError", "Invalid index");
+	if (!Length) return MLNil;
+	ml_cbor_reader_t *Cbor = ml_cbor_reader(NULL, NULL, NULL);
+	string_store_reader_t Reader[1];
+	string_store_reader_open(Reader, ExprsStore, Target->CacheIndex);
+	unsigned char Buffer[16];
+	size_t Size;
+	do {
+		Size = string_store_reader_read(Reader, Buffer, 16);
+		ml_cbor_reader_read(Cbor, Buffer, Size);
+	} while (Size == 16);
+	return ml_cbor_reader_get(Cbor);
 }
 
 void cache_expr_set(target_t *Target, ml_value_t *Value) {
-	size_t Length = cache_expr_value_size(Value);
-	char *Buffer = GC_MALLOC_ATOMIC(Length);
-	cache_expr_value_write(Value, Buffer);
-	string_store_set(ExprsStore, Target->CacheIndex, Buffer, Length);
+	string_store_writer_t Writer[1];
+	string_store_writer_open(Writer, ExprsStore, Target->CacheIndex);
+	ml_cbor_encode_to(Writer, (void *)string_store_writer_write, NULL, Value);
 }
 
 size_t cache_target_id_to_index(const char *Id) {

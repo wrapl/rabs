@@ -27,6 +27,7 @@
 #include <signal.h>
 #include <inttypes.h>
 #include "ml_bytecode.h"
+#include "ml_cbor.h"
 
 #ifdef Linux
 #include "targetwatch.h"
@@ -806,12 +807,32 @@ static void target_threads_kill(void) {
 	}
 }
 
+static void ML_TYPED_FN(ml_cbor_write, TargetT, ml_cbor_writer_t *Writer, target_t *Target) {
+	ml_cbor_write_tag(Writer, ML_CBOR_TAG_OBJECT);
+	ml_cbor_write_array(Writer, 2);
+	ml_cbor_write_string(Writer, strlen("target"));
+	ml_cbor_write_raw(Writer, "target", strlen("target"));
+	ml_cbor_write_string(Writer, Target->IdLength);
+	ml_cbor_write_raw(Writer, Target->Id, Target->IdLength);
+}
+
+ML_FUNCTION(DecodeTarget) {
+//!internal
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLStringT);
+	const char *Id = ml_string_value(Args[0]);
+	target_t *Target = target_find(Id);
+	if (!Target) return ml_error("TargetError", "Target not defined: %s", Id);
+	return (ml_value_t *)Target;
+}
+
 void target_init(void) {
 	targetqueue_init();
 	targetset_ml_init();
 #ifndef GENERATE_INIT
 #include "target_init.c"
 #endif
+	ml_cbor_default_object("target", (ml_value_t *)DecodeTarget);
 	target_expr_init();
 	target_file_init();
 	target_meta_init();
