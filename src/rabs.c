@@ -19,6 +19,7 @@
 #include "ml_file.h"
 #include "ml_time.h"
 #include "ml_json.h"
+#include "ml_cbor.h"
 #include "rabs.h"
 #include "stringmap.h"
 #include "library.h"
@@ -896,6 +897,7 @@ int main(int Argc, char **Argv) {
 	ml_file_init(Globals);
 	ml_time_init(Globals);
 	ml_json_init(Globals);
+	ml_cbor_init(Globals);
 	stringmap_insert(Globals, "vmount", Vmount);
 	stringmap_insert(Globals, "subdir", Subdir);
 	stringmap_insert(Globals, "target", Target);
