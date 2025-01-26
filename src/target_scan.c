@@ -98,6 +98,9 @@ ML_METHOD("scans", ScanT) {
 //>targetset
 // Returns the results of the last scan.
 	target_t *Target = (target_t *)Args[0];
+	target_depends_auto((target_t *)Target);
+	target_queue((target_t *)Target, CurrentTarget);
+	target_wait((target_t *)Target, CurrentTarget);
 	return (ml_value_t *)cache_scan_get(Target);
 }
 
