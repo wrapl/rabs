@@ -200,12 +200,16 @@ ML_METHOD("=>", TargetT, MLAnyT) {
 //>target
 // Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
 	target_t *Target = (target_t *)Args[0];
-	Target->Build = Args[1];
-	Target->BuildContext = CurrentContext;
-	if (CurrentTarget) {
-		Target->Parent = CurrentTarget;
-		if (DependencyGraph) {
-			fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
+	if (Args[1] == MLNil) {
+		Target->Build = NULL;
+	} else {
+		Target->Build = Args[1];
+		Target->BuildContext = CurrentContext;
+		if (CurrentTarget) {
+			Target->Parent = CurrentTarget;
+			if (DependencyGraph) {
+				fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
+			}
 		}
 	}
 	return Args[0];
@@ -217,12 +221,16 @@ ML_METHOD("build", TargetT, MLAnyT) {
 //>target
 // Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
 	target_t *Target = (target_t *)Args[0];
-	Target->Build = Args[1];
-	Target->BuildContext = CurrentContext;
-	if (CurrentTarget) {
-		Target->Parent = CurrentTarget;
-		if (DependencyGraph) {
-			fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
+	if (Args[1] == MLNil) {
+		Target->Build = NULL;
+	} else {
+		Target->Build = Args[1];
+		Target->BuildContext = CurrentContext;
+		if (CurrentTarget) {
+			Target->Parent = CurrentTarget;
+			if (DependencyGraph) {
+				fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
+			}
 		}
 	}
 	return Args[0];
@@ -260,66 +268,7 @@ ML_METHOD("priority", TargetT) {
 	return ml_integer(Target->QueuePriority);
 }
 
-void target_value_hash(ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	typeof(target_value_hash) *function = ml_typed_fn_get(ml_typeof(Value), target_value_hash);
-	if (function) return function(Value, Hash);
-	memset(Hash, -1, SHA256_BLOCK_SIZE);
-}
-
-void ML_TYPED_FN(target_value_hash, MLNilT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	memset(Hash, -1, SHA256_BLOCK_SIZE);
-}
-
-void ML_TYPED_FN(target_value_hash, MLIntegerT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	memset(Hash, 0, SHA256_BLOCK_SIZE);
-	*(long *)Hash = ml_integer_value(Value);
-	Hash[SHA256_BLOCK_SIZE - 1] = 1;
-}
-
-void ML_TYPED_FN(target_value_hash, MLRealT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	memset(Hash, 0, SHA256_BLOCK_SIZE);
-	*(double *)Hash = ml_real_value(Value);
-	Hash[SHA256_BLOCK_SIZE - 1] = 1;
-}
-
-void ML_TYPED_FN(target_value_hash, MLStringT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	const char *String = ml_string_value(Value);
-	size_t Len = ml_string_length(Value);
-	SHA256_CTX Ctx[1];
-	sha256_init(Ctx);
-	sha256_update(Ctx, (unsigned char *)String, Len);
-	sha256_final(Ctx, Hash);
-}
-
-void ML_TYPED_FN(target_value_hash, MLListT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	SHA256_CTX Ctx[1];
-	sha256_init(Ctx);
-	ML_LIST_FOREACH(Value, Iter) {
-		unsigned char ChildHash[SHA256_BLOCK_SIZE];
-		target_value_hash(Iter->Value, ChildHash);
-		sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-	}
-	sha256_final(Ctx, Hash);
-}
-
-void ML_TYPED_FN(target_value_hash, MLMapT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	SHA256_CTX Ctx[1];
-	sha256_init(Ctx);
-	ML_MAP_FOREACH(Value, Iter) {
-		unsigned char ChildHash[SHA256_BLOCK_SIZE];
-		target_value_hash(Iter->Key, ChildHash);
-		sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-		target_value_hash(Iter->Value, ChildHash);
-		sha256_update(Ctx, ChildHash, SHA256_BLOCK_SIZE);
-	}
-	sha256_final(Ctx, Hash);
-}
-
-void ML_TYPED_FN(target_value_hash, MLClosureT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
-	ml_closure_sha256(Value, Hash);
-}
-
-void ML_TYPED_FN(target_value_hash, TargetT, ml_value_t *Value, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+void ML_TYPED_FN(ml_value_sha256, TargetT, ml_value_t *Value, ml_hash_chain_t *Chain, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	target_t *Target = (target_t *)Value;
 	SHA256_CTX Ctx[1];
 	sha256_init(Ctx);
