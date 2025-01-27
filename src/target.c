@@ -556,8 +556,8 @@ static void target_update(target_t *Target) {
 	Target->LastUpdated = STATE_CHECKING;
 	int DependsLastUpdated = 0;
 	unsigned char BuildHash[SHA256_BLOCK_SIZE];
-	if (Target->Build && ml_is(Target->Build, MLClosureT)) {
-		ml_closure_sha256(Target->Build, BuildHash);
+	if (Target->Build) {
+		ml_value_sha256(Target->Build, NULL, BuildHash);
 		int I = 0;
 		for (const unsigned char *P = (unsigned char *)Target->BuildContext->Name; *P; ++P) {
 			BuildHash[I] ^= *P;
