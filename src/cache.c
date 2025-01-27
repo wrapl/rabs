@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <gc/gc.h>
 #include <sys/stat.h>
 #include <targetcache.h>
@@ -49,6 +50,33 @@ static int version_compare(int *A, int *B) {
 	return 0;
 }
 
+static void cache_delete(const char *Path) {
+	DIR *Dir = opendir(Path);
+	if (!Dir) {
+		fprintf(stderr, "Failed to open cache directory %s: %s", Path, strerror(errno));
+		exit(-1);
+	}
+	struct dirent *Entry = readdir(Dir);
+	while (Entry) {
+		if (strcmp(Entry->d_name, ".") && strcmp(Entry->d_name, "..")) {
+			char *FileName;
+			asprintf(&FileName, "%s/%s", Path, Entry->d_name);
+			if (unlink(FileName)) {
+				fprintf(stderr, "Failed to open delete file %s: %s", FileName, strerror(errno));
+				exit(-1);
+			}
+			free(FileName);
+			rewinddir(Dir);
+		}
+		Entry = readdir(Dir);
+	}
+	closedir(Dir);
+	if (rmdir(Path)) {
+		fprintf(stderr, "Failed to open delete directory %s: %s", Path, strerror(errno));
+		exit(-1);
+	}
+}
+
 void cache_open(const char *RootPath) {
 	const char *CacheFileName = concat(RootPath, "/", SystemName, ".db", NULL);
 	struct stat Stat[1];
@@ -72,8 +100,12 @@ void cache_open(const char *RootPath) {
 		ScansStore = string_store_create(concat(CacheFileName, "/scans", NULL), 128, 524288);
 		ExprsStore = string_store_create(concat(CacheFileName, "/exprs", NULL), 16, 512);
 	} else if (!S_ISDIR(Stat->st_mode)) {
-		printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
-		exit(1);
+		printf("Version error: database was built with an incompatible version of Rabs, performing fresh build.\n");
+		if (unlink(CacheFileName)) {
+			fprintf(stderr, "Failed to open delete file %s: %s", CacheFileName, strerror(errno));
+			exit(-1);
+		}
+		return cache_open(RootPath);
 	} else {
 		int LockFile = open(concat(CacheFileName, "/lock", NULL), O_CREAT | O_WRONLY | O_TRUNC, 0600);
 		if (LockFile < 0) {
@@ -92,13 +124,12 @@ void cache_open(const char *RootPath) {
 			string_store_get(MetadataStore, CURRENT_VERSION_INDEX, Temp, 16);
 			int Current[3] = {CURRENT_VERSION}, Minimal[3] = {MINIMAL_VERSION}, Actual[3];
 			sscanf(Temp, "%d.%d.%d", Actual + 0, Actual + 1, Actual + 2);
-			if (version_compare(Actual, Minimal) < 0) {
-				printf("Version error: database was built with an older version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
-				exit(1);
-			}
-			if (version_compare(Current, Actual) < 0) {
-				printf("Version error: database was built with an newer version of Rabs. Delete %s to force a clean build.\n", CacheFileName);
-				exit(1);
+			if ((version_compare(Actual, Minimal) < 0) || (version_compare(Current, Actual) < 0)) {
+				printf("Version error: database was built with an incompatible version of Rabs, performing fresh build.\n");
+				Lock.l_type = F_UNLCK;
+				fcntl(LockFile, F_SETLK, &Lock);
+				cache_delete(CacheFileName);
+				return cache_open(RootPath);
 			}
 		}
 		TargetsIndex = string_index0_open(concat(CacheFileName, "/targets", NULL));
