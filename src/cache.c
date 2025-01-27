@@ -288,7 +288,7 @@ void cache_scan_set(target_t *Target, targetset_t *Scans) {
 ml_value_t *cache_expr_get(target_t *Target) {
 	size_t Length = string_store_size(ExprsStore, Target->CacheIndex);
 	if (Length == INVALID_INDEX) return ml_error("IndexError", "Invalid index");
-	if (!Length) return MLNil;
+	if (!Length) return NULL;
 	ml_cbor_reader_t *Cbor = ml_cbor_reader(NULL, NULL, NULL);
 	string_store_reader_t Reader[1];
 	string_store_reader_open(Reader, ExprsStore, Target->CacheIndex);
