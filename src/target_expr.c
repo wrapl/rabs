@@ -60,7 +60,7 @@ ML_METHOD("append", MLStringBufferT, ExprT) {
 }
 
 time_t target_expr_hash(target_expr_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
-	target_value_hash(Target->Value, Target->Base.Hash);
+	ml_value_sha256(Target->Value, NULL, Target->Base.Hash);
 	return 0;
 }
 

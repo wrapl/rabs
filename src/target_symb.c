@@ -50,7 +50,7 @@ ML_TYPE(SymbolT, (TargetT), "symbol",
 
 time_t target_symb_hash(target_symb_t *Target, time_t PreviousTime, unsigned char PreviousHash[SHA256_BLOCK_SIZE]) {
 	ml_value_t *Value = context_symb_get(Target->Context, Target->Name) ?: MLNil;
-	target_value_hash(Value, Target->Base.Hash);
+	ml_value_sha256(Value, NULL, Target->Base.Hash);
 	return 0;
 }
 
