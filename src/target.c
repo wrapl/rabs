@@ -200,16 +200,12 @@ ML_METHOD("=>", TargetT, MLAnyT) {
 //>target
 // Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
 	target_t *Target = (target_t *)Args[0];
-	if (Args[1] == MLNil) {
-		Target->Build = NULL;
-	} else {
-		Target->Build = Args[1];
-		Target->BuildContext = CurrentContext;
-		if (CurrentTarget) {
-			Target->Parent = CurrentTarget;
-			if (DependencyGraph) {
-				fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
-			}
+	Target->Build = Args[1];
+	Target->BuildContext = CurrentContext;
+	if (CurrentTarget) {
+		Target->Parent = CurrentTarget;
+		if (DependencyGraph) {
+			fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
 		}
 	}
 	return Args[0];
@@ -221,16 +217,12 @@ ML_METHOD("build", TargetT, MLAnyT) {
 //>target
 // Sets the build function for :mini:`Target` to :mini:`Function` and returns :mini:`Target`. The current context is also captured.
 	target_t *Target = (target_t *)Args[0];
-	if (Args[1] == MLNil) {
-		Target->Build = NULL;
-	} else {
-		Target->Build = Args[1];
-		Target->BuildContext = CurrentContext;
-		if (CurrentTarget) {
-			Target->Parent = CurrentTarget;
-			if (DependencyGraph) {
-				fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
-			}
+	Target->Build = Args[1];
+	Target->BuildContext = CurrentContext;
+	if (CurrentTarget) {
+		Target->Parent = CurrentTarget;
+		if (DependencyGraph) {
+			fprintf(DependencyGraph, "\tT%" PRIxPTR " -> T%" PRIxPTR " [color=red];\n", (uintptr_t)Target, (uintptr_t)Target->Parent);
 		}
 	}
 	return Args[0];
