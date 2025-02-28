@@ -47,6 +47,7 @@ enum {
 };
 
 int StatusUpdates = 0;
+int DisplayHashes = 0;
 int ProgressBar = 0;
 int MonitorFiles = 0;
 int DebugThreads = 0;
@@ -616,7 +617,13 @@ static void target_update(target_t *Target) {
 		cache_last_check_set(Target, FileTime);
 	}
 	++BuiltTargets;
-	if (StatusUpdates) printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to iteration %d\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id, Target->LastUpdated);
+	if (StatusUpdates) {
+		printf("\e[35m%d / %d\e[0m #%d Updated \e[32m%s\e[0m to iteration %d\n", BuiltTargets, QueuedTargets, CurrentThread->Id, Target->Id, Target->LastUpdated);
+		if (DisplayHashes) {
+			for (int J = 0; J < SHA256_BLOCK_SIZE; ++J) printf("%02x", Target->Hash[J]);
+			puts("");
+		}
+	}
 	if (ProgressBar) display_progress();
 	pthread_cond_broadcast(TargetUpdated);
 
