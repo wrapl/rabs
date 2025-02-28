@@ -30,7 +30,7 @@ extern __thread target_t *CurrentTarget;
 ml_value_t *rabs_global(const char *Name);
 ml_value_t *rabs_ml_global(void *Data, const char *Name, const char *Source, int Line, int Mode);
 
-#define CURRENT_VERSION 2, 34, 3
+#define CURRENT_VERSION 2, 34, 4
 #define MINIMAL_VERSION 2, 34, 1
 
 #endif

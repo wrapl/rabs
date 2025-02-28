@@ -33,6 +33,7 @@ target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, size_t Index, 
 #define target_new(type, Type, Id, Index, Slot) ((type *)target_alloc(sizeof(type), Type, Id, Index, Slot))
 
 extern int StatusUpdates;
+extern int DisplayHashes;
 extern int ProgressBar;
 extern int MonitorFiles;
 extern int DebugThreads;
