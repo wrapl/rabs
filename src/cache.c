@@ -118,7 +118,7 @@ void cache_open(const char *RootPath) {
 			fprintf(stderr, "Failed to lock build database: %s", strerror(errno));
 			exit(-1);
 		}
-		MetadataStore = string_store_open(concat(CacheFileName, "/metadata", NULL));
+		MetadataStore = string_store_open(concat(CacheFileName, "/metadata", NULL), 0);
 		{
 			char Temp[16];
 			string_store_get(MetadataStore, CURRENT_VERSION_INDEX, Temp, 16);
@@ -132,11 +132,11 @@ void cache_open(const char *RootPath) {
 				return cache_open(RootPath);
 			}
 		}
-		TargetsIndex = string_index0_open(concat(CacheFileName, "/targets", NULL));
-		DetailsStore = fixed_store_open(concat(CacheFileName, "/details", NULL));
-		DependsStore = string_store_open(concat(CacheFileName, "/depends", NULL));
-		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL));
-		ExprsStore = string_store_open(concat(CacheFileName, "/exprs", NULL));
+		TargetsIndex = string_index0_open(concat(CacheFileName, "/targets", NULL), 0);
+		DetailsStore = fixed_store_open(concat(CacheFileName, "/details", NULL), 0);
+		DependsStore = string_store_open(concat(CacheFileName, "/depends", NULL), 0);
+		ScansStore = string_store_open(concat(CacheFileName, "/scans", NULL), 0);
+		ExprsStore = string_store_open(concat(CacheFileName, "/exprs", NULL), 0);
 		{
 			uint32_t Temp;
 			string_store_get(MetadataStore, CURRENT_ITERATION_INDEX, &Temp, 4);

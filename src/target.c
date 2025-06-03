@@ -764,8 +764,7 @@ static void ML_TYPED_FN(ml_cbor_write, TargetT, ml_cbor_writer_t *Writer, target
 	ml_cbor_write_raw(Writer, Target->Id, Target->IdLength);
 }
 
-ML_FUNCTION(DecodeTarget) {
-//!internal
+static ml_value_t *decode_target(ml_cbor_reader_t *Reader, int Count, ml_value_t **Args) {
 	ML_CHECK_ARG_COUNT(1);
 	ML_CHECK_ARG_TYPE(0, MLStringT);
 	const char *Id = ml_string_value(Args[0]);
@@ -780,7 +779,7 @@ void target_init(void) {
 #ifndef GENERATE_INIT
 #include "target_init.c"
 #endif
-	ml_cbor_default_object("target", (ml_value_t *)DecodeTarget);
+	ml_cbor_default_object("target", decode_target);
 	target_expr_init();
 	target_file_init();
 	target_meta_init();

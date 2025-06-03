@@ -898,6 +898,7 @@ int main(int Argc, char **Argv) {
 	ml_time_init(Globals);
 	ml_json_init(Globals);
 	ml_cbor_init(Globals);
+	ml_uuid_init(Globals);
 	stringmap_insert(Globals, "vmount", Vmount);
 	stringmap_insert(Globals, "subdir", Subdir);
 	stringmap_insert(Globals, "target", Target);
