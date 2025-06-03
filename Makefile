@@ -65,7 +65,7 @@ CFLAGS += \
 	-std=gnu11 -foptimize-sibling-calls \
 	-fstrict-aliasing -Wstrict-aliasing -Wall \
 	-Iobj -Isrc -Iradb -Iminilang/src -Iminilang/obj -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
-LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread
+LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
 
 ifeq ($(MACHINE), i686)
 	CFLAGS += -fno-pic
