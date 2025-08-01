@@ -26,6 +26,11 @@ libraries = \
 	minilang/lib/libminilang.a \
 	radb/libradb.a
 
+CFLAGS += \
+	-std=gnu11 -foptimize-sibling-calls \
+	-fstrict-aliasing -Wstrict-aliasing -Wall \
+	-Iobj -Isrc -Iradb -Iminilang/src -Iminilang/obj -D$(PLATFORM)
+
 obj/%_init.c: src/%.c | obj $(libraries) src/*.h 
 	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > $@
 
@@ -61,10 +66,7 @@ objects = \
 obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-CFLAGS += \
-	-std=gnu11 -foptimize-sibling-calls \
-	-fstrict-aliasing -Wstrict-aliasing -Wall \
-	-Iobj -Isrc -Iradb -Iminilang/src -Iminilang/obj -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
+CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
 LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
 
 ifeq ($(MACHINE), i686)
@@ -93,7 +95,7 @@ ifeq ($(PLATFORM), Mingw)
 endif
 
 ifeq ($(PLATFORM), Darwin)
-	LDFLAGS += -ldl -lgc -lsqlite3
+	LDFLAGS += -ldl -lgc
 endif
 
 ifdef DEBUG
