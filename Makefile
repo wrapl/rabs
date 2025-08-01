@@ -26,6 +26,11 @@ libraries = \
 	minilang/lib/libminilang.a \
 	radb/libradb.a
 
+CFLAGS += \
+	-std=gnu11 -foptimize-sibling-calls \
+	-fstrict-aliasing -Wstrict-aliasing -Wall \
+	-Iobj -Isrc -Iradb -Iminilang/src -Iminilang/obj -D$(PLATFORM)
+
 obj/%_init.c: src/%.c | obj $(libraries) src/*.h 
 	cc -E -P -DGENERATE_INIT $(CFLAGS) $< | sed -f sed.txt | grep -o 'INIT_CODE .*);' | sed 's/INIT_CODE //g' > $@
 
@@ -61,11 +66,8 @@ objects = \
 obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-CFLAGS += \
-	-std=gnu11 -foptimize-sibling-calls \
-	-fstrict-aliasing -Wstrict-aliasing -Wall \
-	-Iobj -Isrc -Iradb -Iminilang/src -Iminilang/obj -Iradb -pthread -DSQLITE_THREADSAFE=0 -DGC_THREADS -D_GNU_SOURCE -D$(PLATFORM)
-LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
+CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
+LDFLAGS += -lm -pthread
 
 ifeq ($(MACHINE), i686)
 	CFLAGS += -fno-pic
@@ -73,17 +75,17 @@ ifeq ($(MACHINE), i686)
 endif
 
 ifeq ($(PLATFORM), Linux)
-	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
 	objects += obj/targetwatch.o
 endif
 
 ifeq ($(PLATFORM), Android)
-	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
 endif
 
 ifeq ($(PLATFORM), FreeBSD)
 	CFLAGS += -I/usr/local/include
-	LDFLAGS += -L/usr/local/lib -lgc-threaded
+	LDFLAGS += -L/usr/local/lib -lgc-threaded -luuid
 endif
 
 ifeq ($(PLATFORM), Mingw)
@@ -93,7 +95,7 @@ ifeq ($(PLATFORM), Mingw)
 endif
 
 ifeq ($(PLATFORM), Darwin)
-	LDFLAGS += -ldl -lgc -lsqlite3
+	LDFLAGS += -ldl -lgc
 endif
 
 ifdef DEBUG
