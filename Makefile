@@ -26,7 +26,7 @@ libraries = \
 	minilang/lib/libminilang.a \
 	radb/libradb.a
 
-CFLAGS += \
+override CFLAGS += \
 	-std=gnu11 -foptimize-sibling-calls \
 	-fstrict-aliasing -Wstrict-aliasing -Wall \
 	-Iobj -Isrc -Iradb -Iminilang/src -Iminilang/obj -D$(PLATFORM)
@@ -66,8 +66,8 @@ objects = \
 obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
-LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
+override CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
+override LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
 
 ifeq ($(MACHINE), i686)
 	CFLAGS += -fno-pic
