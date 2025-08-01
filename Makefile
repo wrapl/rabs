@@ -67,7 +67,7 @@ obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 override CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
-override LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
+override LDFLAGS += -lm -pthread
 
 ifeq ($(MACHINE), i686)
 	override CFLAGS += -fno-pic
@@ -75,17 +75,17 @@ ifeq ($(MACHINE), i686)
 endif
 
 ifeq ($(PLATFORM), Linux)
-	override LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+	override LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
 	objects += obj/targetwatch.o
 endif
 
 ifeq ($(PLATFORM), Android)
-	override LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+	override LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
 endif
 
 ifeq ($(PLATFORM), FreeBSD)
 	override CFLAGS += -I/usr/local/include
-	override LDFLAGS += -L/usr/local/lib -lgc-threaded
+	override LDFLAGS += -L/usr/local/lib -lgc-threaded -luuid
 endif
 
 ifeq ($(PLATFORM), Mingw)
