@@ -66,8 +66,8 @@ objects = \
 obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-override CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
-override LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
+CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
+LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
 
 ifeq ($(MACHINE), i686)
 	CFLAGS += -fno-pic
