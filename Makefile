@@ -26,7 +26,7 @@ libraries = \
 	minilang/lib/libminilang.a \
 	radb/libradb.a
 
-override CFLAGS += \
+CFLAGS += \
 	-std=gnu11 -foptimize-sibling-calls \
 	-fstrict-aliasing -Wstrict-aliasing -Wall \
 	-Iobj -Isrc -Iradb -Iminilang/src -Iminilang/obj -D$(PLATFORM)
@@ -66,43 +66,43 @@ objects = \
 obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-override CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
-override LDFLAGS += -lm -pthread
+CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
+LDFLAGS += -lm -pthread
 
 ifeq ($(MACHINE), i686)
-	override CFLAGS += -fno-pic
-	override LDFLAGS += -fno-pic
+	CFLAGS += -fno-pic
+	LDFLAGS += -fno-pic
 endif
 
 ifeq ($(PLATFORM), Linux)
-	override LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
+	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
 	objects += obj/targetwatch.o
 endif
 
 ifeq ($(PLATFORM), Android)
-	override LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
+	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
 endif
 
 ifeq ($(PLATFORM), FreeBSD)
-	override CFLAGS += -I/usr/local/include
-	override LDFLAGS += -L/usr/local/lib -lgc-threaded -luuid
+	CFLAGS += -I/usr/local/include
+	LDFLAGS += -L/usr/local/lib -lgc-threaded -luuid
 endif
 
 ifeq ($(PLATFORM), Mingw)
-	override CFLAGS += -include ansicolor-w32.h
-	override LDFLAGS += -lregex -lgc
+	CFLAGS += -include ansicolor-w32.h
+	LDFLAGS += -lregex -lgc
 	objects += obj/ansicolor-w32.o
 endif
 
 ifeq ($(PLATFORM), Darwin)
-	override LDFLAGS += -ldl -lgc
+	LDFLAGS += -ldl -lgc
 endif
 
 ifdef DEBUG
-	override CFLAGS += -g
-	override LDFLAGS += -g
+	CFLAGS += -g
+	LDFLAGS += -g
 else
-	override CFLAGS += -O3 -g
+	CFLAGS += -O3 -g
 endif
 
 ifdef DEBUG
