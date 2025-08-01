@@ -66,43 +66,43 @@ objects = \
 obj/%.o: src/%.c | obj $(libraries) src/*.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
-LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
+override CFLAGS += -pthread -DGC_THREADS -D_GNU_SOURCE
+override LDFLAGS += minilang/lib/libminilang.a radb/libradb.a -lm -pthread -luuid
 
 ifeq ($(MACHINE), i686)
-	CFLAGS += -fno-pic
-	LDFLAGS += -fno-pic
+	override CFLAGS += -fno-pic
+	override LDFLAGS += -fno-pic
 endif
 
 ifeq ($(PLATFORM), Linux)
-	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+	override LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
 	objects += obj/targetwatch.o
 endif
 
 ifeq ($(PLATFORM), Android)
-	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
+	override LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc
 endif
 
 ifeq ($(PLATFORM), FreeBSD)
-	CFLAGS += -I/usr/local/include
-	LDFLAGS += -L/usr/local/lib -lgc-threaded
+	override CFLAGS += -I/usr/local/include
+	override LDFLAGS += -L/usr/local/lib -lgc-threaded
 endif
 
 ifeq ($(PLATFORM), Mingw)
-	CFLAGS += -include ansicolor-w32.h
-	LDFLAGS += -lregex -lgc
+	override CFLAGS += -include ansicolor-w32.h
+	override LDFLAGS += -lregex -lgc
 	objects += obj/ansicolor-w32.o
 endif
 
 ifeq ($(PLATFORM), Darwin)
-	LDFLAGS += -ldl -lgc
+	override LDFLAGS += -ldl -lgc
 endif
 
 ifdef DEBUG
-	CFLAGS += -g
-	LDFLAGS += -g
+	override CFLAGS += -g
+	override LDFLAGS += -g
 else
-	CFLAGS += -O3 -g
+	override CFLAGS += -O3 -g
 endif
 
 ifdef DEBUG
