@@ -88,9 +88,12 @@ ml_value_t *context_symb_get(context_t *Context, const char *Name) {
 	while (Context) {
 		ml_value_t *Value = stringmap_search(Context->Locals, Name);
 		if (Value) return Value;
+		if (Context->Filter) {
+			if (!stringmap_search(Context->Filter, Name)) return NULL;
+		}
 		Context = Context->Parent;
 	}
-	return 0;
+	return NULL;
 }
 
 ml_value_t *context_symb_set(context_t *Context, const char *Name, ml_value_t *Value) {

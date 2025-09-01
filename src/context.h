@@ -12,7 +12,9 @@ struct context_t {
 	context_t *Parent;
 	const char *Path, *Name, *FullPath;
 	struct target_t *Default;
+	stringmap_t *Filter;
 	stringmap_t Locals[1];
+
 };
 
 extern ml_type_t ContextT[];

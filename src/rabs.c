@@ -220,7 +220,19 @@ ML_FUNCTION(Subdir) {
 	FileName = vfs_resolve(FileName);
 	target_t *ParentDefault = CurrentContext->Default;
 	context_t *Context = context_push(Path);
-	if (Count < 2 || Args[1] != MLNil) targetset_insert(ParentDefault->Depends, CurrentContext->Default);
+	int Depends = 1;
+	for (int I = 1; I < Count; ++I) {
+		if (ml_is(Args[I], MLListT)) {
+			stringmap_t *Filter = Context->Filter = stringmap_new();
+			ML_LIST_FOREACH(Args[I], Iter) {
+				if (!ml_is(Iter->Value, MLStringT)) return ml_error("TypeError", "Expected string");
+				stringmap_insert(Filter, ml_string_value(Iter->Value), MLNil);
+			}
+		} else if (Args[I] == MLNil) {
+			Depends = 0;
+		}
+	}
+	if (Depends) targetset_insert(ParentDefault->Depends, CurrentContext->Default);
 	ml_value_t *Result = load_file(FileName);
 	context_pop();
 	if (ml_is_error(Result)) {
