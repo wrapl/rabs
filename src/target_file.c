@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <dirent.h>
+#include <errno.h>
 #include <gc/gc.h>
 #include "rabs.h"
 #include "util.h"
@@ -435,7 +436,7 @@ ML_METHOD("copy", FileT, FileT) {
 	if (Dest->Absolute) {
 		DestPath = Dest->Path;
 	} else {
-		DestPath = vfs_resolve(concat(RootPath, "/", Dest->Path, NULL));
+		DestPath = concat(RootPath, "/", Dest->Path, NULL);
 	}
 	int SourceFile = open(SourcePath, O_RDONLY);
 	if (SourceFile < 0) return ml_error("FileError", "could not open source %s", SourcePath);
@@ -516,9 +517,51 @@ ML_METHOD("open", FileT, MLStringT) {
 	}
 	FILE *Handle = fopen(FileName, Mode);
 	if (!Handle) {
-		return ml_error("FileError", "error opening %s", FileName);
+		return ml_error("FileError", "error opening %s: %s", FileName, strerror(errno));
 	} else {
 		return ml_file(Handle);
+	}
+}
+
+ML_METHOD("unlink", FileT) {
+//<Target
+//>Target
+// Unlinks the file at :mini:`Target`.
+	target_file_t *Target = (target_file_t *)Args[0];
+	const char *FileName;
+	if (Target->Absolute) {
+		FileName = Target->Path;
+	} else {
+		FileName = vfs_resolve(concat(RootPath, "/", Target->Path, NULL));
+	}
+	if (unlink(FileName)) {
+		return ml_error("FileError", "error unlinking %s: %s", FileName, strerror(errno));
+	} else {
+		return (ml_value_t *)Target;
+	}
+}
+
+ML_METHOD("rename", FileT, FileT) {
+//<Source
+//>Dest
+// Renames the file at :mini:`Source` to :mini:`Dest`.
+	target_file_t *Source = (target_file_t *)Args[0];
+	target_file_t *Target = (target_file_t *)Args[1];
+	const char *OldName, *NewName;
+	if (Source->Absolute) {
+		OldName = Source->Path;
+	} else {
+		OldName = vfs_resolve(concat(RootPath, "/", Source->Path, NULL));
+	}
+	if (Target->Absolute) {
+		NewName = Target->Path;
+	} else {
+		NewName = concat(RootPath, "/", Target->Path, NULL);
+	}
+	if (rename(OldName, NewName)) {
+		return ml_error("FileError", "error unlinking %s: %s", OldName, strerror(errno));
+	} else {
+		return (ml_value_t *)Target;
 	}
 }
 
