@@ -86,7 +86,15 @@ file
    Returns :mini:`Target` if is has a relative path,  otherwise returns :mini:`nil`.
 
 
+:mini:`meth (Source: file):rename(Arg₂: file): Dest`
+   Renames the file at :mini:`Source` to :mini:`Dest`.
+
+
 :mini:`meth (Target: file):rmdir: file`
    Removes :mini:`Target` recursively. Returns :mini:`Directory`.
+
+
+:mini:`meth (Target: file):unlink: Target`
+   Unlinks the file at :mini:`Target`.
 
 
