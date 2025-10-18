@@ -29,7 +29,7 @@ var TestCflags := expr("TestCflags")[Config, "TEST"] => fun() shell(Config):trim
 
 CFLAGS := old + [TestCflags, pkgconfig("-march=native")]
 LDFLAGS := old + ["-lminilang"]
-PREBUILDS := old + [EXTERNALS."MINILANG"]
+:>PREBUILDS := old + [EXTERNALS."MINILANG"]
 
 DEFAULT[c_program(file("test"), [file("test.o"), file("test2.o")])]
 
@@ -93,3 +93,39 @@ do
 end
 
 DEFAULT[ScopeTest]
+
+DYNAMIC_VERSION := 2
+
+let DynamicRabs := file("dynamic/build.rabs") => fun(Target) do
+	file("dynamic"):mkdir
+	print("Creating dynamic/test.txt\n")
+	with Wr := file("dynamic/test.txt"):open("w") do
+		Wr:write("Hello world!\\n")
+		Wr:close
+	end
+	print("Creating dynamic/build.rabs\n")
+	with Wr := Target:open("w") do
+		Wr:write(':> Version {DYNAMIC_VERSION}
+:> {time()}
+
+let Test := file("dynamic.test")[file("test.txt")] => fun(Target) do
+	file("test.txt"):copy(Target)
+end
+
+print(\'Using dynamic rabs to create \{Test}\\n\')
+
+DEFAULT[Test]
+
+print(\'\{context():path} => \{list(DEFAULT:depends)}\\n\')
+')
+		Wr:close()
+	end
+end
+
+let Dynamic := meta("dynamic"):scan("subdir")[ITERATION, DynamicRabs] => fun(Target) do
+	let Subdir := subdir("dynamic")
+	print('{context():path} => {list(DEFAULT:depends)}\n')
+	[Subdir::DEFAULT]
+end
+
+DEFAULT[Dynamic]
