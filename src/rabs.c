@@ -228,6 +228,11 @@ ML_FUNCTION(Subdir) {
 				if (!ml_is(Iter->Value, MLStringT)) return ml_error("TypeError", "Expected string");
 				stringmap_insert(Filter, ml_string_value(Iter->Value), MLNil);
 			}
+		} else if (ml_is(Args[I], MLMapT)) {
+			ML_MAP_FOREACH(Args[I], Iter) {
+				if (!ml_is(Iter->Value, MLStringT)) return ml_error("TypeError", "Expected string");
+				context_symb_set(Context, ml_string_value(Iter->Key), Iter->Value);
+			}
 		} else if (Args[I] == MLNil) {
 			Depends = 0;
 		}
