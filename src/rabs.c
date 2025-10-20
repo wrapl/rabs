@@ -230,7 +230,7 @@ ML_FUNCTION(Subdir) {
 			}
 		} else if (ml_is(Args[I], MLMapT)) {
 			ML_MAP_FOREACH(Args[I], Iter) {
-				if (!ml_is(Iter->Value, MLStringT)) return ml_error("TypeError", "Expected string");
+				if (!ml_is(Iter->Key, MLStringT)) return ml_error("TypeError", "Expected string");
 				context_symb_set(Context, ml_string_value(Iter->Key), Iter->Value);
 			}
 		} else if (Args[I] == MLNil) {
