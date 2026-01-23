@@ -455,6 +455,9 @@ void display_threads(void) {
 		case BUILD_IDLE:
 			printf("[%2d] I\n\e[K", Thread->Id);
 			break;
+		case BUILD_UPDATE:
+			printf("[%2d] U %6d|%s %.32s\n\e[K", Thread->Id, Thread->Target->QueuePriority, Thread->Target->Id, Thread->Command);
+			break;
 		case BUILD_WAIT:
 			printf("[%2d] W %6d|%s %.32s\n\e[K", Thread->Id, Thread->Target->QueuePriority, Thread->Target->Id, Thread->Command);
 			break;
@@ -490,7 +493,11 @@ static int build_scan_target_list(ml_value_t *Depend, targetset_t *Scans) {
 }
 
 static void target_update(target_t *Target) {
-	if (DebugThreads) display_threads();
+	if (DebugThreads) {
+		CurrentThread->Status = BUILD_UPDATE;
+		CurrentThread->Target = Target;
+		display_threads();
+	}
 	if (DependencyGraph) {
 		fprintf(DependencyGraph, "\tT%" PRIxPTR " [label=\"%s\"];\n", (uintptr_t)Target, Target->Id);
 		targetset_foreach(Target->Depends, Target, (void *)target_graph_depends);
@@ -520,6 +527,11 @@ static void target_update(target_t *Target) {
 		memset(BuildHash, 0, SHA256_BLOCK_SIZE);
 	}
 	targetset_foreach(Target->Depends, Target, (void *)target_wait);
+	if (DebugThreads) {
+		CurrentThread->Status = BUILD_UPDATE;
+		CurrentThread->Target = Target;
+		display_threads();
+	}
 	targetset_foreach(Target->Depends, &DependsLastUpdated, (void *)target_depends_fn);
 
 	unsigned char Previous[SHA256_BLOCK_SIZE];
@@ -550,6 +562,7 @@ static void target_update(target_t *Target) {
 		if (DebugThreads) {
 			CurrentThread->Status = BUILD_EXEC;
 			CurrentThread->Target = Target;
+			display_threads();
 		}
 		if (Target->Build) {
 			target_t *OldTarget = CurrentTarget;
@@ -656,6 +669,21 @@ int target_queue(target_t *Target, target_t *Waiter) {
 }
 
 int target_wait(target_t *Target, target_t *Waiter) {
+	if (Waiter) {
+		//fprintf(stderr, "\e[34m%s waiting:\n\e[0m", Waiter->Id);
+		for (target_t *Waiting = Target; Waiting; Waiting = Waiting->Waiting) {
+			//fprintf(stderr, "\e[34m\t%s\n\e[0m", Waiting->Id);
+			if (Waiting == Waiter) {
+				fprintf(stderr, "\e[31mError: %s has recursive dependency:", Waiter->Id);
+				for (target_t *Waiting = Target; Waiting; Waiting = Waiting->Waiting) {
+					fprintf(stderr, " -> %s", Waiting->Id);
+				}
+				fprintf(stderr, "\n\e[0m");
+				exit(1);
+			}
+		}
+		Waiter->Waiting = Target;
+	}
 	if (Target->LastUpdated == STATE_QUEUED) {
 		target_update(Target);
 	} else while (Target->LastUpdated == STATE_CHECKING) {
@@ -665,10 +693,11 @@ int target_wait(target_t *Target, target_t *Waiter) {
 		}
 		pthread_cond_wait(TargetUpdated, InterpreterLock);
 	}
-	if (DebugThreads) {
+	if (Waiter) Waiter->Waiting = NULL;
+	/*if (DebugThreads) {
 		CurrentThread->Status = BUILD_EXEC;
 		CurrentThread->Target = Waiter;
-	}
+	}*/
 	return 0;
 }
 

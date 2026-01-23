@@ -27,6 +27,7 @@ struct target_t {
 	int QueueIndex, QueuePriority;
 	unsigned long IdHash;
 	unsigned char Hash[SHA256_BLOCK_SIZE];
+	target_t *Waiting;
 };
 
 target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, size_t Index, target_t **Slot);
