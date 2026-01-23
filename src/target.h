@@ -17,6 +17,7 @@ struct target_t {
 	ml_value_t *Build;
 	struct context_t *BuildContext;
 	const char *Id;
+	target_t *Waiting;
 	targetset_t Affects[1];
 	targetset_t Depends[1];
 	targetset_t BuildDepends[1];
@@ -27,7 +28,6 @@ struct target_t {
 	int QueueIndex, QueuePriority;
 	unsigned long IdHash;
 	unsigned char Hash[SHA256_BLOCK_SIZE];
-	target_t *Waiting;
 };
 
 target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, size_t Index, target_t **Slot);
