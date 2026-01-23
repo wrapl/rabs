@@ -116,6 +116,12 @@ let Test := file("dynamic.test")[file("test.txt")] => fun(Target) do
 	end
 end
 
+let A := file("a.txt")
+
+A[A]
+
+DEFAULT[A]
+
 print(\'Using dynamic rabs to create \{Test}\\n\')
 
 DEFAULT[Test]

@@ -17,6 +17,7 @@ struct target_t {
 	ml_value_t *Build;
 	struct context_t *BuildContext;
 	const char *Id;
+	target_t *Waiting;
 	targetset_t Affects[1];
 	targetset_t Depends[1];
 	targetset_t BuildDepends[1];
