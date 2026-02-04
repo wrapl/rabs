@@ -9,6 +9,12 @@ if TEST then
 	setenv("TEST_CFLAGS", "-pipe")
 end
 
+SHA_TEST := meta("SHA_TEST") => fun() do
+	print("SHA_TEST ", list(1 .. 10, 'x{_}y'), "\n")
+end
+
+DEFAULT[SHA_TEST]
+
 var Config := if PLATFORM != "Mingw" then
 	file("config") => fun(Target) do
 		print(list(1 .. 10), "\n")
