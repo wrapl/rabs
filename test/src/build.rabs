@@ -11,6 +11,7 @@ end
 
 var Config := if PLATFORM != "Mingw" then
 	file("config") => fun(Target) do
+		print(list(1 .. 10), "\n")
 		var File := Target:open("w")
 		File:write("#!/bin/sh\n")
 		File:write("echo \"-g -O1 $TEST_CFLAGS\"\n")
@@ -118,7 +119,7 @@ end
 
 let A := file("a.txt")
 
-A[A]
+:>A[A]
 
 DEFAULT[A]
 
