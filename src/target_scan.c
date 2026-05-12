@@ -10,6 +10,8 @@
 #undef ML_CATEGORY
 #define ML_CATEGORY "scan"
 
+extern ml_value_t *ArgifyMethod;
+
 struct target_scan_t {
 	target_t Base;
 	const char *Name;
@@ -98,10 +100,45 @@ ML_METHOD("scans", ScanT) {
 //>targetset
 // Returns the results of the last scan.
 	target_t *Target = (target_t *)Args[0];
-	target_depends_auto((target_t *)Target);
-	target_queue((target_t *)Target, CurrentTarget);
-	target_wait((target_t *)Target, CurrentTarget);
+	target_depends_auto(Target);
+	target_queue(Target, CurrentTarget);
+	target_wait(Target, CurrentTarget);
 	return (ml_value_t *)cache_scan_get(Target);
+}
+
+static int argify_scan_target(target_t *Target, void *Args) {
+	ml_list_put((ml_value_t *)Args, (ml_value_t *)Target);
+	return 0;
+}
+
+ML_METHOD(ArgifyMethod, MLListT, ScanT) {
+//!internal
+	target_t *Target = (target_t *)Args[1];
+	target_depends_auto(Target);
+	target_queue(Target, CurrentTarget);
+	target_wait(Target, CurrentTarget);
+	targetset_t *Targets = cache_scan_get(Target);
+	targetset_foreach(Targets, Args[0], argify_scan_target);
+	return Args[0];
+}
+
+static int append_scan_target(target_t *Target, void *Data) {
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Data;
+	if (Buffer->Length) ml_stringbuffer_put(Buffer, ' ');
+	ml_stringbuffer_simple_append(Buffer, (ml_value_t *)Target);
+	return 0;
+}
+
+ML_METHOD("append", MLStringBufferT, ScanT) {
+//!internal
+	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Args[0];
+	target_t *Target = (target_t *)Args[1];
+	target_depends_auto(Target);
+	target_queue(Target, CurrentTarget);
+	target_wait(Target, CurrentTarget);
+	targetset_t *Targets = cache_scan_get(Target);
+	targetset_foreach(Targets, Buffer, append_scan_target);
+	return (ml_value_t *)Buffer;
 }
 
 void target_scan_init() {
