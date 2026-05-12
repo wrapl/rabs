@@ -84,13 +84,19 @@ void target_depends_auto(target_t *Depend) {
 	}
 }
 
+static unsigned long target_id_hash(const char *Key) {
+	unsigned long Hash = 5381;
+	for (const unsigned char *P = (const unsigned char *)Key; P[0]; ++P) Hash = ((Hash << 5) + Hash) + P[0];
+	return Hash;
+}
+
 target_t *target_alloc(int Size, ml_type_t *Type, const char *Id, size_t Index, target_t **Slot) {
 	++NumTargets;
 	target_t *Target = (target_t *)GC_MALLOC(Size);
 	Target->Type = Type;
 	Target->Id = Id;
 	Target->IdLength = strlen(Id);
-	Target->IdHash = stringmap_hash(Id);
+	Target->IdHash = target_id_hash(Id);
 	Target->Build = NULL;
 	Target->Parent = NULL;
 	Target->LastUpdated = STATE_UNCHECKED;
