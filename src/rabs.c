@@ -278,7 +278,7 @@ ML_FUNCTION(Include) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
 		if (ml_is_error(Result)) return Result;
 	}
 	size_t Length = Buffer->Length;
@@ -354,7 +354,7 @@ ML_METHOD("append", MLStringBufferT, MLListT) {
 	ML_LIST_FOREACH(Args[1], Node) {
 		if (Buffer->Length > Last) ml_stringbuffer_put(Buffer, ' ');
 		Last = Buffer->Length;
-		ml_stringbuffer_simple_append(Buffer, Node->Value);
+		ml_stringbuffer_append(Buffer, Node->Value);
 	}
 	return MLSome;
 }
@@ -366,11 +366,11 @@ ML_METHOD("append", MLStringBufferT, MLMapT) {
 	ML_MAP_FOREACH(Args[1], Iter) {
 		if (Buffer->Length > Last) ml_stringbuffer_put(Buffer, ' ');
 		Last = Buffer->Length;
-		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Iter->Key);
+		ml_value_t *Result = ml_stringbuffer_append(Buffer, Iter->Key);
 		if (ml_is_error(Result)) return Result;
 		if (Iter->Value != MLNil && Iter->Value != MLSome) {
 			ml_stringbuffer_put(Buffer, '=');
-			Result = ml_stringbuffer_simple_append(Buffer, Iter->Value);
+			Result = ml_stringbuffer_append(Buffer, Iter->Value);
 			if (ml_is_error(Result)) return Result;
 		}
 	}
@@ -393,7 +393,7 @@ static ml_value_t *command(int Capture, int Count, ml_value_t **Args) {
 	for (int I = 0; I < Count; ++I) {
 		if (Buffer->Length > Last) ml_stringbuffer_put(Buffer, ' ');
 		Last = Buffer->Length;
-		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
 		if (ml_is_error(Result)) return Result;
 	}
 	const char *Command = ml_stringbuffer_get_string(Buffer);
@@ -538,11 +538,11 @@ ML_METHOD(ArgifyMethod, MLListT, MLMapT) {
 //!internal
 	ML_MAP_FOREACH(Args[1], Iter) {
 		ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Iter->Key);
+		ml_value_t *Result = ml_stringbuffer_append(Buffer, Iter->Key);
 		if (ml_is_error(Result)) return Result;
 		if (Iter->Value != MLNil && Iter->Value != MLSome) {
 			ml_stringbuffer_put(Buffer, '=');
-			Result = ml_stringbuffer_simple_append(Buffer, Iter->Value);
+			Result = ml_stringbuffer_append(Buffer, Iter->Value);
 			if (ml_is_error(Result)) return Result;
 		}
 		ml_list_append(Args[0], ml_stringbuffer_get_value(Buffer));
@@ -682,7 +682,7 @@ ML_FUNCTION(Mkdir) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
 		if (ml_is_error(Result)) return Result;
 	}
 	char *Path = ml_stringbuffer_get_string(Buffer);
@@ -699,7 +699,7 @@ ML_FUNCTION(Chdir) {
 	ML_CHECK_ARG_COUNT(1);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
 		if (ml_is_error(Result)) return Result;
 	}
 	if (CurrentDirectory) GC_free((void *)CurrentDirectory);
@@ -715,7 +715,7 @@ ML_FUNCTION(Open) {
 	ML_CHECK_ARG_COUNT(2);
 	ML_CHECK_ARG_TYPE(1, MLStringT);
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
-	ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[0]);
+	ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[0]);
 	if (ml_is_error(Result)) return Result;
 	const char *Path = ml_stringbuffer_get_string(Buffer);
 	const char *Mode = ml_string_value(Args[1]);
@@ -768,7 +768,7 @@ ML_FUNCTION(Print) {
 // Prints out :mini:`Values` to standard output.
 	ml_stringbuffer_t Buffer[1] = {ML_STRINGBUFFER_INIT};
 	for (int I = 0; I < Count; ++I) {
-		ml_value_t *Result = ml_stringbuffer_simple_append(Buffer, Args[I]);
+		ml_value_t *Result = ml_stringbuffer_append(Buffer, Args[I]);
 		if (ml_is_error(Result)) return Result;
 	}
 	ml_stringbuffer_drain(Buffer, stdout, (void *)ml_stringbuffer_print);

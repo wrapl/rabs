@@ -125,7 +125,7 @@ ML_METHOD(ArgifyMethod, MLListT, ScanT) {
 static int append_scan_target(target_t *Target, void *Data) {
 	ml_stringbuffer_t *Buffer = (ml_stringbuffer_t *)Data;
 	if (Buffer->Length) ml_stringbuffer_put(Buffer, ' ');
-	ml_stringbuffer_simple_append(Buffer, (ml_value_t *)Target);
+	ml_stringbuffer_append(Buffer, (ml_value_t *)Target);
 	return 0;
 }
 
