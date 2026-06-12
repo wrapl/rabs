@@ -80,7 +80,7 @@ ifeq ($(PLATFORM), Linux)
 endif
 
 ifeq ($(PLATFORM), Android)
-	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid
+	LDFLAGS += -Wl,--dynamic-list=src/exports.lst -ldl -lgc -luuid -lpcre2-8 -lpcre2-posix
 endif
 
 ifeq ($(PLATFORM), FreeBSD)
