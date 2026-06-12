@@ -152,7 +152,7 @@ void cache_open(const char *RootPath) {
 	}
 	{
 		char Temp[16];
-		sprintf(Temp, "%d.%d.%d", CURRENT_VERSION);
+		sprintf(Temp, "%d.%d.%d", MINIMAL_VERSION);
 		string_store_set(MetadataStore, CURRENT_VERSION_INDEX, Temp, sizeof(Temp));
 	}
 	targetcache_init();
