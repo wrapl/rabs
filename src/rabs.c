@@ -303,6 +303,10 @@ ML_FUNCTION(Include) {
 	return ml_error("IncludeError", "Unable to include: %s", FileName);
 }
 
+ML_FUNCTION(Current) {
+	return (ml_value_t *)CurrentTarget ?: MLNil;
+}
+
 ML_FUNCTION(Vmount) {
 //<Path:string
 //<Source:string
@@ -354,7 +358,8 @@ ML_METHOD("append", MLStringBufferT, MLListT) {
 	ML_LIST_FOREACH(Args[1], Node) {
 		if (Buffer->Length > Last) ml_stringbuffer_put(Buffer, ' ');
 		Last = Buffer->Length;
-		ml_stringbuffer_append(Buffer, Node->Value);
+		ml_value_t *Result = ml_stringbuffer_append(Buffer, Node->Value);
+		if (ml_is_error(Result)) return Result;
 	}
 	return MLSome;
 }
@@ -375,6 +380,55 @@ ML_METHOD("append", MLStringBufferT, MLMapT) {
 		}
 	}
 	return MLSome;
+}
+
+typedef struct {
+	ml_type_t *Type;
+	ml_value_t *Function;
+} dynamic_t;
+
+extern ml_type_t DynamicT[];
+
+ML_FUNCTION(Dynamic) {
+	ML_CHECK_ARG_COUNT(1);
+	ML_CHECK_ARG_TYPE(0, MLFunctionT);
+	dynamic_t *Dynamic = new(dynamic_t);
+	Dynamic->Type = DynamicT;
+	Dynamic->Function = Args[0];
+	return (ml_value_t *)Dynamic;
+}
+
+ML_TYPE(DynamicT, (), "dynamic",
+	.Constructor = (ml_value_t *)Dynamic
+);
+
+typedef struct {
+	ml_state_t Base;
+	ml_value_t *Args[2];
+} dynamic_state_t;
+
+extern ml_value_t *AppendMethod;
+
+static void dynamic_run(dynamic_state_t *State, ml_value_t *Value) {
+	ml_state_t *Caller = State->Base.Caller;
+	if (ml_is_error(Value)) ML_RETURN(Value);
+	State->Args[1] = Value;
+	return ml_call(Caller, AppendMethod, 2, State->Args);
+}
+
+ML_METHODX("append", MLStringBufferT, DynamicT) {
+	dynamic_t *Dynamic = (dynamic_t *)Args[1];
+	dynamic_state_t *State = new(dynamic_state_t);
+	State->Base.Caller = Caller;
+	State->Base.Context = Caller->Context;
+	State->Base.run = (ml_state_fn)dynamic_run;
+	State->Args[0] = Args[0];
+	State->Args[1] = (ml_value_t *)CurrentTarget ?: MLNil;
+	return ml_call((ml_state_t *)State, Dynamic->Function, 1, State->Args + 1);
+}
+
+static void ML_TYPED_FN(ml_value_sha256, DynamicT, dynamic_t *Dynamic, ml_hash_chain_t *Chain, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+	return ml_value_sha256(Dynamic->Function, Chain, Hash);
 }
 
 static int ErrorLogFile = STDERR_FILENO;
@@ -916,6 +970,7 @@ int main(int Argc, char **Argv) {
 	ml_json_init(Globals);
 	ml_cbor_init(Globals);
 	ml_uuid_init(Globals);
+	stringmap_insert(Globals, "current", Current);
 	stringmap_insert(Globals, "vmount", Vmount);
 	stringmap_insert(Globals, "subdir", Subdir);
 	stringmap_insert(Globals, "target", Target);
@@ -924,6 +979,7 @@ int main(int Argc, char **Argv) {
 	stringmap_insert(Globals, "expr", ExprT);
 	// TODO: add functions to register and create udf targets
 	stringmap_insert(Globals, "symbol", SymbolT);
+	stringmap_insert(Globals, "dynamic", DynamicT);
 	stringmap_insert(Globals, "scan", ScanT);
 	stringmap_insert(Globals, "include", Include);
 	stringmap_insert(Globals, "context", ContextT);
