@@ -267,7 +267,7 @@ ML_METHOD("priority", TargetT) {
 	return ml_integer(Target->QueuePriority);
 }
 
-void ML_TYPED_FN(ml_value_sha256, TargetT, ml_value_t *Value, ml_hash_chain_t *Chain, unsigned char Hash[SHA256_BLOCK_SIZE]) {
+static void ML_TYPED_FN(ml_value_sha256, TargetT, ml_value_t *Value, ml_hash_chain_t *Chain, unsigned char Hash[SHA256_BLOCK_SIZE]) {
 	target_t *Target = (target_t *)Value;
 	SHA256_CTX Ctx[1];
 	sha256_init(Ctx);
